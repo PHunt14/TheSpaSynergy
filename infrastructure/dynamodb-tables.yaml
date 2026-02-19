@@ -1,0 +1,80 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'DynamoDB tables for spa booking system'
+
+Resources:
+  VendorsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: spa-vendors
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: vendorId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: vendorId
+          KeyType: HASH
+
+  ServicesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: spa-services
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: serviceId
+          AttributeType: S
+        - AttributeName: vendorId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: serviceId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: VendorIndex
+          KeySchema:
+            - AttributeName: vendorId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
+  AppointmentsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: spa-appointments
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: appointmentId
+          AttributeType: S
+        - AttributeName: vendorId
+          AttributeType: S
+        - AttributeName: dateTime
+          AttributeType: S
+      KeySchema:
+        - AttributeName: appointmentId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: VendorDateIndex
+          KeySchema:
+            - AttributeName: vendorId
+              KeyType: HASH
+            - AttributeName: dateTime
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+Outputs:
+  VendorsTableName:
+    Description: 'Name of the Vendors table'
+    Value: !Ref VendorsTable
+    Export:
+      Name: !Sub '${AWS::StackName}-VendorsTable'
+  
+  ServicesTableName:
+    Description: 'Name of the Services table'
+    Value: !Ref ServicesTable
+    Export:
+      Name: !Sub '${AWS::StackName}-ServicesTable'
+  
+  AppointmentsTableName:
+    Description: 'Name of the Appointments table'
+    Value: !Ref AppointmentsTable
+    Export:
+      Name: !Sub '${AWS::StackName}-AppointmentsTable'
