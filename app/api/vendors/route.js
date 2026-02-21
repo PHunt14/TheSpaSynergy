@@ -1,6 +1,7 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { awsConfig } from '../../config/aws';
+import { TABLE_NAMES } from '../../config/tables';
 
 const client = new DynamoDBClient(awsConfig);
 const docClient = DynamoDBDocumentClient.from(client);
@@ -14,7 +15,7 @@ export async function GET() {
     console.log('Secret key length:', awsConfig.credentials?.secretAccessKey?.length);
     
     const command = new ScanCommand({
-      TableName: 'spa-vendors',
+      TableName: TABLE_NAMES.VENDORS,
       FilterExpression: 'isActive = :active',
       ExpressionAttributeValues: {
         ':active': true
