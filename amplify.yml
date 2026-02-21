@@ -1,14 +1,10 @@
 version: 1
-backend:
+frontend:
   phases:
     preBuild:
       commands:
         - echo "Deploying CloudFormation infrastructure for $AWS_BRANCH..."
         - aws cloudformation deploy --stack-name spa-booking-tables-$AWS_BRANCH --template-file infrastructure/dynamodb-tables.yaml --parameter-overrides Environment=$AWS_BRANCH --region us-east-1 --no-fail-on-empty-changeset
-frontend:
-  phases:
-    preBuild:
-      commands:
         - npm ci
     build:
       commands:
