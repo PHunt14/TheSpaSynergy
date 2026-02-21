@@ -1,6 +1,6 @@
-# Alpha Environ
+# The Spa Synergy
 
-## Demo For Flat Top Suites
+## Demo For The Spa Synergy
 
 node v22.16.0
 

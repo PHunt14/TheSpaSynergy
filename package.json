@@ -1,5 +1,5 @@
 {
-  "name": "alpha-environ",
+  "name": "TheSpaSynergy",
   "version": "1.0.0",
   "description": "This is now a demo project at this time.",
   "main": "index.js",
@@ -12,15 +12,15 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/PHunt14/alpha-environ.git"
+    "url": "git+https://github.com/PHunt14/TheSpaSynergy.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/PHunt14/alpha-environ/issues"
+    "url": "https://github.com/PHunt14/TheSpaSynergy/issues"
   },
-  "homepage": "https://github.com/PHunt14/alpha-environ#readme",
+  "homepage": "https://github.com/PHunt14/TheSpaSynergy#readme",
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.0.0",
     "@aws-sdk/client-ses": "^3.0.0",
