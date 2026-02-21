@@ -5,7 +5,7 @@ export default function Navbar() {
     <nav className="navbar">
       <div className="nav-inner">
         <Link href="/" className="nav-logo">
-          Flat Top Studio
+          The Spa Synergy
         </Link>
 
         <div className="nav-links">

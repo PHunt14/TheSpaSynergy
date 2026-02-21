@@ -20,9 +20,9 @@ git push -u origin dev
 - Go to AWS Amplify Console
 - Click "New app" → "Host web app"
 - Select GitHub and authorize
-- Choose repository: `PHunt14/alpha-environ`
+- Choose repository: `PHunt14/TheSpaSynergy`
 - Select branch: `dev`
-- App name: `alpha-environ-dev`
+- App name: `TheSpaSynergy-dev`
 
 ### 3. Configure Build Settings
 The `amplify.yml` file is already configured. Amplify will detect it automatically.
