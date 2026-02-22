@@ -180,7 +180,7 @@ export default function Appointments() {
                       background: getStatusColor(apt.status),
                       color: 'white'
                     }}>
-                      {apt.status}
+                      {apt.status === 'confirmed' ? 'Paid' : apt.status === 'pending' ? 'Unpaid' : 'Cancelled'}
                     </span>
                   </td>
                   <td style={{ padding: '1rem' }}>
