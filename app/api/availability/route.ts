@@ -1,9 +1,14 @@
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
-import { getAwsConfig } from '../../config/aws';
-import { TABLE_NAMES } from '../../config/tables';
+import { generateServerClientUsingCookies } from '@aws-amplify/adapter-nextjs/data';
+import { cookies } from 'next/headers';
+import type { Schema } from '../../../amplify/data/resource';
+import config from '../../../amplify_outputs.json' with { type: 'json' };
 
-export async function GET(request) {
+const client = generateServerClientUsingCookies<Schema>({
+  config,
+  cookies,
+});
+
+export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const vendorId = searchParams.get('vendorId');
   const serviceId = searchParams.get('serviceId');
@@ -14,61 +19,58 @@ export async function GET(request) {
   }
 
   try {
-    const awsConfig = await getAwsConfig();
-    const client = new DynamoDBClient(awsConfig);
-    const docClient = DynamoDBDocumentClient.from(client);
-    
-    // Get vendor details (working hours, buffer time)
-    const vendorResult = await docClient.send(new GetCommand({
-      TableName: TABLE_NAMES.VENDORS,
-      Key: { vendorId }
-    }));
+    // Get vendor details
+    const { data: vendor, errors: vendorErrors } = await client.models.Vendor.get({ vendorId });
 
-    const vendor = vendorResult.Item;
-    if (!vendor) {
+    if (vendorErrors || !vendor) {
       return Response.json({ error: 'Vendor not found' }, { status: 404 });
     }
 
-    // Get service details (duration)
-    const serviceResult = await docClient.send(new GetCommand({
-      TableName: TABLE_NAMES.SERVICES,
-      Key: { serviceId }
-    }));
+    // Get service details
+    const { data: service, errors: serviceErrors } = await client.models.Service.get({ serviceId });
 
-    const service = serviceResult.Item;
-    if (!service) {
+    if (serviceErrors || !service) {
       return Response.json({ error: 'Service not found' }, { status: 404 });
     }
 
-    // Get day of week
+    // Parse working hours
+    const workingHours = JSON.parse(vendor.workingHours as string);
     const requestedDate = new Date(date);
     const dayOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][requestedDate.getDay()];
     
-    const workingHours = vendor.workingHours[dayOfWeek];
-    if (!workingHours || !workingHours.start || !workingHours.end) {
+    const dayHours = workingHours[dayOfWeek];
+    if (!dayHours || !dayHours.start || !dayHours.end) {
       return Response.json({ availableSlots: [] }); // Closed on this day
     }
 
     // Get existing appointments for this vendor on this date
-    const appointmentsResult = await docClient.send(new QueryCommand({
-      TableName: TABLE_NAMES.APPOINTMENTS,
-      IndexName: 'VendorDateIndex',
-      KeyConditionExpression: 'vendorId = :vendorId AND begins_with(#dt, :date)',
-      ExpressionAttributeNames: {
-        '#dt': 'dateTime'
-      },
-      ExpressionAttributeValues: {
-        ':vendorId': vendorId,
-        ':date': date
+    // For the same resource type (staff vs sauna)
+    const serviceResourceType = service.resourceType || 'staff';
+    
+    // Get all appointments for this vendor on this date
+    const { data: allAppointments } = await client.models.Appointment.list({
+      filter: { 
+        vendorId: { eq: vendorId },
+        dateTime: { beginsWith: date }
       }
-    }));
+    });
 
-    const bookedSlots = appointmentsResult.Items || [];
+    // Filter appointments by resource type
+    const appointments = [];
+    for (const apt of allAppointments || []) {
+      const { data: aptService } = await client.models.Service.get({ serviceId: apt.serviceId });
+      const aptResourceType = aptService?.resourceType || 'staff';
+      if (aptResourceType === serviceResourceType) {
+        appointments.push(apt);
+      }
+    }
+
+    const bookedSlots = appointments;
 
     // Generate available time slots
     const slots = generateTimeSlots(
-      workingHours.start,
-      workingHours.end,
+      dayHours.start,
+      dayHours.end,
       service.duration,
       vendor.bufferMinutes || 15,
       bookedSlots,
@@ -82,14 +84,13 @@ export async function GET(request) {
   }
 }
 
-function generateTimeSlots(startTime, endTime, serviceDuration, bufferMinutes, bookedSlots, date) {
+function generateTimeSlots(startTime: string, endTime: string, serviceDuration: number, bufferMinutes: number, bookedSlots: any[], date: string) {
   const slots = [];
   const [startHour, startMin] = startTime.split(':').map(Number);
   const [endHour, endMin] = endTime.split(':').map(Number);
 
   let currentMinutes = startHour * 60 + startMin;
   const endMinutes = endHour * 60 + endMin;
-  const totalDuration = serviceDuration + bufferMinutes;
 
   while (currentMinutes + serviceDuration <= endMinutes) {
     const hour = Math.floor(currentMinutes / 60);
@@ -99,7 +100,7 @@ function generateTimeSlots(startTime, endTime, serviceDuration, bufferMinutes, b
 
     // Check if this slot conflicts with existing appointments
     const isBooked = bookedSlots.some(appointment => {
-      const appointmentTime = appointment.dateTime.split(' ')[1]; // Extract time from "MM/DD/YYYY HH:MM AM/PM"
+      const appointmentTime = appointment.dateTime.split(' ')[1];
       return timeOverlaps(timeString, appointmentTime, serviceDuration, bufferMinutes);
     });
 
@@ -116,21 +117,18 @@ function generateTimeSlots(startTime, endTime, serviceDuration, bufferMinutes, b
   return slots;
 }
 
-function timeOverlaps(newTime, bookedTime, serviceDuration, bufferMinutes) {
-  // Convert times to minutes for comparison
+function timeOverlaps(newTime: string, bookedTime: string, serviceDuration: number, bufferMinutes: number) {
   const [newHour, newMin] = newTime.split(':').map(Number);
   const newStart = newHour * 60 + newMin;
   const newEnd = newStart + serviceDuration + bufferMinutes;
 
-  // Parse booked time (could be "2:00 PM" format)
   const bookedStart = parseTimeToMinutes(bookedTime);
   const bookedEnd = bookedStart + serviceDuration + bufferMinutes;
 
   return (newStart < bookedEnd && newEnd > bookedStart);
 }
 
-function parseTimeToMinutes(timeStr) {
-  // Handle "HH:MM AM/PM" format
+function parseTimeToMinutes(timeStr: string) {
   const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)?/i);
   if (!match) return 0;
 
@@ -146,7 +144,7 @@ function parseTimeToMinutes(timeStr) {
   return hour * 60 + min;
 }
 
-function formatTime(hour, min) {
+function formatTime(hour: number, min: number) {
   const period = hour >= 12 ? 'PM' : 'AM';
   const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
   return `${displayHour}:${min.toString().padStart(2, '0')} ${period}`;
