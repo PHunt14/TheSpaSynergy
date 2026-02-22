@@ -18,7 +18,7 @@ export async function POST(request: Request) {
 
     const { errors } = await client.models.Appointment.update({
       appointmentId,
-      dateTime: newDateTime
+      dateTime: newDateTime as any
     });
 
     if (errors) {

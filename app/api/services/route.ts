@@ -21,7 +21,7 @@ export async function GET(request: Request) {
       filter: { 
         vendorId: { eq: vendorId },
         isActive: { eq: true }
-      }
+      } as any
     });
 
     if (errors) {

@@ -10,6 +10,7 @@
     "dev:full": "concurrently \"npx ampx sandbox\" \"next dev\"",
     "build": "next build",
     "start": "next start",
+    "typecheck": "tsc --noEmit",
     "seed": "node scripts/seed-amplify.js",
     "seed:clear": "node scripts/clear-data.js"
   },

@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     // Update status to cancelled
     const { errors: updateErrors } = await client.models.Appointment.update({
       appointmentId,
-      status: 'cancelled'
+      status: 'cancelled' as any
     });
 
     if (updateErrors) {
