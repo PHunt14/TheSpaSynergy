@@ -1,15 +1,22 @@
 import { Client, Environment } from 'square';
 import { randomUUID } from 'crypto';
 
-const client = new Client({
-  accessToken: process.env.SQUARE_ACCESS_TOKEN,
-  environment: process.env.NEXT_PUBLIC_SQUARE_ENVIRONMENT === 'production' 
-    ? Environment.Production 
-    : Environment.Sandbox
-});
-
 export async function POST(request) {
   try {
+    // Initialize client inside handler to ensure env vars are loaded
+    const client = new Client({
+      accessToken: process.env.SQUARE_ACCESS_TOKEN,
+      environment: process.env.NEXT_PUBLIC_SQUARE_ENVIRONMENT === 'production' 
+        ? Environment.Production 
+        : Environment.Sandbox
+    });
+
+    console.log('Square config:', {
+      hasToken: !!process.env.SQUARE_ACCESS_TOKEN,
+      environment: process.env.NEXT_PUBLIC_SQUARE_ENVIRONMENT,
+      locationId: process.env.NEXT_PUBLIC_SQUARE_LOCATION_ID
+    });
+
     const { sourceId, amount, vendorId } = await request.json();
 
     if (!sourceId || !amount) {
