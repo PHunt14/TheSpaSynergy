@@ -1,0 +1,82 @@
+import { CognitoIdentityProviderClient, AdminCreateUserCommand, ListUsersCommand } from '@aws-sdk/client-cognito-identity-provider';
+
+const client = new CognitoIdentityProviderClient({ region: 'us-east-1' });
+
+// Get User Pool ID from environment
+const getUserPoolId = () => {
+  return process.env.AMPLIFY_AUTH_USERPOOL_ID;
+};
+
+export async function POST(request: Request) {
+  try {
+    const { email } = await request.json();
+
+    if (!email) {
+      return Response.json({ error: 'Email required' }, { status: 400 });
+    }
+
+    const userPoolId = getUserPoolId();
+    if (!userPoolId) {
+      return Response.json({ error: 'User pool not configured' }, { status: 500 });
+    }
+
+    const command = new AdminCreateUserCommand({
+      UserPoolId: userPoolId,
+      Username: email,
+      UserAttributes: [
+        {
+          Name: 'email',
+          Value: email
+        },
+        {
+          Name: 'email_verified',
+          Value: 'true'
+        }
+      ],
+      DesiredDeliveryMediums: ['EMAIL']
+    });
+
+    await client.send(command);
+
+    return Response.json({ 
+      success: true,
+      message: 'User invited successfully. They will receive an email with login instructions.'
+    });
+  } catch (error: any) {
+    console.error('Error inviting user:', error);
+    return Response.json({ 
+      error: 'Failed to invite user',
+      details: error.message 
+    }, { status: 500 });
+  }
+}
+
+export async function GET(request: Request) {
+  try {
+    const userPoolId = getUserPoolId();
+    if (!userPoolId) {
+      return Response.json({ error: 'User pool not configured' }, { status: 500 });
+    }
+
+    const command = new ListUsersCommand({
+      UserPoolId: userPoolId
+    });
+
+    const response = await client.send(command);
+
+    const users = response.Users?.map(user => ({
+      username: user.Username,
+      email: user.Attributes?.find(attr => attr.Name === 'email')?.Value,
+      status: user.UserStatus,
+      created: user.UserCreateDate
+    })) || [];
+
+    return Response.json({ users });
+  } catch (error: any) {
+    console.error('Error listing users:', error);
+    return Response.json({ 
+      error: 'Failed to list users',
+      details: error.message 
+    }, { status: 500 });
+  }
+}
