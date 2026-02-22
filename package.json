@@ -27,6 +27,8 @@
   "homepage": "https://github.com/PHunt14/TheSpaSynergy#readme",
   "dependencies": {
     "@aws-amplify/adapter-nextjs": "^1.7.2",
+    "@aws-amplify/ui-react": "^6.15.0",
+    "@aws-sdk/client-cognito-identity-provider": "^3.995.0",
     "@aws-sdk/client-dynamodb": "^3.0.0",
     "@aws-sdk/client-secrets-manager": "^3.0.0",
     "@aws-sdk/client-ses": "^3.0.0",

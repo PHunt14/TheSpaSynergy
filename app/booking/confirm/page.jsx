@@ -18,6 +18,7 @@ function ConfirmPageContent() {
   const [loading, setLoading] = useState(false)
   const [card, setCard] = useState(null)
   const [serviceDetails, setServiceDetails] = useState(null)
+  const [paymentMethod, setPaymentMethod] = useState('card') // 'card' or 'in-person'
 
   useEffect(() => {
     // Fetch service details for pricing
@@ -80,57 +81,74 @@ function ConfirmPageContent() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!card || !serviceDetails) return
+    if (!serviceDetails) return
 
     setLoading(true)
 
     try {
-      // Tokenize card
-      const result = await card.tokenize()
-      if (result.status === 'OK') {
-        // Process payment
-        const paymentResponse = await fetch('/api/payment', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sourceId: result.token,
-            amount: serviceDetails.price,
-            vendorId: vendor
-          })
-        })
+      let paymentId = null
 
-        const paymentData = await paymentResponse.json()
+      // Only process payment if paying by card
+      if (paymentMethod === 'card') {
+        if (!card) {
+          alert('Please enter card information')
+          setLoading(false)
+          return
+        }
 
-        if (paymentData.success) {
-          // Create appointment
-          const appointmentResponse = await fetch('/api/appointments', {
+        // Tokenize card
+        const result = await card.tokenize()
+        if (result.status === 'OK') {
+          // Process payment
+          const paymentResponse = await fetch('/api/payment', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              vendorId: vendor,
-              serviceId: service,
-              dateTime: `${date} ${time}`,
-              customer: formData,
-              status: 'confirmed',
-              paymentId: paymentData.paymentId
+              sourceId: result.token,
+              amount: serviceDetails.price,
+              vendorId: vendor
             })
           })
 
-          if (appointmentResponse.ok) {
-            alert('Appointment booked successfully!')
-            window.location.href = '/'
-          } else {
-            alert('Payment processed but appointment creation failed')
+          const paymentData = await paymentResponse.json()
+
+          if (!paymentData.success) {
+            alert('Payment failed: ' + paymentData.error)
+            setLoading(false)
+            return
           }
+
+          paymentId = paymentData.paymentId
         } else {
-          alert('Payment failed: ' + paymentData.error)
+          alert('Card tokenization failed')
+          setLoading(false)
+          return
         }
+      }
+
+      // Create appointment
+      const appointmentResponse = await fetch('/api/appointments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vendorId: vendor,
+          serviceId: service,
+          dateTime: `${date} ${time}`,
+          customer: formData,
+          status: paymentMethod === 'card' ? 'confirmed' : 'pending',
+          paymentId
+        })
+      })
+
+      if (appointmentResponse.ok) {
+        alert(`Appointment booked successfully! ${paymentMethod === 'in-person' ? 'Payment due at appointment.' : ''}`)
+        window.location.href = '/'
       } else {
-        alert('Card tokenization failed')
+        alert(paymentMethod === 'card' ? 'Payment processed but appointment creation failed' : 'Appointment creation failed')
       }
     } catch (error) {
       console.error('Error:', error)
-      alert('Error processing payment')
+      alert('Error processing booking')
     } finally {
       setLoading(false)
     }
@@ -150,6 +168,9 @@ function ConfirmPageContent() {
         borderRadius: '8px' 
       }}>
         <h3>Appointment Summary</h3>
+        {serviceDetails && (
+          <p><strong>Service:</strong> {serviceDetails.name}</p>
+        )}
         <p><strong>Date:</strong> {new Date(date).toLocaleDateString()}</p>
         <p><strong>Time:</strong> {time}</p>
         {serviceDetails && (
@@ -216,28 +237,78 @@ function ConfirmPageContent() {
         </div>
 
         <div style={{ marginTop: '2rem', marginBottom: '1rem' }}>
-          <label style={{ display: 'block', marginBottom: '0.5rem' }}>
-            Payment Information *
+          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600' }}>
+            Payment Method *
           </label>
-          <div 
-            id="card-container"
-            style={{
-              minHeight: '100px',
+          <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
+            <label style={{ 
+              flex: 1,
               padding: '1rem',
-              background: 'white',
               borderRadius: '8px',
-              border: '1px solid var(--color-border)'
-            }}
-          ></div>
+              border: '2px solid',
+              borderColor: paymentMethod === 'card' ? 'var(--color-primary)' : 'var(--color-border)',
+              background: paymentMethod === 'card' ? 'var(--color-accent)' : 'white',
+              cursor: 'pointer',
+              textAlign: 'center'
+            }}>
+              <input
+                type="radio"
+                name="paymentMethod"
+                value="card"
+                checked={paymentMethod === 'card'}
+                onChange={(e) => setPaymentMethod(e.target.value)}
+                style={{ marginRight: '0.5rem' }}
+              />
+              Pay Now (Card)
+            </label>
+            <label style={{ 
+              flex: 1,
+              padding: '1rem',
+              borderRadius: '8px',
+              border: '2px solid',
+              borderColor: paymentMethod === 'in-person' ? 'var(--color-primary)' : 'var(--color-border)',
+              background: paymentMethod === 'in-person' ? 'var(--color-accent)' : 'white',
+              cursor: 'pointer',
+              textAlign: 'center'
+            }}>
+              <input
+                type="radio"
+                name="paymentMethod"
+                value="in-person"
+                checked={paymentMethod === 'in-person'}
+                onChange={(e) => setPaymentMethod(e.target.value)}
+                style={{ marginRight: '0.5rem' }}
+              />
+              Pay In-Person
+            </label>
+          </div>
         </div>
+
+        {paymentMethod === 'card' && (
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'block', marginBottom: '0.5rem' }}>
+              Payment Information *
+            </label>
+            <div 
+              id="card-container"
+              style={{
+                minHeight: '100px',
+                padding: '1rem',
+                background: 'white',
+                borderRadius: '8px',
+                border: '1px solid var(--color-border)'
+              }}
+            ></div>
+          </div>
+        )}
 
         <button
           type="submit"
-          disabled={loading || !card}
+          disabled={loading || (paymentMethod === 'card' && !card)}
           className="cta"
           style={{ width: '100%', marginTop: '1rem' }}
         >
-          {loading ? 'Processing...' : 'Confirm & Pay'}
+          {loading ? 'Processing...' : paymentMethod === 'card' ? 'Confirm & Pay' : 'Confirm Booking'}
         </button>
       </form>
     </main>
