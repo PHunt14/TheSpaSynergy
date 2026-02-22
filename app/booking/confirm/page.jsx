@@ -109,7 +109,7 @@ function ConfirmPageContent() {
             body: JSON.stringify({
               vendorId: vendor,
               serviceId: service,
-              dateTime: `${new Date(date).toLocaleDateString()} ${time}`,
+              dateTime: `${date} ${time}`,
               customer: formData,
               status: 'confirmed',
               paymentId: paymentData.paymentId

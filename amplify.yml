@@ -1,10 +1,14 @@
 version: 1
+backend:
+  phases:
+    build:
+      commands:
+        - npm ci --cache .npm --prefer-offline
+        - npx ampx generate outputs --branch $AWS_BRANCH --app-id $AWS_APP_ID
 frontend:
   phases:
     preBuild:
       commands:
-        - echo "Deploying CloudFormation infrastructure for $AWS_BRANCH..."
-        - aws cloudformation deploy --stack-name spa-booking-tables-$AWS_BRANCH --template-file infrastructure/dynamodb-tables.yaml --parameter-overrides Environment=$AWS_BRANCH --region us-east-1 --no-fail-on-empty-changeset
         - npm ci
     build:
       commands:
@@ -15,5 +19,6 @@ frontend:
       - '**/*'
   cache:
     paths:
-      - node_modules/**/*
       - .next/cache/**/*
+      - .npm/**/*
+      - node_modules/**/*

@@ -65,26 +65,33 @@ function TimePageContent() {
           </p>
         )}
 
-        {!loading && availableSlots.map(slot => (
-          <div
-            key={slot.time}
-            onClick={() => setSelectedTime(slot.display)}
-            style={{
-              padding: '1rem',
-              marginBottom: '1rem',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              background:
-                selectedTime === slot.display
-                  ? 'var(--color-primary)'
-                  : 'var(--color-accent)',
-              color: selectedTime === slot.display ? 'white' : 'var(--color-text)',
-              transition: '0.2s ease',
-            }}
-          >
-            {slot.display}
-          </div>
-        ))}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: window.innerWidth > 768 ? 'repeat(4, 1fr)' : 'repeat(2, 1fr)',
+          gap: '1rem'
+        }}>
+          {!loading && availableSlots.map(slot => (
+            <div
+              key={slot.time}
+              onClick={() => setSelectedTime(slot.display)}
+              style={{
+                padding: '1rem',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                background:
+                  selectedTime === slot.display
+                    ? 'var(--color-primary)'
+                    : 'var(--color-accent)',
+                color: selectedTime === slot.display ? 'white' : 'var(--color-text)',
+                transition: '0.2s ease',
+                textAlign: 'center',
+                fontWeight: '500'
+              }}
+            >
+              {slot.display}
+            </div>
+          ))}
+        </div>
       </div>
 
       {selectedTime && (

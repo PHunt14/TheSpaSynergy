@@ -17,7 +17,15 @@ function ServicePageContent() {
     fetch(`/api/services?vendorId=${vendor}`)
       .then(res => res.json())
       .then(data => {
-        setServices(data.services || [])
+        const serviceList = data.services || []
+        // Group by category
+        const grouped = serviceList.reduce((acc, service) => {
+          const category = service.category || 'Other'
+          if (!acc[category]) acc[category] = []
+          acc[category].push(service)
+          return acc
+        }, {})
+        setServices(grouped)
         setLoading(false)
       })
       .catch(err => {
@@ -36,26 +44,44 @@ function ServicePageContent() {
       </p>
 
       <div style={{ marginTop: '1.5rem' }}>
-        {services.map(service => (
-          <div
-            key={service.serviceId}
-            onClick={() => setSelected(service.serviceId)}
-            style={{
-              padding: '1rem',
+        {Object.entries(services).map(([category, categoryServices]) => (
+          <div key={category} style={{ marginBottom: '2rem' }}>
+            <h2 style={{ 
+              fontSize: '1.2rem', 
               marginBottom: '1rem',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              background:
-                selected === service.serviceId
-                  ? 'var(--color-primary)'
-                  : 'var(--color-accent)',
-              color: selected === service.serviceId ? 'white' : 'var(--color-text)',
-              transition: '0.2s ease',
-            }}
-          >
-            <strong>{service.name}</strong>
-            <div style={{ fontSize: '0.9rem', opacity: 0.8 }}>
-              {service.duration} min • ${service.price}
+              color: 'var(--color-primary)',
+              borderBottom: '2px solid var(--color-primary)',
+              paddingBottom: '0.5rem'
+            }}>
+              {category}
+            </h2>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: window.innerWidth > 768 ? 'repeat(3, 1fr)' : '1fr',
+              gap: '1rem'
+            }}>
+              {categoryServices.map(service => (
+                <div
+                  key={service.serviceId}
+                  onClick={() => setSelected(service.serviceId)}
+                  style={{
+                    padding: '1rem',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    background:
+                      selected === service.serviceId
+                        ? 'var(--color-primary)'
+                        : 'var(--color-accent)',
+                    color: selected === service.serviceId ? 'white' : 'var(--color-text)',
+                    transition: '0.2s ease',
+                  }}
+                >
+                  <strong>{service.name}</strong>
+                  <div style={{ fontSize: '0.9rem', opacity: 0.8 }}>
+                    {service.duration} min • ${service.price}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         ))}
