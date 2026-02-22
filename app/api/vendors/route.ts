@@ -11,7 +11,7 @@ const client = generateServerClientUsingCookies<Schema>({
 export async function GET() {
   try {
     const { data: vendors, errors } = await client.models.Vendor.list({
-      filter: { isActive: { eq: true } }
+      filter: { isActive: { eq: true } } as any
     });
 
     if (errors) {

@@ -29,7 +29,7 @@ export async function POST(request: Request) {
       status: status || 'pending',
       paymentId,
       createdAt: new Date().toISOString(),
-    });
+    } as any);
 
     if (errors) {
       console.error('Error creating appointment:', errors);
