@@ -21,8 +21,8 @@ export default function Appointments() {
       const session = await fetchAuthSession()
       const vendorId = session.tokens?.idToken?.payload['custom:vendorId']
       const role = session.tokens?.idToken?.payload['custom:role'] || 'staff'
-      setUserVendorId(vendorId as string)
-      setUserRole(role as string)
+      setUserVendorId(vendorId)
+      setUserRole(role)
     } catch (error) {
       console.error('Error loading user vendor:', error)
     }
