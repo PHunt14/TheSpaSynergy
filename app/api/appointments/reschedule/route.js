@@ -1,6 +1,7 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { awsConfig } from '../../../config/aws';
+import { TABLE_NAMES } from '../../../config/tables';
 
 const client = new DynamoDBClient(awsConfig);
 const docClient = DynamoDBDocumentClient.from(client);
@@ -14,7 +15,7 @@ export async function POST(request) {
     }
 
     await docClient.send(new UpdateCommand({
-      TableName: 'spa-appointments',
+      TableName: TABLE_NAMES.APPOINTMENTS,
       Key: { appointmentId },
       UpdateExpression: 'SET dateTime = :newDateTime',
       ExpressionAttributeValues: {

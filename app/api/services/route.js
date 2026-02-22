@@ -1,6 +1,7 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { awsConfig } from '../../config/aws';
+import { TABLE_NAMES } from '../../config/tables';
 
 const client = new DynamoDBClient(awsConfig);
 const docClient = DynamoDBDocumentClient.from(client);
@@ -15,7 +16,7 @@ export async function GET(request) {
 
   try {
     const command = new QueryCommand({
-      TableName: 'spa-services',
+      TableName: TABLE_NAMES.SERVICES,
       IndexName: 'VendorIndex',
       KeyConditionExpression: 'vendorId = :vendorId',
       FilterExpression: 'isActive = :active',
@@ -43,7 +44,7 @@ export async function POST(request) {
     }
 
     const command = new PutCommand({
-      TableName: 'spa-services',
+      TableName: TABLE_NAMES.SERVICES,
       Item: {
         serviceId,
         vendorId,
