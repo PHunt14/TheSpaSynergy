@@ -1,13 +1,13 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
-import { awsConfig } from '../../config/aws';
+import { getAwsConfig } from '../../config/aws';
 import { TABLE_NAMES } from '../../config/tables';
-
-const client = new DynamoDBClient(awsConfig);
-const docClient = DynamoDBDocumentClient.from(client);
 
 export async function GET() {
   try {
+    const awsConfig = await getAwsConfig();
+    const client = new DynamoDBClient(awsConfig);
+    const docClient = DynamoDBDocumentClient.from(client);
     const command = new ScanCommand({
       TableName: TABLE_NAMES.VENDORS,
       FilterExpression: 'isActive = :active',

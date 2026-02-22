@@ -1,10 +1,7 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
-import { awsConfig } from '../../config/aws';
+import { getAwsConfig } from '../../config/aws';
 import { TABLE_NAMES } from '../../config/tables';
-
-const client = new DynamoDBClient(awsConfig);
-const docClient = DynamoDBDocumentClient.from(client);
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
@@ -15,6 +12,10 @@ export async function GET(request) {
   }
 
   try {
+    const awsConfig = await getAwsConfig();
+    const client = new DynamoDBClient(awsConfig);
+    const docClient = DynamoDBDocumentClient.from(client);
+    
     // Get all appointments for this vendor
     const result = await docClient.send(new QueryCommand({
       TableName: TABLE_NAMES.APPOINTMENTS,
