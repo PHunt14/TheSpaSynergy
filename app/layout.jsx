@@ -7,7 +7,7 @@ import Footer from './components/Footer'
 
 
 export const metadata = {
-  title: 'My App',
+  title: 'Spa Synergy',
   description: 'Demo for booking + dashboard',
 }
 

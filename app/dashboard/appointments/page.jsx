@@ -1,28 +1,54 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { fetchAuthSession } from 'aws-amplify/auth'
 
 export default function Appointments() {
   const [appointments, setAppointments] = useState([])
   const [loading, setLoading] = useState(true)
-  const [selectedVendor, setSelectedVendor] = useState('vendor-winsome')
+  const [userVendorId, setUserVendorId] = useState(null)
+  const [userRole, setUserRole] = useState(null)
   const [vendors, setVendors] = useState([])
   const [showReschedule, setShowReschedule] = useState(null)
   const [newDateTime, setNewDateTime] = useState('')
 
   useEffect(() => {
-    fetch('/api/vendors')
-      .then(res => res.json())
-      .then(data => {
-        setVendors(data.vendors || [])
-      })
+    loadUserVendor()
   }, [])
 
+  const loadUserVendor = async () => {
+    try {
+      const session = await fetchAuthSession()
+      const vendorId = session.tokens?.idToken?.payload['custom:vendorId']
+      const role = session.tokens?.idToken?.payload['custom:role'] || 'staff'
+      setUserVendorId(vendorId as string)
+      setUserRole(role as string)
+    } catch (error) {
+      console.error('Error loading user vendor:', error)
+    }
+  }
+
+  useEffect(() => {
+    if (userRole === 'admin' || userRole === 'superadmin') {
+      // Admin/superadmin can see all vendors
+      fetch('/api/vendors')
+        .then(res => res.json())
+        .then(data => {
+          setVendors(data.vendors || [])
+          if (data.vendors?.length > 0) {
+            setUserVendorId(data.vendors[0].vendorId)
+          }
+        })
+    } else if (userVendorId) {
+      loadAppointments()
+    }
+  }, [userVendorId, userRole])
+
   const loadAppointments = () => {
-    if (!selectedVendor) return
+    if (!userVendorId) return
 
     setLoading(true)
-    fetch(`/api/dashboard?vendorId=${selectedVendor}`)
+    fetch(`/api/dashboard?vendorId=${userVendorId}`)
       .then(res => res.json())
       .then(data => {
         setAppointments(data.appointments || [])
@@ -35,8 +61,10 @@ export default function Appointments() {
   }
 
   useEffect(() => {
-    loadAppointments()
-  }, [selectedVendor])
+    if (userVendorId) {
+      loadAppointments()
+    }
+  }, [userVendorId])
 
   const handleCancel = async (appointmentId) => {
     if (!confirm('Are you sure you want to cancel this appointment?')) return
@@ -103,30 +131,34 @@ export default function Appointments() {
         View and manage your bookings.
       </p>
 
-      <div style={{ marginBottom: '2rem' }}>
-        <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-          Select Vendor:
-        </label>
-        <select
-          value={selectedVendor}
-          onChange={(e) => setSelectedVendor(e.target.value)}
-          style={{
-            padding: '0.75rem',
-            borderRadius: '8px',
-            border: '1px solid var(--color-border)',
-            fontSize: '1rem',
-            minWidth: '250px'
-          }}
-        >
-          {vendors.map(vendor => (
-            <option key={vendor.vendorId} value={vendor.vendorId}>
-              {vendor.name}
-            </option>
-          ))}
-        </select>
-      </div>
+      {(userRole === 'admin' || userRole === 'superadmin') && vendors.length > 0 && (
+        <div style={{ marginBottom: '2rem' }}>
+          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+            Select Vendor:
+          </label>
+          <select
+            value={userVendorId || ''}
+            onChange={(e) => setUserVendorId(e.target.value)}
+            style={{
+              padding: '0.75rem',
+              borderRadius: '8px',
+              border: '1px solid var(--color-border)',
+              fontSize: '1rem',
+              minWidth: '250px'
+            }}
+          >
+            {vendors.map(vendor => (
+              <option key={vendor.vendorId} value={vendor.vendorId}>
+                {vendor.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
-      {loading && <p>Loading appointments...</p>}
+      {!userVendorId && <p>Loading...</p>}
+
+      {loading && userVendorId && <p>Loading appointments...</p>}
 
       {!loading && appointments.length === 0 && (
         <p style={{ color: 'var(--color-text-light)' }}>
