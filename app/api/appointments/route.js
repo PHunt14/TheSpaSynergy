@@ -2,14 +2,15 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { randomUUID } from 'crypto';
 import { sendAppointmentConfirmation } from '../../utils/email';
-import { awsConfig } from '../../config/aws';
+import { getAwsConfig } from '../../config/aws';
 import { TABLE_NAMES } from '../../config/tables';
-
-const client = new DynamoDBClient(awsConfig);
-const docClient = DynamoDBDocumentClient.from(client);
 
 export async function POST(request) {
   try {
+    const awsConfig = await getAwsConfig();
+    const client = new DynamoDBClient(awsConfig);
+    const docClient = DynamoDBDocumentClient.from(client);
+    
     const body = await request.json();
     const { vendorId, serviceId, dateTime, customer, status, paymentId } = body;
 

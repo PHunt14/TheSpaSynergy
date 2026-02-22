@@ -1,13 +1,14 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import { awsConfig } from '../../../config/aws';
+import { getAwsConfig } from '../../../config/aws';
 import { TABLE_NAMES } from '../../../config/tables';
-
-const client = new DynamoDBClient(awsConfig);
-const docClient = DynamoDBDocumentClient.from(client);
 
 export async function POST(request) {
   try {
+    const awsConfig = await getAwsConfig();
+    const client = new DynamoDBClient(awsConfig);
+    const docClient = DynamoDBDocumentClient.from(client);
+    
     const { appointmentId, newDateTime } = await request.json();
 
     if (!appointmentId || !newDateTime) {

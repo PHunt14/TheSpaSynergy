@@ -1,10 +1,7 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
-import { awsConfig } from '../../config/aws';
+import { getAwsConfig } from '../../config/aws';
 import { TABLE_NAMES } from '../../config/tables';
-
-const client = new DynamoDBClient(awsConfig);
-const docClient = DynamoDBDocumentClient.from(client);
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
@@ -17,6 +14,10 @@ export async function GET(request) {
   }
 
   try {
+    const awsConfig = await getAwsConfig();
+    const client = new DynamoDBClient(awsConfig);
+    const docClient = DynamoDBDocumentClient.from(client);
+    
     // Get vendor details (working hours, buffer time)
     const vendorResult = await docClient.send(new GetCommand({
       TableName: TABLE_NAMES.VENDORS,
