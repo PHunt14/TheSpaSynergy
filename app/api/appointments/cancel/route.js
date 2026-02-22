@@ -2,6 +2,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, UpdateCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { sendCancellationEmail } from '../../../utils/email';
 import { awsConfig } from '../../../config/aws';
+import { TABLE_NAMES } from '../../../config/tables';
 
 const client = new DynamoDBClient(awsConfig);
 const docClient = DynamoDBDocumentClient.from(client);
@@ -16,7 +17,7 @@ export async function POST(request) {
 
     // Get appointment details before cancelling
     const getResult = await docClient.send(new GetCommand({
-      TableName: 'spa-appointments',
+      TableName: TABLE_NAMES.APPOINTMENTS,
       Key: { appointmentId }
     }));
 
@@ -27,7 +28,7 @@ export async function POST(request) {
 
     // Update status to cancelled
     await docClient.send(new UpdateCommand({
-      TableName: 'spa-appointments',
+      TableName: TABLE_NAMES.APPOINTMENTS,
       Key: { appointmentId },
       UpdateExpression: 'SET #status = :cancelled',
       ExpressionAttributeNames: {
@@ -41,12 +42,12 @@ export async function POST(request) {
     // Send cancellation email
     if (process.env.SES_FROM_EMAIL) {
       const vendorResult = await docClient.send(new GetCommand({
-        TableName: 'spa-vendors',
+        TableName: TABLE_NAMES.VENDORS,
         Key: { vendorId: appointment.vendorId }
       }));
 
       const serviceResult = await docClient.send(new GetCommand({
-        TableName: 'spa-services',
+        TableName: TABLE_NAMES.SERVICES,
         Key: { serviceId: appointment.serviceId }
       }));
 

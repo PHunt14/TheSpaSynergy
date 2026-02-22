@@ -1,6 +1,7 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { awsConfig } from '../../config/aws';
+import { TABLE_NAMES } from '../../config/tables';
 
 const client = new DynamoDBClient(awsConfig);
 const docClient = DynamoDBDocumentClient.from(client);
@@ -18,7 +19,7 @@ export async function GET(request) {
   try {
     // Get vendor details (working hours, buffer time)
     const vendorResult = await docClient.send(new GetCommand({
-      TableName: 'spa-vendors',
+      TableName: TABLE_NAMES.VENDORS,
       Key: { vendorId }
     }));
 
@@ -29,7 +30,7 @@ export async function GET(request) {
 
     // Get service details (duration)
     const serviceResult = await docClient.send(new GetCommand({
-      TableName: 'spa-services',
+      TableName: TABLE_NAMES.SERVICES,
       Key: { serviceId }
     }));
 
@@ -49,7 +50,7 @@ export async function GET(request) {
 
     // Get existing appointments for this vendor on this date
     const appointmentsResult = await docClient.send(new QueryCommand({
-      TableName: 'spa-appointments',
+      TableName: TABLE_NAMES.APPOINTMENTS,
       IndexName: 'VendorDateIndex',
       KeyConditionExpression: 'vendorId = :vendorId AND begins_with(#dt, :date)',
       ExpressionAttributeNames: {

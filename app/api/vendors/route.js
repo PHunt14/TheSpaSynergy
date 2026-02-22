@@ -8,30 +8,6 @@ const docClient = DynamoDBDocumentClient.from(client);
 
 export async function GET() {
   try {
-    console.log('=== Vendors API Debug ===');
-    console.log('All process.env keys:', Object.keys(process.env).filter(k => k.includes('ACCESS') || k.includes('SECRET') || k.includes('REGION') || k.includes('ENV')));
-    console.log('Environment vars:', {
-      ACCESS_KEY_ID: process.env.ACCESS_KEY_ID?.substring(0, 10),
-      SECRET_ACCESS_KEY: process.env.SECRET_ACCESS_KEY ? 'SET' : 'NOT SET',
-      AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID?.substring(0, 10),
-      AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY ? 'SET' : 'NOT SET',
-      NEXT_PUBLIC_ACCESS_KEY_ID: process.env.NEXT_PUBLIC_ACCESS_KEY_ID?.substring(0, 10),
-      NEXT_PUBLIC_SECRET_ACCESS_KEY: process.env.NEXT_PUBLIC_SECRET_ACCESS_KEY ? 'SET' : 'NOT SET',
-      REGION: process.env.REGION,
-      AWS_REGION: process.env.AWS_REGION,
-      NEXT_PUBLIC_REGION: process.env.NEXT_PUBLIC_REGION,
-      NEXT_PUBLIC_ENV: process.env.NEXT_PUBLIC_ENV,
-      NODE_ENV: process.env.NODE_ENV
-    });
-    console.log('awsConfig object:', JSON.stringify(awsConfig, null, 2));
-    console.log('Config region:', awsConfig.region);
-    console.log('Has credentials:', !!awsConfig.credentials);
-    console.log('Full access key:', awsConfig.credentials?.accessKeyId);
-    console.log('Secret key length:', awsConfig.credentials?.secretAccessKey?.length);
-    console.log('Secret key first 10:', awsConfig.credentials?.secretAccessKey?.substring(0, 10));
-    console.log('Table name:', TABLE_NAMES.VENDORS);
-    console.log('TABLE_NAMES object:', TABLE_NAMES);
-    
     const command = new ScanCommand({
       TableName: TABLE_NAMES.VENDORS,
       FilterExpression: 'isActive = :active',

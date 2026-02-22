@@ -1,6 +1,7 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { awsConfig } from '../../config/aws';
+import { TABLE_NAMES } from '../../config/tables';
 
 const client = new DynamoDBClient(awsConfig);
 const docClient = DynamoDBDocumentClient.from(client);
@@ -16,7 +17,7 @@ export async function GET(request) {
   try {
     // Get all appointments for this vendor
     const result = await docClient.send(new QueryCommand({
-      TableName: 'spa-appointments',
+      TableName: TABLE_NAMES.APPOINTMENTS,
       IndexName: 'VendorDateIndex',
       KeyConditionExpression: 'vendorId = :vendorId',
       ExpressionAttributeValues: {
@@ -29,7 +30,7 @@ export async function GET(request) {
     const appointments = await Promise.all(
       (result.Items || []).map(async (appointment) => {
         const serviceResult = await docClient.send(new GetCommand({
-          TableName: 'spa-services',
+          TableName: TABLE_NAMES.SERVICES,
           Key: { serviceId: appointment.serviceId }
         }));
 

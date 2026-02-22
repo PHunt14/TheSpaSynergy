@@ -3,6 +3,7 @@ import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { randomUUID } from 'crypto';
 import { sendAppointmentConfirmation } from '../../utils/email';
 import { awsConfig } from '../../config/aws';
+import { TABLE_NAMES } from '../../config/tables';
 
 const client = new DynamoDBClient(awsConfig);
 const docClient = DynamoDBDocumentClient.from(client);
@@ -30,7 +31,7 @@ export async function POST(request) {
     };
 
     const command = new PutCommand({
-      TableName: 'spa-appointments',
+      TableName: TABLE_NAMES.APPOINTMENTS,
       Item: appointment
     });
 
@@ -42,12 +43,12 @@ export async function POST(request) {
       const { GetCommand } = await import('@aws-sdk/lib-dynamodb');
       
       const vendorResult = await docClient.send(new GetCommand({
-        TableName: 'spa-vendors',
+        TableName: TABLE_NAMES.VENDORS,
         Key: { vendorId }
       }));
       
       const serviceResult = await docClient.send(new GetCommand({
-        TableName: 'spa-services',
+        TableName: TABLE_NAMES.SERVICES,
         Key: { serviceId }
       }));
 
