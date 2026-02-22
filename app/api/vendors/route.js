@@ -8,11 +8,22 @@ const docClient = DynamoDBDocumentClient.from(client);
 
 export async function GET() {
   try {
-    console.log('Vendors API called');
+    console.log('=== Vendors API Debug ===');
+    console.log('Environment vars:', {
+      ACCESS_KEY_ID: process.env.ACCESS_KEY_ID?.substring(0, 10),
+      SECRET_ACCESS_KEY: process.env.SECRET_ACCESS_KEY ? 'SET' : 'NOT SET',
+      AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID?.substring(0, 10),
+      AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY ? 'SET' : 'NOT SET',
+      REGION: process.env.REGION,
+      AWS_REGION: process.env.AWS_REGION,
+      NEXT_PUBLIC_ENV: process.env.NEXT_PUBLIC_ENV
+    });
     console.log('Config region:', awsConfig.region);
     console.log('Has credentials:', !!awsConfig.credentials);
-    console.log('Access key starts with:', awsConfig.credentials?.accessKeyId?.substring(0, 10));
+    console.log('Full access key:', awsConfig.credentials?.accessKeyId);
     console.log('Secret key length:', awsConfig.credentials?.secretAccessKey?.length);
+    console.log('Secret key first 10:', awsConfig.credentials?.secretAccessKey?.substring(0, 10));
+    console.log('Table name:', TABLE_NAMES.VENDORS);
     
     const command = new ScanCommand({
       TableName: TABLE_NAMES.VENDORS,

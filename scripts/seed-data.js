@@ -1,6 +1,7 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
 
+const ENV = process.env.ENV || 'dev';
 const client = new DynamoDBClient({ region: 'us-east-1' });
 const docClient = DynamoDBDocumentClient.from(client);
 
@@ -114,21 +115,21 @@ const services = [
 ];
 
 async function seedData() {
-  console.log('Seeding vendors...');
+  console.log(`Seeding vendors to spa-vendors-${ENV}...`);
   
   for (const vendor of vendors) {
     await docClient.send(new PutCommand({
-      TableName: 'spa-vendors',
+      TableName: `spa-vendors-${ENV}`,
       Item: vendor
     }));
     console.log(`✓ Added vendor: ${vendor.name}`);
   }
 
-  console.log('\nSeeding services...');
+  console.log(`\nSeeding services to spa-services-${ENV}...`);
   
   for (const service of services) {
     await docClient.send(new PutCommand({
-      TableName: 'spa-services',
+      TableName: `spa-services-${ENV}`,
       Item: service
     }));
     console.log(`✓ Added service: ${service.name} (${service.vendorId})`);
