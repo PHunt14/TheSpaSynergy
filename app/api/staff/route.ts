@@ -9,10 +9,14 @@ const getUserPoolId = () => {
 
 export async function POST(request: Request) {
   try {
-    const { email } = await request.json();
+    const { email, vendorId, role } = await request.json();
 
-    if (!email) {
-      return Response.json({ error: 'Email required' }, { status: 400 });
+    if (!email || !role) {
+      return Response.json({ error: 'Email and role required' }, { status: 400 });
+    }
+
+    if (role === 'staff' && !vendorId) {
+      return Response.json({ error: 'VendorId required for staff role' }, { status: 400 });
     }
 
     const userPoolId = getUserPoolId();
@@ -20,19 +24,33 @@ export async function POST(request: Request) {
       return Response.json({ error: 'User pool not configured' }, { status: 500 });
     }
 
+    const userAttributes = [
+      {
+        Name: 'email',
+        Value: email
+      },
+      {
+        Name: 'email_verified',
+        Value: 'true'
+      },
+      {
+        Name: 'custom:role',
+        Value: role
+      }
+    ];
+
+    // Only add vendorId for staff users
+    if (role === 'staff' && vendorId) {
+      userAttributes.push({
+        Name: 'custom:vendorId',
+        Value: vendorId
+      });
+    }
+
     const command = new AdminCreateUserCommand({
       UserPoolId: userPoolId,
       Username: email,
-      UserAttributes: [
-        {
-          Name: 'email',
-          Value: email
-        },
-        {
-          Name: 'email_verified',
-          Value: 'true'
-        }
-      ],
+      UserAttributes: userAttributes,
       DesiredDeliveryMediums: ['EMAIL']
     });
 
@@ -67,6 +85,8 @@ export async function GET(request: Request) {
     const users = response.Users?.map(user => ({
       username: user.Username,
       email: user.Attributes?.find(attr => attr.Name === 'email')?.Value,
+      role: user.Attributes?.find(attr => attr.Name === 'custom:role')?.Value || 'staff',
+      vendorId: user.Attributes?.find(attr => attr.Name === 'custom:vendorId')?.Value,
       status: user.UserStatus,
       created: user.UserCreateDate
     })) || [];
