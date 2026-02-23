@@ -77,7 +77,7 @@ export default function Services() {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          id: service.id,
+          serviceId: service.serviceId,
           isActive: !service.isActive
         })
       })
@@ -98,7 +98,7 @@ export default function Services() {
     if (!confirm(`Delete "${service.name}"?`)) return
 
     try {
-      const response = await fetch(`/api/services?id=${service.id}`, {
+      const response = await fetch(`/api/services?serviceId=${service.serviceId}`, {
         method: 'DELETE'
       })
 
