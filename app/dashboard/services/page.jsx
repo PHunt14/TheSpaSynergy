@@ -10,6 +10,7 @@ export default function Services() {
   const [showAddForm, setShowAddForm] = useState(false)
   const [newService, setNewService] = useState({
     name: '',
+    category: '',
     duration: 30,
     price: 0
   })
@@ -58,8 +59,7 @@ export default function Services() {
       if (response.ok) {
         alert('Service added successfully!')
         setShowAddForm(false)
-        setNewService({ name: '', duration: 30, price: 0 })
-        // Refresh services list
+        setNewService({ name: '', category: '', duration: 30, price: 0 })
         const data = await fetch(`/api/services?vendorId=${selectedVendor}`).then(r => r.json())
         setServices(data.services || [])
       } else {
@@ -68,6 +68,49 @@ export default function Services() {
     } catch (error) {
       console.error('Error adding service:', error)
       alert('Error adding service')
+    }
+  }
+
+  const handleToggleActive = async (service) => {
+    try {
+      const response = await fetch('/api/services', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: service.id,
+          isActive: !service.isActive
+        })
+      })
+
+      if (response.ok) {
+        const data = await fetch(`/api/services?vendorId=${selectedVendor}`).then(r => r.json())
+        setServices(data.services || [])
+      } else {
+        alert('Failed to update service')
+      }
+    } catch (error) {
+      console.error('Error updating service:', error)
+      alert('Error updating service')
+    }
+  }
+
+  const handleDelete = async (service) => {
+    if (!confirm(`Delete "${service.name}"?`)) return
+
+    try {
+      const response = await fetch(`/api/services?id=${service.id}`, {
+        method: 'DELETE'
+      })
+
+      if (response.ok) {
+        const data = await fetch(`/api/services?vendorId=${selectedVendor}`).then(r => r.json())
+        setServices(data.services || [])
+      } else {
+        alert('Failed to delete service')
+      }
+    } catch (error) {
+      console.error('Error deleting service:', error)
+      alert('Error deleting service')
     }
   }
 
@@ -125,6 +168,22 @@ export default function Services() {
               required
               value={newService.name}
               onChange={(e) => setNewService({ ...newService, name: e.target.value })}
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                borderRadius: '8px',
+                border: '1px solid var(--color-border)',
+                fontSize: '1rem'
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Category</label>
+            <input
+              type="text"
+              value={newService.category}
+              onChange={(e) => setNewService({ ...newService, category: e.target.value })}
               style={{
                 width: '100%',
                 padding: '0.75rem',
@@ -200,19 +259,36 @@ export default function Services() {
               <div>
                 <h3 style={{ marginBottom: '0.5rem' }}>{service.name}</h3>
                 <p style={{ color: 'var(--color-text-light)', fontSize: '0.9rem' }}>
-                  {service.duration} minutes • ${service.price}
+                  {service.category && `${service.category} • `}{service.duration} min • ${service.price}
                 </p>
               </div>
-              <div>
-                <span style={{
-                  padding: '0.5rem 1rem',
-                  borderRadius: '12px',
-                  fontSize: '0.85rem',
-                  background: service.isActive ? '#4CAF50' : '#999',
-                  color: 'white'
-                }}>
+              <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                <button
+                  onClick={() => handleToggleActive(service)}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    borderRadius: '8px',
+                    border: 'none',
+                    cursor: 'pointer',
+                    background: service.isActive ? '#4CAF50' : '#999',
+                    color: 'white'
+                  }}
+                >
                   {service.isActive ? 'Active' : 'Inactive'}
-                </span>
+                </button>
+                <button
+                  onClick={() => handleDelete(service)}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    borderRadius: '8px',
+                    border: 'none',
+                    cursor: 'pointer',
+                    background: '#f44336',
+                    color: 'white'
+                  }}
+                >
+                  Delete
+                </button>
               </div>
             </div>
           ))}

@@ -39,7 +39,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { serviceId, vendorId, name, duration, price, isActive } = body;
+    const { serviceId, vendorId, name, duration, price, isActive, category, resourceType } = body;
 
     if (!serviceId || !vendorId || !name || !duration || price === undefined) {
       return Response.json({ error: 'Missing required fields' }, { status: 400 });
@@ -51,6 +51,8 @@ export async function POST(request: Request) {
       name,
       duration,
       price,
+      category,
+      resourceType,
       isActive: isActive !== undefined ? isActive : true,
     });
 
@@ -63,5 +65,51 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('Error creating service:', error);
     return Response.json({ error: 'Failed to create service' }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+
+    if (!id) {
+      return Response.json({ error: 'id required' }, { status: 400 });
+    }
+
+    const { data, errors } = await client.models.Service.delete({ id });
+
+    if (errors) {
+      console.error('Error deleting service:', errors);
+      return Response.json({ error: 'Failed to delete service' }, { status: 500 });
+    }
+
+    return Response.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting service:', error);
+    return Response.json({ error: 'Failed to delete service' }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const body = await request.json();
+    const { id, isActive } = body;
+
+    if (!id || isActive === undefined) {
+      return Response.json({ error: 'id and isActive required' }, { status: 400 });
+    }
+
+    const { data, errors } = await client.models.Service.update({ id, isActive });
+
+    if (errors) {
+      console.error('Error updating service:', errors);
+      return Response.json({ error: 'Failed to update service' }, { status: 500 });
+    }
+
+    return Response.json({ success: true, data });
+  } catch (error) {
+    console.error('Error updating service:', error);
+    return Response.json({ error: 'Failed to update service' }, { status: 500 });
   }
 }
