@@ -8,7 +8,7 @@ export default function Home() {
 
       <section style={{ padding: '4rem 2rem', maxWidth: '1200px', margin: '0 auto' }}>
         <h2 style={{ textAlign: 'center', marginBottom: '3rem' }}>Experience Luxury & Wellness</h2>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '2rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '2rem' }}>
           <div style={{
             borderRadius: '12px',
             overflow: 'hidden',

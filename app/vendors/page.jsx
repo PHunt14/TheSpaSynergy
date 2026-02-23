@@ -28,7 +28,7 @@ export default function VendorsPage() {
 
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(3, 1fr)',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
         gap: '2rem'
       }}>
         {vendors.map(vendor => (

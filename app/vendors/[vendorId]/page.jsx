@@ -121,7 +121,7 @@ export default function VendorDetailPage() {
       {services.length === 0 ? (
         <p style={{ color: 'var(--color-text-light)' }}>No services available at this time.</p>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
           {services.map(service => (
             <Link
               key={service.serviceId}
