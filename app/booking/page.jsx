@@ -1,11 +1,14 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 
 export default function Booking() {
+  const searchParams = useSearchParams()
+  const preselect = searchParams.get('preselect')
   const [vendors, setVendors] = useState([])
-  const [selected, setSelected] = useState(null)
+  const [selected, setSelected] = useState(preselect)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
