@@ -71,13 +71,13 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
+    const serviceId = searchParams.get('serviceId');
 
-    if (!id) {
-      return Response.json({ error: 'id required' }, { status: 400 });
+    if (!serviceId) {
+      return Response.json({ error: 'serviceId required' }, { status: 400 });
     }
 
-    const { data, errors } = await client.models.Service.delete({ id });
+    const { data, errors } = await client.models.Service.delete({ serviceId });
 
     if (errors) {
       console.error('Error deleting service:', errors);
@@ -94,13 +94,13 @@ export async function DELETE(request: Request) {
 export async function PATCH(request: Request) {
   try {
     const body = await request.json();
-    const { id, isActive } = body;
+    const { serviceId, isActive } = body;
 
-    if (!id || isActive === undefined) {
-      return Response.json({ error: 'id and isActive required' }, { status: 400 });
+    if (!serviceId || isActive === undefined) {
+      return Response.json({ error: 'serviceId and isActive required' }, { status: 400 });
     }
 
-    const { data, errors } = await client.models.Service.update({ id, isActive });
+    const { data, errors } = await client.models.Service.update({ serviceId, isActive });
 
     if (errors) {
       console.error('Error updating service:', errors);
