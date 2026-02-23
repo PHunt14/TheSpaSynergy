@@ -1,4 +1,4 @@
-import { CognitoIdentityProviderClient, AdminCreateUserCommand, ListUsersCommand } from '@aws-sdk/client-cognito-identity-provider';
+import { CognitoIdentityProviderClient, AdminCreateUserCommand, ListUsersCommand, AdminDeleteUserCommand, AdminUpdateUserAttributesCommand } from '@aws-sdk/client-cognito-identity-provider';
 
 const client = new CognitoIdentityProviderClient({ region: 'us-east-1' });
 
@@ -96,6 +96,82 @@ export async function GET(request: Request) {
     console.error('Error listing users:', error);
     return Response.json({ 
       error: 'Failed to list users',
+      details: error.message 
+    }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const username = searchParams.get('username');
+
+    if (!username) {
+      return Response.json({ error: 'Username required' }, { status: 400 });
+    }
+
+    const userPoolId = getUserPoolId();
+    if (!userPoolId) {
+      return Response.json({ error: 'User pool not configured' }, { status: 500 });
+    }
+
+    const command = new AdminDeleteUserCommand({
+      UserPoolId: userPoolId,
+      Username: username
+    });
+
+    await client.send(command);
+
+    return Response.json({ success: true });
+  } catch (error: any) {
+    console.error('Error deleting user:', error);
+    return Response.json({ 
+      error: 'Failed to delete user',
+      details: error.message 
+    }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const { username, role, vendorId } = await request.json();
+
+    if (!username || !role) {
+      return Response.json({ error: 'Username and role required' }, { status: 400 });
+    }
+
+    const userPoolId = getUserPoolId();
+    if (!userPoolId) {
+      return Response.json({ error: 'User pool not configured' }, { status: 500 });
+    }
+
+    const attributes = [
+      {
+        Name: 'custom:role',
+        Value: role
+      }
+    ];
+
+    if (vendorId) {
+      attributes.push({
+        Name: 'custom:vendorId',
+        Value: vendorId
+      });
+    }
+
+    const command = new AdminUpdateUserAttributesCommand({
+      UserPoolId: userPoolId,
+      Username: username,
+      UserAttributes: attributes
+    });
+
+    await client.send(command);
+
+    return Response.json({ success: true });
+  } catch (error: any) {
+    console.error('Error updating user:', error);
+    return Response.json({ 
+      error: 'Failed to update user',
       details: error.message 
     }, { status: 500 });
   }

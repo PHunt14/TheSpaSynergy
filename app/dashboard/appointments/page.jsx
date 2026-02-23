@@ -25,6 +25,7 @@ export default function Appointments() {
       setUserRole(role)
     } catch (error) {
       console.error('Error loading user vendor:', error)
+      setLoading(false)
     }
   }
 

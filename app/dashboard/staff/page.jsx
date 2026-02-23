@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { fetchAuthSession } from 'aws-amplify/auth'
 
 export default function Staff() {
   const [email, setEmail] = useState('')
@@ -10,11 +11,30 @@ export default function Staff() {
   const [loadingUsers, setLoadingUsers] = useState(true)
   const [vendors, setVendors] = useState([])
   const [selectedVendor, setSelectedVendor] = useState('')
+  const [currentUserRole, setCurrentUserRole] = useState(null)
+  const [currentUserVendorId, setCurrentUserVendorId] = useState(null)
+  const [editingUser, setEditingUser] = useState(null)
 
   useEffect(() => {
+    loadCurrentUser()
     loadUsers()
     loadVendors()
   }, [])
+
+  const loadCurrentUser = async () => {
+    try {
+      const session = await fetchAuthSession()
+      const vendorId = session.tokens?.idToken?.payload['custom:vendorId']
+      const role = session.tokens?.idToken?.payload['custom:role'] || 'staff'
+      setCurrentUserRole(role)
+      setCurrentUserVendorId(vendorId)
+      if (role === 'staff' && vendorId) {
+        setSelectedVendor(vendorId)
+      }
+    } catch (error) {
+      console.error('Error loading current user:', error)
+    }
+  }
 
   const loadVendors = async () => {
     try {
@@ -46,6 +66,8 @@ export default function Staff() {
     e.preventDefault()
     if (!email) return
 
+    const vendorId = currentUserRole === 'staff' ? currentUserVendorId : selectedVendor
+
     setLoading(true)
     try {
       const response = await fetch('/api/staff', {
@@ -53,7 +75,7 @@ export default function Staff() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           email,
-          vendorId: selectedVendor,
+          vendorId,
           role
         })
       })
@@ -75,6 +97,47 @@ export default function Staff() {
     }
   }
 
+  const handleUpdate = async (username, newRole, newVendorId) => {
+    try {
+      const response = await fetch('/api/staff', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, role: newRole, vendorId: newVendorId })
+      })
+
+      if (response.ok) {
+        alert('User updated successfully')
+        setEditingUser(null)
+        loadUsers()
+      } else {
+        alert('Failed to update user')
+      }
+    } catch (error) {
+      console.error('Error updating user:', error)
+      alert('Error updating user')
+    }
+  }
+
+  const handleDelete = async (username, email) => {
+    if (!confirm(`Delete user ${email}?`)) return
+
+    try {
+      const response = await fetch(`/api/staff?username=${username}`, {
+        method: 'DELETE'
+      })
+
+      if (response.ok) {
+        alert('User deleted successfully')
+        loadUsers()
+      } else {
+        alert('Failed to delete user')
+      }
+    } catch (error) {
+      console.error('Error deleting user:', error)
+      alert('Error deleting user')
+    }
+  }
+
   return (
     <div>
       <h1>Staff Management</h1>
@@ -91,50 +154,56 @@ export default function Staff() {
       }}>
         <h3>Invite New User</h3>
         <form onSubmit={handleInvite}>
-          <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem' }}>
-              Assign to Vendor *
-            </label>
-            <select
-              value={selectedVendor}
-              onChange={(e) => setSelectedVendor(e.target.value)}
-              required
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                borderRadius: '8px',
-                border: '1px solid var(--color-border)',
-                fontSize: '1rem'
-              }}
-            >
-              {vendors.map(vendor => (
-                <option key={vendor.vendorId} value={vendor.vendorId}>
-                  {vendor.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem' }}>
-              Role *
-            </label>
-            <select
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-              required
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                borderRadius: '8px',
-                border: '1px solid var(--color-border)',
-                fontSize: '1rem'
-              }}
-            >
-              <option value="staff">Staff (Vendor Access)</option>
-              <option value="admin">Admin (All Vendors)</option>
-              <option value="superadmin">Super Admin (Full Access)</option>
-            </select>
-          </div>
+          {(currentUserRole === 'admin' || currentUserRole === 'superadmin') && (
+            <>
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.5rem' }}>
+                  Role *
+                </label>
+                <select
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    borderRadius: '8px',
+                    border: '1px solid var(--color-border)',
+                    fontSize: '1rem'
+                  }}
+                >
+                  <option value="staff">Staff (Vendor Access)</option>
+                  <option value="admin">Admin (All Vendors)</option>
+                  {currentUserRole === 'superadmin' && <option value="superadmin">Super Admin (Full Access)</option>}
+                </select>
+              </div>
+              {role === 'staff' && (
+                <div style={{ marginBottom: '1rem' }}>
+                  <label style={{ display: 'block', marginBottom: '0.5rem' }}>
+                    Assign to Vendor *
+                  </label>
+                  <select
+                    value={selectedVendor}
+                    onChange={(e) => setSelectedVendor(e.target.value)}
+                    required
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem',
+                      borderRadius: '8px',
+                      border: '1px solid var(--color-border)',
+                      fontSize: '1rem'
+                    }}
+                  >
+                    {vendors.map(vendor => (
+                      <option key={vendor.vendorId} value={vendor.vendorId}>
+                        {vendor.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </>
+          )}
           <div style={{ marginBottom: '1rem' }}>
             <label style={{ display: 'block', marginBottom: '0.5rem' }}>
               Email Address *
@@ -188,7 +257,7 @@ export default function Staff() {
                   <th style={{ padding: '1rem', textAlign: 'left' }}>Role</th>
                   <th style={{ padding: '1rem', textAlign: 'left' }}>Vendor</th>
                   <th style={{ padding: '1rem', textAlign: 'left' }}>Status</th>
-                  <th style={{ padding: '1rem', textAlign: 'left' }}>Created</th>
+                  <th style={{ padding: '1rem', textAlign: 'left' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -196,18 +265,43 @@ export default function Staff() {
                   <tr key={user.username} style={{ borderBottom: '1px solid var(--color-border)' }}>
                     <td style={{ padding: '1rem' }}>{user.email}</td>
                     <td style={{ padding: '1rem' }}>
-                      <span style={{
-                        padding: '0.25rem 0.75rem',
-                        borderRadius: '12px',
-                        fontSize: '0.85rem',
-                        background: user.role === 'superadmin' ? '#9C27B0' : user.role === 'admin' ? '#2196F3' : '#4CAF50',
-                        color: 'white'
-                      }}>
-                        {user.role}
-                      </span>
+                      {editingUser === user.username ? (
+                        <select
+                          defaultValue={user.role}
+                          onChange={(e) => user.editRole = e.target.value}
+                          style={{ padding: '0.5rem', borderRadius: '4px' }}
+                        >
+                          <option value="staff">Staff</option>
+                          <option value="admin">Admin</option>
+                          {currentUserRole === 'superadmin' && <option value="superadmin">Super Admin</option>}
+                        </select>
+                      ) : (
+                        <span style={{
+                          padding: '0.25rem 0.75rem',
+                          borderRadius: '12px',
+                          fontSize: '0.85rem',
+                          background: user.role === 'superadmin' ? '#9C27B0' : user.role === 'admin' ? '#2196F3' : '#4CAF50',
+                          color: 'white'
+                        }}>
+                          {user.role}
+                        </span>
+                      )}
                     </td>
                     <td style={{ padding: '1rem' }}>
-                      {user.vendorId ? vendors.find(v => v.vendorId === user.vendorId)?.name || user.vendorId : 'All'}
+                      {editingUser === user.username ? (
+                        <select
+                          defaultValue={user.vendorId || ''}
+                          onChange={(e) => user.editVendorId = e.target.value}
+                          style={{ padding: '0.5rem', borderRadius: '4px' }}
+                        >
+                          <option value="">All</option>
+                          {vendors.map(v => (
+                            <option key={v.vendorId} value={v.vendorId}>{v.name}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        user.vendorId ? vendors.find(v => v.vendorId === user.vendorId)?.name || user.vendorId : 'All'
+                      )}
                     </td>
                     <td style={{ padding: '1rem' }}>
                       <span style={{
@@ -220,8 +314,70 @@ export default function Staff() {
                         {user.status}
                       </span>
                     </td>
-                    <td style={{ padding: '1rem' }}>
-                      {new Date(user.created).toLocaleDateString()}
+                    <td style={{ padding: '1rem', display: 'flex', gap: '0.5rem' }}>
+                      {editingUser === user.username ? (
+                        <>
+                          <button
+                            onClick={() => handleUpdate(user.username, user.editRole || user.role, user.editVendorId || user.vendorId)}
+                            style={{
+                              padding: '0.5rem 1rem',
+                              borderRadius: '4px',
+                              border: 'none',
+                              background: '#4CAF50',
+                              color: 'white',
+                              cursor: 'pointer',
+                              fontSize: '0.85rem'
+                            }}
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={() => setEditingUser(null)}
+                            style={{
+                              padding: '0.5rem 1rem',
+                              borderRadius: '4px',
+                              border: 'none',
+                              background: '#999',
+                              color: 'white',
+                              cursor: 'pointer',
+                              fontSize: '0.85rem'
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => setEditingUser(user.username)}
+                            style={{
+                              padding: '0.5rem 1rem',
+                              borderRadius: '4px',
+                              border: 'none',
+                              background: '#2196F3',
+                              color: 'white',
+                              cursor: 'pointer',
+                              fontSize: '0.85rem'
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDelete(user.username, user.email)}
+                            style={{
+                              padding: '0.5rem 1rem',
+                              borderRadius: '4px',
+                              border: 'none',
+                              background: '#F44336',
+                              color: 'white',
+                              cursor: 'pointer',
+                              fontSize: '0.85rem'
+                            }}
+                          >
+                            Delete
+                          </button>
+                        </>
+                      )}
                     </td>
                   </tr>
                 ))}
