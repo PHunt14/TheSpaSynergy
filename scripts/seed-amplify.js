@@ -11,15 +11,16 @@ const vendors = [
     name: 'Winsome Woods',
     description: 'Massage and Wellness',
     email: 'contact@winsomewoods.com',
+    phone: '301-992-3224',
     squareAccountId: 'PLACEHOLDER_SQUARE_ID_1',
     isActive: true,
     workingHours: {
-      monday: { start: '09:00', end: '17:00' },
-      tuesday: { start: '09:00', end: '17:00' },
-      wednesday: { start: '09:00', end: '17:00' },
-      thursday: { start: '09:00', end: '17:00' },
-      friday: { start: '09:00', end: '17:00' },
-      saturday: { start: '09:00', end: '14:00' },
+      monday: { start: '12:00', end: '17:00' },
+      tuesday: { start: '12:00', end: '17:00' },
+      wednesday: { start: '12:00', end: '17:00' },
+      thursday: { start: '12:00', end: '17:00' },
+      friday: { start: '12:00', end: '17:00' },
+      saturday: { start: '12:00', end: '17:00' },
       sunday: { start: null, end: null }
     },
     bufferMinutes: 15
@@ -29,8 +30,9 @@ const vendors = [
     name: 'Chemically Lavish',
     description: 'Hair Studio',
     email: 'contact@chemicallylavish.com',
+    phone: '240-452-2839',
     squareAccountId: 'PLACEHOLDER_SQUARE_ID_2',
-    isActive: true,
+    isActive: false,
     workingHours: {
       monday: { start: '09:00', end: '17:00' },
       tuesday: { start: '09:00', end: '17:00' },
@@ -47,8 +49,28 @@ const vendors = [
     name: 'The Kera Studio',
     description: 'Hair and Nails',
     email: 'contact@kerastudio.com',
+    phone: '240-329-6537',
     squareAccountId: 'PLACEHOLDER_SQUARE_ID_3',
     isActive: true,
+    workingHours: {
+      monday: { start: '09:00', end: '17:00' },
+      tuesday: { start: '09:00', end: '17:00' },
+      wednesday: { start: '09:00', end: '17:00' },
+      thursday: { start: '09:00', end: '17:00' },
+      friday: { start: '09:00', end: '17:00' },
+      saturday: { start: '09:00', end: '14:00' },
+      sunday: { start: null, end: null }
+    },
+    bufferMinutes: 15
+  },
+  {
+    vendorId: 'vendor-radiant',
+    name: 'Radiant Artistry',
+    description: 'Hair Styling',
+    email: 'contact@radiantartistry.com',
+    phone: '240-452-2839',
+    squareAccountId: 'PLACEHOLDER_SQUARE_ID_4',
+    isActive: false,
     workingHours: {
       monday: { start: '09:00', end: '17:00' },
       tuesday: { start: '09:00', end: '17:00' },
@@ -64,16 +86,28 @@ const vendors = [
 
 const services = [
   // Winsome Woods
-  { serviceId: 'svc-massage-60', vendorId: 'vendor-winsome', category: 'Massage', name: 'Swedish Massage', duration: 60, price: 80, isActive: true },
-  { serviceId: 'svc-massage-90', vendorId: 'vendor-winsome', category: 'Massage', name: 'Deep Tissue Massage', duration: 90, price: 120, isActive: true },
-  { serviceId: 'svc-facial', vendorId: 'vendor-winsome', category: 'Facial', name: 'Relaxation Facial', duration: 60, price: 75, isActive: true },
-  { serviceId: 'svc-aromatherapy', vendorId: 'vendor-winsome', category: 'Wellness', name: 'Aromatherapy Session', duration: 45, price: 65, isActive: true },
+  { serviceId: 'svc-massage-60', vendorId: 'vendor-winsome', category: 'Massage', name: 'Massage - 60 min', duration: 60, price: 65, isActive: true },
+  { serviceId: 'svc-massage-90', vendorId: 'vendor-winsome', category: 'Massage', name: 'Massage - 90 min', duration: 90, price: 120, isActive: true },
+  { serviceId: 'svc-reiki', vendorId: 'vendor-winsome', category: 'Wellness', name: 'Reiki', duration: 30, price: 75, isActive: true },
+  { serviceId: 'svc-sound-healing-30', vendorId: 'vendor-winsome', category: 'Wellness', name: 'Sound Healing - 30 min', duration: 30, price: 35, isActive: true },
+  { serviceId: 'svc-sound-healing-60', vendorId: 'vendor-winsome', category: 'Wellness', name: 'Sound Healing - 60 min', duration: 60, price: 50, isActive: true },
+  { serviceId: 'svc-redlight-therapy', vendorId: 'vendor-winsome', category: 'Red Light', name: 'Red Light Therapy', duration: 30, price: 25, isActive: true },
+  { serviceId: 'svc-tarot-30', vendorId: 'vendor-winsome', category: 'Tarot', name: 'Tarot Reading - 30 min', duration: 30, price: 20, isActive: true },
+  { serviceId: 'svc-tarot-60', vendorId: 'vendor-winsome', category: 'Tarot', name: 'Tarot Reading - 60 min', duration: 60, price: 45, isActive: true },
+  { serviceId: 'svc-salt-soak', vendorId: 'vendor-winsome', category: 'Wellness', name: 'Foot Salt Soak', duration: 30, price: 15, isActive: true },
+  { serviceId: 'svc-salt-soak-detox', vendorId: 'vendor-winsome', category: 'Wellness', name: 'Ionic Foot Detox', duration: 30, price: 20, isActive: true },
   
   // Chemically Lavish
-  { serviceId: 'svc-haircut', vendorId: 'vendor-chemically', category: 'Hair', name: 'Haircut & Style', duration: 45, price: 50, isActive: true },
-  { serviceId: 'svc-color', vendorId: 'vendor-chemically', category: 'Hair Color', name: 'Full Color', duration: 120, price: 150, isActive: true },
-  { serviceId: 'svc-highlights', vendorId: 'vendor-chemically', category: 'Hair Color', name: 'Highlights', duration: 90, price: 120, isActive: true },
-  { serviceId: 'svc-blowout', vendorId: 'vendor-chemically', category: 'Hair', name: 'Blowout', duration: 30, price: 35, isActive: true },
+  { serviceId: 'svc-haircut', vendorId: 'vendor-chemically', category: 'Hair', name: 'Haircut & Style', duration: 45, price: 50, isActive: false },
+  { serviceId: 'svc-color', vendorId: 'vendor-chemically', category: 'Hair Color', name: 'Full Color', duration: 120, price: 150, isActive: false },
+  { serviceId: 'svc-highlights', vendorId: 'vendor-chemically', category: 'Hair Color', name: 'Highlights', duration: 90, price: 120, isActive: false },
+  { serviceId: 'svc-blowout', vendorId: 'vendor-chemically', category: 'Hair', name: 'Blowout', duration: 30, price: 35, isActive: false },
+  
+  // Radiant Artistry
+  { serviceId: 'svc-radiant-haircut', vendorId: 'vendor-radiant', category: 'Hair', name: 'Haircut & Style', duration: 45, price: 50, isActive: false },
+  { serviceId: 'svc-radiant-color', vendorId: 'vendor-radiant', category: 'Hair Color', name: 'Full Color', duration: 120, price: 150, isActive: false },
+  { serviceId: 'svc-radiant-highlights', vendorId: 'vendor-radiant', category: 'Hair Color', name: 'Highlights', duration: 90, price: 120, isActive: false },
+  { serviceId: 'svc-radiant-blowout', vendorId: 'vendor-radiant', category: 'Hair', name: 'Blowout', duration: 30, price: 35, isActive: false },
   
   // The Kera Studio
   { serviceId: 'svc-kera-head-bath', vendorId: 'vendor-kera', category: 'Spa Room', name: 'Head Bath', duration: 60, price: 115, isActive: true },

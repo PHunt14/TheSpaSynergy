@@ -9,7 +9,18 @@ Amplify.configure(outputs)
 
 export default function DashboardAuthLayout({ children }) {
   return (
-    <Authenticator hideSignUp={true}>
+    <Authenticator 
+      hideSignUp={true}
+      components={{
+        Header() {
+          return (
+            <div style={{ textAlign: 'center', padding: '2rem 0 1rem' }}>
+              <h2>Vendor Login</h2>
+            </div>
+          )
+        }
+      }}
+    >
       {({ signOut, user }) => (
         <div>
           <div style={{ 

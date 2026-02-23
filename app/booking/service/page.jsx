@@ -8,17 +8,19 @@ function ServicePageContent() {
   const params = useSearchParams()
   const vendor = params.get('vendor')
   const [services, setServices] = useState([])
+  const [vendorInfo, setVendorInfo] = useState(null)
   const [selected, setSelected] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (!vendor) return
     
-    fetch(`/api/services?vendorId=${vendor}`)
-      .then(res => res.json())
-      .then(data => {
-        const serviceList = data.services || []
-        // Group by category
+    Promise.all([
+      fetch(`/api/services?vendorId=${vendor}`).then(res => res.json()),
+      fetch('/api/vendors').then(res => res.json())
+    ])
+      .then(([servicesData, vendorsData]) => {
+        const serviceList = servicesData.services || []
         const grouped = serviceList.reduce((acc, service) => {
           const category = service.category || 'Other'
           if (!acc[category]) acc[category] = []
@@ -26,6 +28,7 @@ function ServicePageContent() {
           return acc
         }, {})
         setServices(grouped)
+        setVendorInfo(vendorsData.vendors?.find(v => v.vendorId === vendor))
         setLoading(false)
       })
       .catch(err => {
@@ -38,6 +41,40 @@ function ServicePageContent() {
 
   return (
     <main>
+      {vendorInfo && (
+        <div style={{
+          background: 'var(--color-accent)',
+          borderRadius: '12px',
+          padding: '1.5rem',
+          marginBottom: '2rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '1.5rem'
+        }}>
+          <div style={{
+            width: '80px',
+            height: '80px',
+            borderRadius: '12px',
+            background: 'linear-gradient(135deg, var(--color-primary), var(--color-secondary))',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'white',
+            fontSize: '0.8rem',
+            fontWeight: 'bold',
+            flexShrink: 0
+          }}>
+            [Icon]
+          </div>
+          <div>
+            <h2 style={{ margin: '0 0 0.25rem 0' }}>{vendorInfo.name}</h2>
+            <p style={{ margin: 0, color: 'var(--color-text-light)', fontSize: '0.9rem' }}>
+              {vendorInfo.description}
+            </p>
+          </div>
+        </div>
+      )}
+
       <h1>Select a Service</h1>
       <p style={{ color: 'var(--color-text-light)' }}>
         Choose the service you'd like to book.

@@ -7,6 +7,7 @@ const schema = a.schema({
       name: a.string().required(),
       description: a.string(),
       email: a.email().required(),
+      phone: a.string(),
       squareAccountId: a.string(),
       isActive: a.boolean().default(true),
       workingHours: a.json(),
