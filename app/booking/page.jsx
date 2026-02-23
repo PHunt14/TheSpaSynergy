@@ -38,25 +38,40 @@ export default function Booking() {
         Choose who you'd like to book with.
       </p>
 
-      <div style={{ marginTop: '1.5rem' }}>
+      <div style={{ marginTop: '1.5rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
         {vendors.map(vendor => (
           <div
             key={vendor.vendorId}
             onClick={() => setSelected(vendor.vendorId)}
             style={{
-              padding: '1rem',
-              marginBottom: '1rem',
-              borderRadius: '8px',
+              background: selected === vendor.vendorId ? 'var(--color-primary)' : 'var(--color-accent)',
+              borderRadius: '12px',
+              overflow: 'hidden',
               cursor: 'pointer',
-              background:
-                selected === vendor.vendorId
-                  ? 'var(--color-primary)'
-                  : 'var(--color-accent)',
-              color: selected === vendor.vendorId ? 'white' : 'var(--color-text)',
+              border: selected === vendor.vendorId ? '3px solid var(--color-primary-dark)' : '1px solid var(--color-border)',
               transition: '0.2s ease',
             }}
           >
-            <strong>{vendor.name}</strong>
+            <div style={{
+              height: '150px',
+              background: 'linear-gradient(135deg, var(--color-primary), var(--color-secondary))',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'white',
+              fontSize: '1rem',
+              fontWeight: 'bold'
+            }}>
+              [Vendor Icon]
+            </div>
+            <div style={{ padding: '1.5rem' }}>
+              <strong style={{ color: selected === vendor.vendorId ? 'white' : 'var(--color-text)' }}>
+                {vendor.name}
+              </strong>
+              <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.9rem', opacity: 0.8, color: selected === vendor.vendorId ? 'white' : 'var(--color-text-light)' }}>
+                {vendor.description}
+              </p>
+            </div>
           </div>
         ))}
       </div>
