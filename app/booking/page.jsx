@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 
-export default function Booking() {
+function BookingContent() {
   const searchParams = useSearchParams()
   const preselect = searchParams.get('preselect')
   const [vendors, setVendors] = useState([])
@@ -85,5 +85,13 @@ export default function Booking() {
         </Link>
       )}
     </main>
+  )
+}
+
+export default function Booking() {
+  return (
+    <Suspense fallback={<main><h1>Loading...</h1></main>}>
+      <BookingContent />
+    </Suspense>
   )
 }
