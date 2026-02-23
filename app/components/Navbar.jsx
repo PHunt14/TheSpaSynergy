@@ -13,7 +13,6 @@ export default function Navbar() {
           <Link href="/services">Services</Link>
           <Link href="/booking">Book Now</Link>
           <Link href="/contact">Contact</Link>
-          <Link href="/dashboard">Dashboard</Link>
         </div>
       </div>
     </nav>

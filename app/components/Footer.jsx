@@ -14,6 +14,7 @@ export default function Footer() {
           <Link href="/services">Services</Link>
           <Link href="/booking">Book Now</Link>
           <Link href="/contact">Contact</Link>
+          <Link href="/dashboard">Vendor Dashboard</Link>
         </div>
       </div>
 
