@@ -1,3 +1,15 @@
+export const metadata = {
+  title: 'The Spa Synergy | Luxury Spa & Wellness Services in Fort Ritchie, MD',
+  description: 'Book premium spa, beauty, and wellness services at The Spa Synergy in Fort Ritchie, MD. Expert massage, hair styling, and private suite rentals.',
+  keywords: 'spa Fort Ritchie, massage Fort Ritchie MD, hair salon Fort Ritchie, beauty services Maryland, wellness center',
+  openGraph: {
+    title: 'The Spa Synergy | Luxury Spa & Wellness',
+    description: 'Premium spa and wellness services in Fort Ritchie, MD',
+    type: 'website',
+    locale: 'en_US',
+  },
+}
+
 export default function Home() {
   return (
     <main className="home">

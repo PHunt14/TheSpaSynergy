@@ -32,6 +32,36 @@ export default function VendorDetailPage() {
       .catch(() => setLoading(false))
   }, [vendorId])
 
+  useEffect(() => {
+    if (vendor) {
+      document.title = `${vendor.name} | The Spa Synergy`
+      
+      const structuredData = {
+        "@context": "https://schema.org",
+        "@type": "LocalBusiness",
+        "name": vendor.name,
+        "description": vendor.description,
+        "telephone": vendor.phone,
+        "email": vendor.email,
+        "address": {
+          "@type": "PostalAddress",
+          "streetAddress": "14310 Castle Dr",
+          "addressLocality": "Fort Ritchie",
+          "addressRegion": "MD",
+          "postalCode": "21719"
+        }
+      }
+      
+      let script = document.querySelector('script[type="application/ld+json"]')
+      if (!script) {
+        script = document.createElement('script')
+        script.type = 'application/ld+json'
+        document.head.appendChild(script)
+      }
+      script.textContent = JSON.stringify(structuredData)
+    }
+  }, [vendor])
+
   if (loading) return <div style={{ padding: '2rem' }}>Loading...</div>
   if (!vendor) return <div style={{ padding: '2rem' }}>Vendor not found</div>
 
