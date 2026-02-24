@@ -83,8 +83,8 @@ export default function Home() {
               [Hair]
             </div>
             <div style={{ padding: '1.5rem' }}>
-              <h3>Private Suites</h3>
-              <p style={{ color: 'var(--color-text-light)' }}>Book exclusive spaces for your personal wellness journey.</p>
+              <h3>Wellness</h3>
+              <p style={{ color: 'var(--color-text-light)' }}>Holistic treatments for mind, body, and spirit balance.</p>
             </div>
           </div>
         </div>
