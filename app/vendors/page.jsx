@@ -3,16 +3,12 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 
-export const metadata = {
-  title: 'Our Vendors | The Spa Synergy',
-  description: 'Discover talented spa and wellness professionals at The Spa Synergy. Browse our vendors offering massage, beauty, hair, and wellness services.',
-}
-
 export default function VendorsPage() {
   const [vendors, setVendors] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    document.title = 'Our Vendors | The Spa Synergy'
     fetch('/api/vendors')
       .then(res => res.json())
       .then(data => {
