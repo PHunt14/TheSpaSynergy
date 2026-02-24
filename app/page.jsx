@@ -1,3 +1,15 @@
+export const metadata = {
+  title: 'The Spa Synergy | Luxury Spa & Wellness Services in Fort Ritchie, MD',
+  description: 'Book premium spa, beauty, and wellness services at The Spa Synergy in Fort Ritchie, MD. Expert massage, hair styling, and private suite rentals.',
+  keywords: 'spa Fort Ritchie, massage Fort Ritchie MD, hair salon Fort Ritchie, beauty services Maryland, wellness center, spa near Hagerstown MD, massage Thurmont MD, salon Smithsburg MD, spa Sabillasville MD, wellness Leitersburg MD, spa Frederick MD, massage Waynesboro PA, salon Blue Ridge Summit PA, spa Gettysburg PA, wellness Chambersburg PA',
+  openGraph: {
+    title: 'The Spa Synergy | Luxury Spa & Wellness',
+    description: 'Premium spa and wellness services in Fort Ritchie, MD',
+    type: 'website',
+    locale: 'en_US',
+  },
+}
+
 export default function Home() {
   return (
     <main className="home">
@@ -71,8 +83,8 @@ export default function Home() {
               [Hair]
             </div>
             <div style={{ padding: '1.5rem' }}>
-              <h3>Private Suites</h3>
-              <p style={{ color: 'var(--color-text-light)' }}>Book exclusive spaces for your personal wellness journey.</p>
+              <h3>Wellness</h3>
+              <p style={{ color: 'var(--color-text-light)' }}>Holistic treatments for mind, body, and spirit balance.</p>
             </div>
           </div>
         </div>

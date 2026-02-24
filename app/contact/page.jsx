@@ -2,6 +2,11 @@
 
 import { useState, useEffect } from 'react'
 
+export const metadata = {
+  title: 'Contact Us | The Spa Synergy',
+  description: 'Contact The Spa Synergy in Fort Ritchie, MD. Visit us at 14310 Castle Dr or reach out to our vendors for appointments and inquiries.',
+}
+
 export default function ContactPage() {
   const [vendors, setVendors] = useState([])
   const [loading, setLoading] = useState(true)
