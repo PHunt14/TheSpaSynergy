@@ -144,22 +144,22 @@ async function seedData() {
       ...vendor,
       workingHours: JSON.stringify(vendor.workingHours)
     };
-    const { data, errors } = await client.models.Vendor.create(vendorData);
+    const { data, errors } = await client.models.Vendor.update(vendorData);
     if (errors) {
-      console.error(`✗ Error adding vendor ${vendor.name}:`, errors);
+      console.error(`✗ Error updating vendor ${vendor.name}:`, errors);
     } else {
-      console.log(`✓ Added vendor: ${vendor.name}`);
+      console.log(`✓ Updated vendor: ${vendor.name}`);
     }
   }
 
   console.log('\nSeeding services...');
   
   for (const service of services) {
-    const { data, errors } = await client.models.Service.create(service);
+    const { data, errors } = await client.models.Service.update(service);
     if (errors) {
-      console.error(`✗ Error adding service ${service.name}:`, errors);
+      console.error(`✗ Error updating service ${service.name}:`, errors);
     } else {
-      console.log(`✓ Added service: ${service.name} (${service.vendorId})`);
+      console.log(`✓ Updated service: ${service.name}`);
     }
   }
 
