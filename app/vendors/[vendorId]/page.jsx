@@ -93,7 +93,7 @@ export default function VendorDetailPage() {
       </p>
       {vendor.phone && (
         <p style={{ fontSize: '1.1rem', marginBottom: '3rem' }}>
-          <strong>Contact:</strong> {vendor.phone}
+          <strong>Contact:</strong> <a href={`tel:${vendor.phone}`} style={{ color: 'var(--color-primary-dark)', textDecoration: 'none' }}>{vendor.phone}</a>
         </p>
       )}
 
@@ -107,7 +107,7 @@ export default function VendorDetailPage() {
         `}</style>
         <div style={{
           background: 'var(--color-accent)',
-          padding: '1.5rem',
+          padding: '0.5rem',
           borderRadius: '12px',
           textAlign: 'center'
         }}>
@@ -119,15 +119,14 @@ export default function VendorDetailPage() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: 'white',
-            marginBottom: '1rem'
+            color: 'white'
           }}>
             [Gallery Photo 1]
           </div>
         </div>
         <div style={{
           background: 'var(--color-accent)',
-          padding: '1.5rem',
+          padding: '0.5rem',
           borderRadius: '12px',
           textAlign: 'center'
         }}>
@@ -139,15 +138,14 @@ export default function VendorDetailPage() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: 'white',
-            marginBottom: '1rem'
+            color: 'white'
           }}>
             [Gallery Photo 2]
           </div>
         </div>
         <div style={{
           background: 'var(--color-accent)',
-          padding: '1.5rem',
+          padding: '0.5rem',
           borderRadius: '12px',
           textAlign: 'center'
         }}>
@@ -159,8 +157,7 @@ export default function VendorDetailPage() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: 'white',
-            marginBottom: '1rem'
+            color: 'white'
           }}>
             [Gallery Photo 3]
           </div>

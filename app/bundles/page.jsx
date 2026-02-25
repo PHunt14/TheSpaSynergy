@@ -35,6 +35,7 @@ export default function BundlesPage() {
               borderRadius: '12px',
               padding: '2rem',
               border: '2px solid var(--color-primary)',
+              textAlign: 'center'
             }}
           >
             <h3 style={{ marginBottom: '0.75rem', color: 'var(--color-primary)', fontSize: '1.3rem' }}>

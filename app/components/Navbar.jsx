@@ -1,6 +1,25 @@
+'use client'
+
 import Link from 'next/link'
+import { useState, useEffect } from 'react'
 
 export default function Navbar() {
+  const [vendors, setVendors] = useState([])
+  const [showVendorDropdown, setShowVendorDropdown] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/vendors')
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to fetch')
+        return res.json()
+      })
+      .then(data => setVendors(data.vendors || []))
+      .catch(err => {
+        console.error('Error loading vendors for navbar:', err)
+        setVendors([])
+      })
+  }, [])
+
   return (
     <nav className="navbar">
       <div className="nav-inner">
@@ -9,7 +28,28 @@ export default function Navbar() {
         </Link>
 
         <div className="nav-links">
-          <Link href="/vendors">Vendors</Link>
+          <div 
+            className="nav-dropdown"
+            onMouseEnter={() => setShowVendorDropdown(true)}
+            onMouseLeave={() => setShowVendorDropdown(false)}
+          >
+            <Link href="/vendors">Vendors</Link>
+            {showVendorDropdown && (
+              <div className="dropdown-menu">
+                {vendors.length > 0 ? (
+                  vendors.map(vendor => (
+                    <Link key={vendor.vendorId} href={`/vendors/${vendor.vendorId}`}>
+                      {vendor.name}
+                    </Link>
+                  ))
+                ) : (
+                  <div style={{ padding: '0.75rem 1rem', color: 'var(--color-text-light)' }}>
+                    Loading vendors...
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
           <Link href="/bundles">Bundles</Link>
           <Link href="/booking">Book Now</Link>
           <Link href="/contact">Contact</Link>

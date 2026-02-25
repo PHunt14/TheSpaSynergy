@@ -39,10 +39,10 @@ export default function ContactPage() {
             <div key={vendor.vendorId} style={{ marginBottom: '1.5rem', padding: '1rem', background: 'var(--color-accent)', borderRadius: '8px' }}>
               <h4 style={{ marginBottom: '0.5rem' }}>{vendor.name}</h4>
               <p style={{ margin: '0.25rem 0' }}>
-                <strong>Phone:</strong> {vendor.phone || 'N/A'}
+                <strong>Phone:</strong> <a href={`tel:${vendor.phone}`} style={{ color: 'var(--color-primary-dark)', textDecoration: 'none' }}>{vendor.phone || 'N/A'}</a>
               </p>
               <p style={{ margin: '0.25rem 0' }}>
-                <strong>Email:</strong> {vendor.email}
+                <strong>Email:</strong> <a href={`mailto:${vendor.email}`} style={{ color: 'var(--color-primary-dark)', textDecoration: 'none' }}>{vendor.email}</a>
               </p>
             </div>
           ))}

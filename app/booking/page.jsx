@@ -24,16 +24,21 @@ function BookingContent() {
       })
   }, [])
 
-  if (loading) return <main><h1>Loading...</h1></main>
+  if (loading) return <div style={{ padding: '2rem' }}>Loading...</div>
 
   return (
-    <main>
+    <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
       <h1>Our Professionals</h1>
-      <p style={{ color: 'var(--color-text-light)' }}>
+      <p style={{ color: 'var(--color-text-light)', marginBottom: '3rem' }}>
         Choose a professional to get started.
       </p>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem', marginTop: '2rem' }}>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+        gap: '2rem',
+        marginBottom: '4rem'
+      }}>
         {vendors.map(vendor => (
           <div
             key={vendor.vendorId}
@@ -42,43 +47,41 @@ function BookingContent() {
               background: 'var(--color-accent)',
               borderRadius: '12px',
               overflow: 'hidden',
+              transition: 'transform 0.2s',
               cursor: 'pointer',
-              border: '1px solid var(--color-border)',
-              transition: '0.2s ease',
+              border: '1px solid var(--color-border)'
             }}
             onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
             onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
           >
             <div style={{
-              height: '150px',
+              height: '200px',
               background: 'linear-gradient(135deg, var(--color-primary), var(--color-secondary))',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               color: 'white',
-              fontSize: '1rem',
+              fontSize: '1.2rem',
               fontWeight: 'bold'
             }}>
-              [Vendor Icon]
+              [Vendor Photo]
             </div>
             <div style={{ padding: '1.5rem' }}>
-              <strong style={{ color: 'var(--color-text)' }}>
-                {vendor.name}
-              </strong>
-              <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.9rem', opacity: 0.8, color: 'var(--color-text-light)' }}>
-                {vendor.description}
+              <h3 style={{ marginBottom: '0.5rem' }}>{vendor.name}</h3>
+              <p style={{ color: 'var(--color-text-light)', fontSize: '0.95rem' }}>
+                {vendor.description || 'Professional services tailored to your needs.'}
               </p>
             </div>
           </div>
         ))}
       </div>
-    </main>
+    </div>
   )
 }
 
 export default function Booking() {
   return (
-    <Suspense fallback={<main><h1>Loading...</h1></main>}>
+    <Suspense fallback={<div style={{ padding: '2rem' }}>Loading...</div>}>
       <BookingContent />
     </Suspense>
   )
