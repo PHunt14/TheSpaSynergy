@@ -114,6 +114,11 @@ function ServicePageContent() {
                   }}
                 >
                   <strong>{service.name}</strong>
+                  {service.description && (
+                    <div style={{ fontSize: '0.85rem', opacity: 0.9, margin: '0.5rem 0' }}>
+                      {service.description}
+                    </div>
+                  )}
                   <div style={{ fontSize: '0.9rem', opacity: 0.8 }}>
                     {service.duration} min • ${service.price}
                   </div>

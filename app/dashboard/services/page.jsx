@@ -11,6 +11,7 @@ export default function Services() {
   const [newService, setNewService] = useState({
     name: '',
     category: '',
+    description: '',
     duration: 30,
     price: 0
   })
@@ -59,7 +60,7 @@ export default function Services() {
       if (response.ok) {
         alert('Service added successfully!')
         setShowAddForm(false)
-        setNewService({ name: '', category: '', duration: 30, price: 0 })
+        setNewService({ name: '', category: '', description: '', duration: 30, price: 0 })
         const data = await fetch(`/api/services?vendorId=${selectedVendor}`).then(r => r.json())
         setServices(data.services || [])
       } else {
@@ -195,6 +196,23 @@ export default function Services() {
           </div>
 
           <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Description</label>
+            <textarea
+              value={newService.description}
+              onChange={(e) => setNewService({ ...newService, description: e.target.value })}
+              rows="3"
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                borderRadius: '8px',
+                border: '1px solid var(--color-border)',
+                fontSize: '1rem',
+                resize: 'vertical'
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: '1rem' }}>
             <label style={{ display: 'block', marginBottom: '0.5rem' }}>Duration (minutes) *</label>
             <input
               type="number"
@@ -258,6 +276,11 @@ export default function Services() {
             >
               <div>
                 <h3 style={{ marginBottom: '0.5rem' }}>{service.name}</h3>
+                {service.description && (
+                  <p style={{ color: 'var(--color-text)', fontSize: '0.9rem', marginBottom: '0.5rem' }}>
+                    {service.description}
+                  </p>
+                )}
                 <p style={{ color: 'var(--color-text-light)', fontSize: '0.9rem' }}>
                   {service.category && `${service.category} • `}{service.duration} min • ${service.price}
                 </p>

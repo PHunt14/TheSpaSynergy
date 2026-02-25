@@ -12,24 +12,31 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const vendorId = searchParams.get('vendorId');
 
-  if (!vendorId) {
-    return Response.json({ error: 'vendorId required' }, { status: 400 });
-  }
-
   try {
-    const { data: services, errors } = await client.models.Service.list({
-      filter: { 
-        vendorId: { eq: vendorId },
-        isActive: { eq: true }
-      } as any
-    });
+    if (vendorId) {
+      const { data: services, errors } = await client.models.Service.list({
+        filter: { 
+          vendorId: { eq: vendorId },
+          isActive: { eq: true }
+        } as any
+      });
 
-    if (errors) {
-      console.error('Error fetching services:', errors);
-      return Response.json({ error: 'Failed to fetch services' }, { status: 500 });
+      if (errors) {
+        console.error('Error fetching services:', errors);
+        return Response.json({ error: 'Failed to fetch services' }, { status: 500 });
+      }
+
+      return Response.json({ services });
+    } else {
+      const { data: services, errors } = await client.models.Service.list();
+
+      if (errors) {
+        console.error('Error fetching services:', errors);
+        return Response.json({ error: 'Failed to fetch services' }, { status: 500 });
+      }
+
+      return Response.json({ services });
     }
-
-    return Response.json({ services });
   } catch (error) {
     console.error('Error fetching services:', error);
     return Response.json({ error: 'Failed to fetch services' }, { status: 500 });

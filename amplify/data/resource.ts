@@ -21,6 +21,7 @@ const schema = a.schema({
       serviceId: a.id().required(),
       vendorId: a.string().required(),
       name: a.string().required(),
+      description: a.string(),
       category: a.string(),
       resourceType: a.string().default('staff'),
       duration: a.integer().required(),
@@ -29,6 +30,18 @@ const schema = a.schema({
     })
     .identifier(['serviceId'])
     .secondaryIndexes((index) => [index('vendorId')])
+    .authorization((allow) => [allow.publicApiKey()]),
+
+  Bundle: a
+    .model({
+      bundleId: a.id().required(),
+      name: a.string().required(),
+      description: a.string(),
+      serviceIds: a.string().array().required(),
+      price: a.float().required(),
+      isActive: a.boolean().default(true),
+    })
+    .identifier(['bundleId'])
     .authorization((allow) => [allow.publicApiKey()]),
 
   Appointment: a
