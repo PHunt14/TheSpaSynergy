@@ -6,58 +6,55 @@ import Link from 'next/link'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 
-function TimePageContent() {
+function BundleTimeContent() {
   const params = useSearchParams()
-  const service = params.get('service')
-  const vendor = params.get('vendor')
+  const serviceIds = params.get('services')?.split(',') || []
 
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [selectedTime, setSelectedTime] = useState(null)
   const [availableSlots, setAvailableSlots] = useState([])
   const [loading, setLoading] = useState(false)
-  const [serviceInfo, setServiceInfo] = useState(null)
+  const [services, setServices] = useState([])
 
   useEffect(() => {
-    if (!service) return
+    if (serviceIds.length === 0) return
     
     fetch('/api/services')
       .then(res => res.json())
       .then(data => {
-        const svc = data.services?.find(s => s.serviceId === service)
-        setServiceInfo(svc)
+        const selected = data.services?.filter(s => serviceIds.includes(s.serviceId)) || []
+        setServices(selected)
       })
-  }, [service])
+  }, [])
 
   useEffect(() => {
-    if (!vendor || !service || !selectedDate) return
+    if (serviceIds.length === 0 || !selectedDate) return
 
     setLoading(true)
     setSelectedTime(null)
 
-    const dateStr = selectedDate.toISOString().split('T')[0] // YYYY-MM-DD
+    const dateStr = selectedDate.toISOString().split('T')[0]
+    const vendorId = services[0]?.vendorId
 
-    fetch(`/api/availability?vendorId=${vendor}&serviceId=${service}&date=${dateStr}`)
+    if (!vendorId) return
+
+    fetch(`/api/availability?vendorId=${vendorId}&serviceId=${serviceIds[0]}&date=${dateStr}`)
       .then(res => res.json())
       .then(data => {
         setAvailableSlots(data.availableSlots || [])
         setLoading(false)
       })
-      .catch(err => {
-        console.error('Error loading availability:', err)
-        setLoading(false)
-      })
-  }, [vendor, service, selectedDate])
+      .catch(() => setLoading(false))
+  }, [selectedDate, services])
+
+  const totalDuration = services.reduce((sum, s) => sum + s.duration, 0)
+  const totalPrice = services.reduce((sum, s) => sum + s.price, 0)
 
   return (
     <main>
       <h1>Select Date & Time</h1>
-      {serviceInfo && (
-        <p style={{ color: 'var(--color-text-light)', marginBottom: '0.5rem' }}>
-          {serviceInfo.name} • {serviceInfo.duration} min • ${serviceInfo.price}
-        </p>
-      )}
-      <p style={{ color: 'var(--color-text-light)' }}>
-        Choose a date and time that works for you.
+      <p style={{ color: 'var(--color-text-light)', marginBottom: '1rem' }}>
+        Bundle: {services.length} services • {totalDuration} min • ${totalPrice.toFixed(2)}
       </p>
 
       <div style={{ marginTop: '1.5rem' }}>
@@ -84,7 +81,7 @@ function TimePageContent() {
 
         <div style={{
           display: 'grid',
-          gridTemplateColumns: window.innerWidth > 768 ? 'repeat(4, 1fr)' : 'repeat(2, 1fr)',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
           gap: '1rem'
         }}>
           {!loading && availableSlots.map(slot => (
@@ -95,10 +92,7 @@ function TimePageContent() {
                 padding: '1rem',
                 borderRadius: '8px',
                 cursor: 'pointer',
-                background:
-                  selectedTime === slot.display
-                    ? 'var(--color-primary)'
-                    : 'var(--color-accent)',
+                background: selectedTime === slot.display ? 'var(--color-primary)' : 'var(--color-accent)',
                 color: selectedTime === slot.display ? 'white' : 'var(--color-text)',
                 transition: '0.2s ease',
                 textAlign: 'center',
@@ -113,7 +107,7 @@ function TimePageContent() {
 
       {selectedTime && (
         <Link
-          href={`/booking/confirm?vendor=${vendor}&service=${service}&date=${selectedDate.toISOString()}&time=${selectedTime}`}
+          href={`/booking/confirm?services=${serviceIds.join(',')}&date=${selectedDate.toISOString()}&time=${selectedTime}`}
           className="cta"
         >
           Continue
@@ -123,10 +117,10 @@ function TimePageContent() {
   )
 }
 
-export default function TimePage() {
+export default function BundleTimePage() {
   return (
     <Suspense fallback={<main><h1>Loading...</h1></main>}>
-      <TimePageContent />
+      <BundleTimeContent />
     </Suspense>
   )
 }

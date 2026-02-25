@@ -13,8 +13,9 @@ export default function VendorDetailPage() {
 
   const groupedServices = services.reduce((acc, service) => {
     const category = service.category || 'Other'
-    if (!acc[category]) acc[category] = []
-    acc[category].push(service)
+    if (!acc[category]) acc[category] = { count: 0, services: [] }
+    acc[category].count++
+    acc[category].services.push(service)
     return acc
   }, {})
 
@@ -96,7 +97,14 @@ export default function VendorDetailPage() {
         </p>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '2rem', marginBottom: '3rem' }}>
+      <div className="grid-3-cols" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '2rem', marginBottom: '3rem' }}>
+        <style jsx>{`
+          @media (max-width: 768px) {
+            div[style*="repeat(3, 1fr)"] {
+              grid-template-columns: 1fr !important;
+            }
+          }
+        `}</style>
         <div style={{
           background: 'var(--color-accent)',
           padding: '1.5rem',
@@ -159,53 +167,39 @@ export default function VendorDetailPage() {
         </div>
       </div>
 
-      <h2 style={{ marginBottom: '1.5rem' }}>Services Offered</h2>
+      <h2 style={{ marginBottom: '1.5rem' }}>Service Categories</h2>
       {services.length === 0 ? (
         <p style={{ color: 'var(--color-text-light)' }}>No services available at this time.</p>
       ) : (
-        <div>
-          {Object.entries(groupedServices).map(([category, categoryServices]) => (
-            <div key={category} style={{ marginBottom: '3rem' }}>
-              <h3 style={{ marginBottom: '1rem', color: 'var(--color-primary)' }}>{category}</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem' }}>
-                {categoryServices.map(service => (
-                  <Link
-                    key={service.serviceId}
-                    href={`/booking/time?vendor=${vendorId}&service=${service.serviceId}`}
-                    style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}
-                  >
-                    <div style={{
-                      background: 'var(--color-accent)',
-                      padding: '1.5rem',
-                      borderRadius: '12px',
-                      border: '1px solid var(--color-border)',
-                      cursor: 'pointer',
-                      transition: 'transform 0.2s'
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
-                    onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
-                    >
-                      <h3 style={{ marginBottom: '0.5rem' }}>{service.name}</h3>
-                      <p style={{ color: 'var(--color-text-light)', fontSize: '0.9rem', marginBottom: '1rem' }}>
-                        {service.duration} minutes
-                      </p>
-                      <p style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--color-primary)' }}>
-                        ${service.price}
-                      </p>
-                    </div>
-                  </Link>
-                ))}
-              </div>
+        <div className="grid-3-cols" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', marginBottom: '3rem' }}>
+        <style jsx>{`
+          @media (max-width: 768px) {
+            div[style*="repeat(3, 1fr)"] {
+              grid-template-columns: 1fr !important;
+            }
+          }
+        `}</style>
+          {Object.entries(groupedServices).map(([category, data]) => (
+            <div
+              key={category}
+              style={{
+                background: 'var(--color-accent)',
+                padding: '1.5rem',
+                borderRadius: '12px',
+                border: '1px solid var(--color-border)',
+              }}
+            >
+              <h3 style={{ marginBottom: '0.5rem', color: 'var(--color-primary)', fontSize: '1.1rem' }}>{category}</h3>
+              <p style={{ color: 'var(--color-text-light)', fontSize: '0.9rem', marginBottom: '1rem' }}>
+                {data.count} {data.count === 1 ? 'service' : 'services'} available
+              </p>
+              <Link href={`/booking/service?vendor=${vendorId}`} className="cta" style={{ display: 'inline-block', fontSize: '0.9rem', padding: '0.6rem 1.2rem' }}>
+                Book Now
+              </Link>
             </div>
           ))}
         </div>
       )}
-
-      <div style={{ marginTop: '3rem', textAlign: 'center' }}>
-        <Link href={`/booking/service?vendor=${vendorId}`} className="cta">
-          Book an Appointment
-        </Link>
-      </div>
     </div>
   )
 }

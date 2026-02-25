@@ -278,6 +278,10 @@ html, body {
 
 /* Mobile breakpoint */
 @media (max-width: 768px) {
+  .grid-3-cols {
+    grid-template-columns: 1fr !important;
+  }
+
   .booking-container {
     padding: 1.25rem;
     margin: 1rem;

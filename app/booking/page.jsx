@@ -1,30 +1,25 @@
 'use client'
 
 import { useState, useEffect, Suspense } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 
 function BookingContent() {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const preselect = searchParams.get('preselect')
   const [vendors, setVendors] = useState([])
-  const [selected, setSelected] = useState(preselect)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     fetch('/api/vendors')
-      .then(res => {
-        console.log('Vendors API response status:', res.status)
-        return res.json()
-      })
+      .then(res => res.json())
       .then(data => {
-        console.log('Vendors data:', data)
         setVendors(data.vendors || [])
         setLoading(false)
       })
       .catch(err => {
-        console.error('Error loading vendors:', err)
-        alert('Failed to load vendors. Check console for details.')
+        console.error('Error loading data:', err)
         setLoading(false)
       })
   }, [])
@@ -33,24 +28,26 @@ function BookingContent() {
 
   return (
     <main>
-      <h1>Select a Vendor</h1>
+      <h1>Our Professionals</h1>
       <p style={{ color: 'var(--color-text-light)' }}>
-        Choose who you'd like to book with.
+        Choose a professional to get started.
       </p>
 
-      <div style={{ marginTop: '1.5rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem', marginTop: '2rem' }}>
         {vendors.map(vendor => (
           <div
             key={vendor.vendorId}
-            onClick={() => setSelected(vendor.vendorId)}
+            onClick={() => router.push(`/booking/service?vendor=${vendor.vendorId}`)}
             style={{
-              background: selected === vendor.vendorId ? 'var(--color-primary)' : 'var(--color-accent)',
+              background: 'var(--color-accent)',
               borderRadius: '12px',
               overflow: 'hidden',
               cursor: 'pointer',
-              border: selected === vendor.vendorId ? '3px solid var(--color-primary-dark)' : '1px solid var(--color-border)',
+              border: '1px solid var(--color-border)',
               transition: '0.2s ease',
             }}
+            onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
+            onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
           >
             <div style={{
               height: '150px',
@@ -65,25 +62,16 @@ function BookingContent() {
               [Vendor Icon]
             </div>
             <div style={{ padding: '1.5rem' }}>
-              <strong style={{ color: selected === vendor.vendorId ? 'white' : 'var(--color-text)' }}>
+              <strong style={{ color: 'var(--color-text)' }}>
                 {vendor.name}
               </strong>
-              <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.9rem', opacity: 0.8, color: selected === vendor.vendorId ? 'white' : 'var(--color-text-light)' }}>
+              <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.9rem', opacity: 0.8, color: 'var(--color-text-light)' }}>
                 {vendor.description}
               </p>
             </div>
           </div>
         ))}
       </div>
-
-      {selected && (
-        <Link
-          href={`/booking/service?vendor=${selected}`}
-          className="cta"
-        >
-          Continue
-        </Link>
-      )}
     </main>
   )
 }

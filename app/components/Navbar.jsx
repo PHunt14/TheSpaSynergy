@@ -10,6 +10,7 @@ export default function Navbar() {
 
         <div className="nav-links">
           <Link href="/vendors">Vendors</Link>
+          <Link href="/bundles">Bundles</Link>
           <Link href="/booking">Book Now</Link>
           <Link href="/contact">Contact</Link>
         </div>

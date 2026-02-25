@@ -22,7 +22,7 @@ export default function VendorsPage() {
 
   return (
     <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
-      <h1>Our Vendors</h1>
+      <h1>Our Professionals</h1>
       <p style={{ color: 'var(--color-text-light)', marginBottom: '3rem' }}>
         Discover our talented professionals and their unique services.
       </p>
@@ -30,7 +30,8 @@ export default function VendorsPage() {
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-        gap: '2rem'
+        gap: '2rem',
+        marginBottom: '4rem'
       }}>
         {vendors.map(vendor => (
           <Link
