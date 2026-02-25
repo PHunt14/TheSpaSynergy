@@ -19,8 +19,9 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json()
+    const bundleId = `bundle-${Date.now()}`
     const { data: bundle } = await client.models.Bundle.create({
-      bundleId: `bundle-${Date.now()}`,
+      bundleId: bundleId as any,
       name: body.name,
       description: body.description,
       serviceIds: body.serviceIds,
