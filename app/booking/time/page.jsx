@@ -15,6 +15,18 @@ function TimePageContent() {
   const [selectedTime, setSelectedTime] = useState(null)
   const [availableSlots, setAvailableSlots] = useState([])
   const [loading, setLoading] = useState(false)
+  const [serviceInfo, setServiceInfo] = useState(null)
+
+  useEffect(() => {
+    if (!service) return
+    
+    fetch('/api/services')
+      .then(res => res.json())
+      .then(data => {
+        const svc = data.services?.find(s => s.serviceId === service)
+        setServiceInfo(svc)
+      })
+  }, [service])
 
   useEffect(() => {
     if (!vendor || !service || !selectedDate) return
@@ -39,6 +51,11 @@ function TimePageContent() {
   return (
     <main>
       <h1>Select Date & Time</h1>
+      {serviceInfo && (
+        <p style={{ color: 'var(--color-text-light)', marginBottom: '0.5rem' }}>
+          {serviceInfo.name} • {serviceInfo.duration} min • ${serviceInfo.price}
+        </p>
+      )}
       <p style={{ color: 'var(--color-text-light)' }}>
         Choose a date and time that works for you.
       </p>

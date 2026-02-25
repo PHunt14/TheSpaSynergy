@@ -28,7 +28,7 @@ const vendors = [
   {
     vendorId: 'vendor-kera',
     name: 'The Kera Studio',
-    description: 'Hair and Nails',
+    description: 'Hair and Beauty Studio',
     email: 'contact@kerastudio.com',
     phone: '240-329-6537',
     squareAccountId: 'PLACEHOLDER_SQUARE_ID_3',
