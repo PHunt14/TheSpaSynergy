@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 
 export default function VendorsPage() {
+  const router = useRouter()
   const [vendors, setVendors] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -34,12 +35,10 @@ export default function VendorsPage() {
         marginBottom: '4rem'
       }}>
         {vendors.map(vendor => (
-          <Link
+          <div
             key={vendor.vendorId}
-            href={`/vendors/${vendor.vendorId}`}
-            style={{ textDecoration: 'none', color: 'inherit' }}
-          >
-            <div style={{
+            onClick={() => router.push(`/vendors/${vendor.vendorId}`)}
+            style={{
               background: 'var(--color-accent)',
               borderRadius: '12px',
               overflow: 'hidden',
@@ -49,27 +48,26 @@ export default function VendorsPage() {
             }}
             onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
             onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
-            >
-              <div style={{
-                height: '200px',
-                background: 'linear-gradient(135deg, var(--color-primary), var(--color-secondary))',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'white',
-                fontSize: '1.2rem',
-                fontWeight: 'bold'
-              }}>
-                [Vendor Photo]
-              </div>
-              <div style={{ padding: '1.5rem' }}>
-                <h3 style={{ marginBottom: '0.5rem' }}>{vendor.name}</h3>
-                <p style={{ color: 'var(--color-text-light)', fontSize: '0.95rem' }}>
-                  {vendor.description || 'Professional services tailored to your needs.'}
-                </p>
-              </div>
+          >
+            <div style={{
+              height: '200px',
+              background: 'linear-gradient(135deg, var(--color-primary), var(--color-secondary))',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'white',
+              fontSize: '1.2rem',
+              fontWeight: 'bold'
+            }}>
+              [Vendor Photo]
             </div>
-          </Link>
+            <div style={{ padding: '1.5rem' }}>
+              <h3 style={{ marginBottom: '0.5rem' }}>{vendor.name}</h3>
+              <p style={{ color: 'var(--color-text-light)', fontSize: '0.95rem' }}>
+                {vendor.description || 'Professional services tailored to your needs.'}
+              </p>
+            </div>
+          </div>
         ))}
       </div>
     </div>

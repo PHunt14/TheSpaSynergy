@@ -30,7 +30,7 @@ function BookingContent() {
     <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
       <h1>Our Professionals</h1>
       <p style={{ color: 'var(--color-text-light)', marginBottom: '3rem' }}>
-        Choose a professional to get started.
+        Discover our talented professionals and their unique services.
       </p>
 
       <div style={{
