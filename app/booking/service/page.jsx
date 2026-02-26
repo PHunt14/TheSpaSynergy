@@ -49,7 +49,9 @@ function ServicePageContent() {
           marginBottom: '2rem',
           display: 'flex',
           alignItems: 'center',
-          gap: '1.5rem'
+          gap: '1.5rem',
+          maxWidth: '600px',
+          margin: '0 auto 2rem auto'
         }}>
           <div style={{
             width: '80px',
@@ -75,8 +77,8 @@ function ServicePageContent() {
         </div>
       )}
 
-      <h1>Select a Service</h1>
-      <p style={{ color: 'var(--color-text-light)' }}>
+      <h1 style={{ textAlign: 'center' }}>Select a Service</h1>
+      <p style={{ color: 'var(--color-text-light)', textAlign: 'center' }}>
         Choose the service you'd like to book.
       </p>
 
@@ -88,13 +90,14 @@ function ServicePageContent() {
               marginBottom: '1rem',
               color: 'var(--color-primary)',
               borderBottom: '2px solid var(--color-primary)',
-              paddingBottom: '0.5rem'
+              paddingBottom: '0.5rem',
+              textAlign: 'center'
             }}>
               {category}
             </h2>
             <div style={{
               display: 'grid',
-              gridTemplateColumns: window.innerWidth > 768 ? 'repeat(3, 1fr)' : '1fr',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
               gap: '1rem'
             }}>
               {categoryServices.map(service => (
