@@ -1,12 +1,10 @@
-import { generateServerClientUsingCookies } from '@aws-amplify/adapter-nextjs/data';
-import { cookies } from 'next/headers';
-import type { Schema } from '../../../amplify/data/resource';
-import config from '../../../amplify_outputs.json' with { type: 'json' };
+import { generateClient } from 'aws-amplify/data'
+import type { Schema } from '@/amplify/data/resource'
+import { Amplify } from 'aws-amplify'
+import config from '@/amplify_outputs.json'
 
-const client = generateServerClientUsingCookies<Schema>({
-  config,
-  cookies,
-});
+Amplify.configure(config, { ssr: true })
+const client = generateClient<Schema>()
 
 export async function GET() {
   try {

@@ -23,6 +23,10 @@ h1, h2, h3 {
   color: var(--color-primary-dark);
 }
 
+.hero {
+  text-align: center;
+}
+
 .cta {
   display: inline-block;
   padding: 0.9rem 1.6rem;
@@ -183,14 +187,53 @@ h1, h2, h3 {
   margin-left: 1.5rem;
   font-weight: 500;
   color: var(--color-text);
-  transition: color 0.2s ease;
+  transition: color 0.2s ease, background 0.2s ease;
+  padding: 0.4rem 0.8rem;
+  border-radius: 8px;
 }
 
 .nav-links a:hover {
   color: white;
   background: var(--color-primary);
-  padding: 0.4rem 0.8rem;
+}
+
+.nav-dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.nav-dropdown > a {
+  display: inline-block;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background: white;
   border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  min-width: 200px;
+  padding: 0.5rem 0;
+  margin-top: 0;
+  z-index: 1000;
+  border: 1px solid var(--color-border);
+}
+
+.dropdown-menu a {
+  display: block;
+  padding: 0.75rem 1rem;
+  color: var(--color-text);
+  margin: 0;
+  transition: background 0.2s ease;
+  background: transparent;
+}
+
+.dropdown-menu a:hover {
+  background: var(--color-accent);
+  color: var(--color-primary-dark);
+  border-radius: 0;
+  padding: 0.75rem 1rem;
 }
 
 .map-placeholder {
