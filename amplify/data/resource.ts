@@ -8,6 +8,8 @@ const schema = a.schema({
       description: a.string(),
       email: a.email().required(),
       phone: a.string(),
+      smsAlertPhone: a.string(),
+      smsAlertsEnabled: a.boolean().default(false),
       squareAccountId: a.string(),
       isActive: a.boolean().default(true),
       workingHours: a.json(),

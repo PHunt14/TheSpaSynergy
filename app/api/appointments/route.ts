@@ -36,6 +36,18 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Failed to create appointment' }, { status: 500 });
     }
 
+    // Trigger SMS alert (non-blocking)
+    try {
+      await fetch(`${request.headers.get('origin')}/api/send-sms`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ appointmentId, vendorId })
+      });
+    } catch (smsError) {
+      console.error('SMS notification failed:', smsError);
+      // Don't fail the appointment creation if SMS fails
+    }
+
     return Response.json({ 
       success: true, 
       appointmentId 

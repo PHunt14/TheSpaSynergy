@@ -1,0 +1,8 @@
+{
+  "name": "send-sms",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "@aws-sdk/client-sns": "^3.0.0"
+  }
+}
