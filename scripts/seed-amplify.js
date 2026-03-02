@@ -29,7 +29,7 @@ const vendors = [
     vendorId: 'vendor-kera',
     name: 'The Kera Studio',
     description: 'Hair and Beauty Studio',
-    email: 'contact@kerastudio.com',
+    email: 'thekerastudio@gmail.com',
     phone: '240-329-6537',
     squareAccountId: 'PLACEHOLDER_SQUARE_ID_3',
     isActive: true,
@@ -40,6 +40,25 @@ const vendors = [
       thursday: { start: '11:00', end: '18:00' },
       friday: { start: '11:00', end: '17:00' },
       saturday: { start: '10:00', end: '14:00' },
+      sunday: { start: null, end: null }
+    },
+    bufferMinutes: 15
+  },
+  {
+    vendorId: 'vendor-selene',
+    name: 'Selene Glow',
+    description: 'Massage and Wellness',
+    email: 'contact@seleneglow.com',
+    phone: '301-992-3224',
+    squareAccountId: 'PLACEHOLDER_SQUARE_ID_1',
+    isActive: true,
+    workingHours: {
+      monday: { start: '12:00', end: '17:00' },
+      tuesday: { start: '12:00', end: '17:00' },
+      wednesday: { start: '12:00', end: '17:00' },
+      thursday: { start: '12:00', end: '17:00' },
+      friday: { start: '12:00', end: '17:00' },
+      saturday: { start: '12:00', end: '17:00' },
       sunday: { start: null, end: null }
     },
     bufferMinutes: 15

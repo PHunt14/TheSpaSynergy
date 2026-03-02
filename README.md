@@ -57,9 +57,8 @@ Deployed via AWS Amplify with automatic CI/CD from Git repository.
 
 - when booking I sohuld not be able to book same day, especially after hours, and certainly not a time that has already happened
 - dashboard staff page gives a 500
-- should not be a pop-up for confirming appointments
 - should send an email to the person that signed up for an appointment
-- the payment info bit is broken again when booking
-- textnot coming through to vendor phone
-- when booking see a " Date/Time: Invalid Date"
-- dashboard does not actually seem to timeout
+- text not coming through to vendor phone
+- Relaxation, Beauty, and Wellness blocks should go to those specific services
+- Get pictures
+- Get Selene Glow services and information for listing

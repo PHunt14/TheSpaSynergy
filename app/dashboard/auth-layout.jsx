@@ -60,10 +60,17 @@ export default function DashboardAuthLayout({ children }) {
 
 function AutoLogout({ signOut, children }) {
   const timeoutRef = useRef(null)
+  const signOutRef = useRef(signOut)
+
+  useEffect(() => {
+    signOutRef.current = signOut
+  }, [signOut])
 
   const resetTimeout = () => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current)
-    timeoutRef.current = setTimeout(() => signOut(), TIMEOUT_DURATION)
+    timeoutRef.current = setTimeout(() => {
+      signOutRef.current()
+    }, TIMEOUT_DURATION)
   }
 
   useEffect(() => {
@@ -75,7 +82,7 @@ function AutoLogout({ signOut, children }) {
       events.forEach(event => document.removeEventListener(event, resetTimeout))
       if (timeoutRef.current) clearTimeout(timeoutRef.current)
     }
-  }, [signOut])
+  }, [])
 
   return children
 }
