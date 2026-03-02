@@ -15,7 +15,13 @@ export default function Home() {
     <main className="home">
       <section className="hero">
         <h1>Welcome to The Spa Synergy</h1>
-        <a href="/booking" className="cta">Book an Appointment</a>
+        <p style={{ fontSize: '1.2rem', color: 'var(--color-text-light)', marginTop: '1rem' }}>
+          Your sanctuary for relaxation, beauty, and wellness
+        </p>
+        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginTop: '1.5rem', flexWrap: 'wrap' }}>
+          <a href="/booking" className="cta">Book an Appointment</a>
+          <a href="/vendors" className="cta" style={{ background: 'var(--color-warm)' }}>Meet Our Vendors</a>
+        </div>
       </section>
 
       <section style={{ padding: '4rem 2rem', maxWidth: '1200px', margin: '0 auto' }}>

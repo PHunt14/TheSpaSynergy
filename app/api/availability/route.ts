@@ -100,7 +100,13 @@ function generateTimeSlots(startTime: string, endTime: string, serviceDuration: 
 
     // Check if this slot conflicts with existing appointments
     const isBooked = bookedSlots.some(appointment => {
-      const appointmentTime = appointment.dateTime.split(' ')[1];
+      // Parse ISO datetime (YYYY-MM-DDTHH:MM:SS)
+      const appointmentDateTime = appointment.dateTime
+      const appointmentTime = appointmentDateTime.includes('T') 
+        ? appointmentDateTime.split('T')[1].substring(0, 5) // Extract HH:MM from ISO
+        : appointmentDateTime.split(' ')[1] // Fallback for old format
+      
+      // Get service duration for this appointment
       return timeOverlaps(timeString, appointmentTime, serviceDuration, bufferMinutes);
     });
 
@@ -117,13 +123,15 @@ function generateTimeSlots(startTime: string, endTime: string, serviceDuration: 
   return slots;
 }
 
-function timeOverlaps(newTime: string, bookedTime: string, serviceDuration: number, bufferMinutes: number) {
+function timeOverlaps(newTime: string, bookedTime: string, newServiceDuration: number, bufferMinutes: number) {
   const [newHour, newMin] = newTime.split(':').map(Number);
   const newStart = newHour * 60 + newMin;
-  const newEnd = newStart + serviceDuration + bufferMinutes;
+  const newEnd = newStart + newServiceDuration + bufferMinutes;
 
-  const bookedStart = parseTimeToMinutes(bookedTime);
-  const bookedEnd = bookedStart + serviceDuration + bufferMinutes;
+  const [bookedHour, bookedMin] = bookedTime.split(':').map(Number);
+  const bookedStart = bookedHour * 60 + bookedMin;
+  // Assume booked appointment has similar duration + buffer
+  const bookedEnd = bookedStart + newServiceDuration + bufferMinutes;
 
   return (newStart < bookedEnd && newEnd > bookedStart);
 }

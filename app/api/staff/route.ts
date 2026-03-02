@@ -1,10 +1,11 @@
 import { CognitoIdentityProviderClient, AdminCreateUserCommand, ListUsersCommand, AdminDeleteUserCommand, AdminUpdateUserAttributesCommand } from '@aws-sdk/client-cognito-identity-provider';
+import config from '@/amplify_outputs.json';
 
-const client = new CognitoIdentityProviderClient({ region: 'us-east-1' });
+const client = new CognitoIdentityProviderClient({ region: config.auth.aws_region });
 
-// Get User Pool ID from environment
+// Get User Pool ID from amplify config
 const getUserPoolId = () => {
-  return process.env.AMPLIFY_AUTH_USERPOOL_ID;
+  return config.auth.user_pool_id;
 };
 
 export async function POST(request: Request) {

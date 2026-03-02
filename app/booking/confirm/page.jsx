@@ -31,7 +31,9 @@ function ConfirmPageContent() {
   }, [vendor, service])
 
   useEffect(() => {
-    // Initialize Square Web Payments SDK
+    // Only initialize Square if payment method is card
+    if (paymentMethod !== 'card') return
+
     let isMounted = true
     
     const loadSquare = async () => {
@@ -53,7 +55,7 @@ function ConfirmPageContent() {
     return () => {
       isMounted = false
     }
-  }, [])
+  }, [paymentMethod])
 
   const initializeSquare = async () => {
     if (!window.Square) return
@@ -61,8 +63,6 @@ function ConfirmPageContent() {
     try {
       const appId = process.env.NEXT_PUBLIC_SQUARE_APPLICATION_ID
       const locationId = process.env.NEXT_PUBLIC_SQUARE_LOCATION_ID
-      
-      console.log('Initializing Square with:', { appId, locationId })
       
       if (!appId || !locationId) {
         console.error('Missing Square credentials in environment variables')
@@ -73,7 +73,6 @@ function ConfirmPageContent() {
       const cardInstance = await payments.card()
       await cardInstance.attach('#card-container')
       setCard(cardInstance)
-      console.log('Square card initialized successfully')
     } catch (error) {
       console.error('Square initialization error:', error)
     }
@@ -126,23 +125,41 @@ function ConfirmPageContent() {
         }
       }
 
-      // Create appointment
+      // Create appointment with proper ISO datetime
+      const dateOnly = date.split('T')[0]
+      const timeFormatted = time.replace(' AM', '').replace(' PM', '')
+      const isPM = time.includes('PM')
+      const [hours, minutes] = timeFormatted.split(':')
+      let hour24 = parseInt(hours)
+      if (isPM && hour24 !== 12) hour24 += 12
+      if (!isPM && hour24 === 12) hour24 = 0
+      const time24 = `${hour24.toString().padStart(2, '0')}:${minutes}`
+      
+      const dateTimeISO = `${dateOnly}T${time24}:00`
+      
       const appointmentResponse = await fetch('/api/appointments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           vendorId: vendor,
           serviceId: service,
-          dateTime: `${date} ${time}`,
+          dateTime: dateTimeISO,
           customer: formData,
           status: paymentMethod === 'card' ? 'confirmed' : 'pending',
           paymentId
         })
       })
 
-      if (appointmentResponse.ok) {
-        alert(`Appointment booked successfully! ${paymentMethod === 'in-person' ? 'Payment due at appointment.' : ''}`)
-        window.location.href = '/'
+      const appointmentData = await appointmentResponse.json()
+
+      if (appointmentResponse.ok && appointmentData.appointmentId) {
+        const successUrl = new URLSearchParams({
+          id: appointmentData.appointmentId,
+          dateTime: dateTimeISO,
+          service: serviceDetails.name,
+          payment: paymentMethod
+        })
+        window.location.href = `/booking/success?${successUrl}`
       } else {
         alert(paymentMethod === 'card' ? 'Payment processed but appointment creation failed' : 'Appointment creation failed')
       }
@@ -171,7 +188,7 @@ function ConfirmPageContent() {
         {serviceDetails && (
           <p><strong>Service:</strong> {serviceDetails.name}</p>
         )}
-        <p><strong>Date:</strong> {new Date(date).toLocaleDateString()}</p>
+        <p><strong>Date:</strong> {date ? new Date(date).toLocaleDateString() : 'N/A'}</p>
         <p><strong>Time:</strong> {time}</p>
         {serviceDetails && (
           <p><strong>Price:</strong> ${serviceDetails.price}</p>

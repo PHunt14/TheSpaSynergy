@@ -10,18 +10,10 @@ export async function POST(request: Request) {
   try {
     const { appointmentId, vendorId } = await request.json()
 
-    console.log('SMS Alert triggered for appointment:', appointmentId, 'vendor:', vendorId)
-
     // Get vendor info
     const { data: vendor } = await client.models.Vendor.get({ vendorId })
     
-    console.log('Vendor SMS settings:', {
-      enabled: vendor?.smsAlertsEnabled,
-      phone: vendor?.smsAlertPhone
-    })
-
     if (!vendor || !vendor.smsAlertsEnabled || !vendor.smsAlertPhone) {
-      console.log('SMS not enabled for vendor')
       return Response.json({ 
         success: false, 
         message: 'SMS alerts not enabled for this vendor' 
@@ -45,10 +37,17 @@ export async function POST(request: Request) {
       : appointment.customer
 
     // Format the SMS message
-    const message = `New Booking Alert!\n\nService: ${service?.name || 'N/A'}\nCustomer: ${customer.name}\nPhone: ${customer.phone}\nDate/Time: ${new Date(appointment.dateTime).toLocaleString()}\n\nThe Spa Synergy`
+    const dateTime = appointment.dateTime
+    const formattedDateTime = dateTime ? new Date(dateTime).toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    }) : 'Not specified'
 
-    console.log('SMS Message prepared:', message)
-    console.log('Sending to phone:', vendor.smsAlertPhone)
+    const message = `New Booking Alert!\n\nService: ${service?.name || 'N/A'}\nCustomer: ${customer.name}\nPhone: ${customer.phone}\nDate/Time: ${formattedDateTime}\n\nThe Spa Synergy`
 
     // Call the Lambda function to send SMS
     try {
@@ -62,14 +61,13 @@ export async function POST(request: Request) {
       })
       
       if (lambdaResponse.ok) {
-        console.log('SMS sent successfully via Lambda')
         return Response.json({ 
           success: true, 
           message: 'SMS sent successfully'
         })
       }
     } catch (lambdaError) {
-      console.error('Lambda SMS failed, using dev mode:', lambdaError)
+      // Lambda failed, fall through to dev mode
     }
 
     // For now, just log - actual SMS requires AWS SNS setup in production
