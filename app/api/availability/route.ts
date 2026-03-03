@@ -92,11 +92,23 @@ function generateTimeSlots(startTime: string, endTime: string, serviceDuration: 
   let currentMinutes = startHour * 60 + startMin;
   const endMinutes = endHour * 60 + endMin;
 
+  // Get current time to filter out past slots
+  const now = new Date();
+  const today = now.toISOString().split('T')[0];
+  const isToday = date === today;
+  const currentTimeMinutes = isToday ? now.getHours() * 60 + now.getMinutes() : 0;
+
   while (currentMinutes + serviceDuration <= endMinutes) {
     const hour = Math.floor(currentMinutes / 60);
     const min = currentMinutes % 60;
     const timeString = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
     const displayTime = formatTime(hour, min);
+
+    // Skip past times if booking for today
+    if (isToday && currentMinutes <= currentTimeMinutes) {
+      currentMinutes += 30;
+      continue;
+    }
 
     // Check if this slot conflicts with existing appointments
     const isBooked = bookedSlots.some(appointment => {

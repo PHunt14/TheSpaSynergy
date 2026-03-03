@@ -16,17 +16,27 @@ function TimePageContent() {
   const [availableSlots, setAvailableSlots] = useState([])
   const [loading, setLoading] = useState(false)
   const [serviceInfo, setServiceInfo] = useState(null)
+  const [vendorInfo, setVendorInfo] = useState(null)
 
   useEffect(() => {
-    if (!service) return
+    if (!service || !vendor) return
     
+    // Fetch service info
     fetch('/api/services')
       .then(res => res.json())
       .then(data => {
         const svc = data.services?.find(s => s.serviceId === service)
         setServiceInfo(svc)
       })
-  }, [service])
+    
+    // Fetch vendor info
+    fetch('/api/vendors')
+      .then(res => res.json())
+      .then(data => {
+        const vnd = data.vendors?.find(v => v.vendorId === vendor)
+        setVendorInfo(vnd)
+      })
+  }, [service, vendor])
 
   useEffect(() => {
     if (!vendor || !service || !selectedDate) return
@@ -66,7 +76,7 @@ function TimePageContent() {
           <DatePicker
             selected={selectedDate}
             onChange={setSelectedDate}
-            minDate={new Date()}
+            minDate={serviceInfo?.resourceType === 'sauna' ? new Date() : new Date(Date.now() + 86400000)}
             inline
           />
         </div>
@@ -77,9 +87,21 @@ function TimePageContent() {
         {loading && <p>Loading available times...</p>}
         
         {!loading && availableSlots.length === 0 && (
-          <p style={{ color: 'var(--color-text-light)' }}>
-            No available times for this date. Please select another date.
-          </p>
+          <div style={{
+            background: 'var(--color-accent)',
+            padding: '1.5rem',
+            borderRadius: '12px',
+            marginBottom: '1rem'
+          }}>
+            <p style={{ marginBottom: '1rem' }}>
+              No available times for this date.
+            </p>
+            {vendorInfo && vendorInfo.phone && (
+              <p>
+                Please call us directly to schedule: <a href={`tel:${vendorInfo.phone}`} style={{ fontWeight: 'bold', color: 'var(--color-primary)' }}>{vendorInfo.phone}</a>
+              </p>
+            )}
+          </div>
         )}
 
         <div style={{

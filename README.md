@@ -55,8 +55,6 @@ Deployed via AWS Amplify with automatic CI/CD from Git repository.
 
 ## Issues
 
-- when booking I sohuld not be able to book same day, especially after hours, and certainly not a time that has already happened
-- dashboard staff page gives a 500
 - should send an email to the person that signed up for an appointment
 - text not coming through to vendor phone
 - Relaxation, Beauty, and Wellness blocks should go to those specific services
