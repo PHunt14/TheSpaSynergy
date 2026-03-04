@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { fetchAuthSession } from 'aws-amplify/auth'
 
 export default function Services() {
   const [services, setServices] = useState([])
@@ -10,6 +11,8 @@ export default function Services() {
   const [loading, setLoading] = useState(true)
   const [showAddForm, setShowAddForm] = useState(false)
   const [editingService, setEditingService] = useState(null)
+  const [currentUserRole, setCurrentUserRole] = useState(null)
+  const [currentUserVendorId, setCurrentUserVendorId] = useState(null)
   const [newService, setNewService] = useState({
     name: '',
     category: '',
@@ -23,6 +26,7 @@ export default function Services() {
   })
 
   useEffect(() => {
+    loadCurrentUser()
     fetch('/api/vendors')
       .then(res => res.json())
       .then(data => {
@@ -36,6 +40,21 @@ export default function Services() {
         setStaffMembers(data.users || [])
       })
   }, [])
+
+  const loadCurrentUser = async () => {
+    try {
+      const session = await fetchAuthSession()
+      const vendorId = session.tokens?.idToken?.payload['custom:vendorId']
+      const role = session.tokens?.idToken?.payload['custom:role'] || 'staff'
+      setCurrentUserRole(role)
+      setCurrentUserVendorId(vendorId)
+      if (role === 'staff' && vendorId) {
+        setSelectedVendor(vendorId)
+      }
+    } catch (error) {
+      console.error('Error loading current user:', error)
+    }
+  }
 
   useEffect(() => {
     if (!selectedVendor) return
@@ -167,12 +186,15 @@ export default function Services() {
         <select
           value={selectedVendor}
           onChange={(e) => setSelectedVendor(e.target.value)}
+          disabled={currentUserRole === 'staff'}
           style={{
             padding: '0.75rem',
             borderRadius: '8px',
             border: '1px solid var(--color-border)',
             fontSize: '1rem',
-            minWidth: '250px'
+            minWidth: '250px',
+            background: currentUserRole === 'staff' ? '#f5f5f5' : 'white',
+            cursor: currentUserRole === 'staff' ? 'not-allowed' : 'pointer'
           }}
         >
           {vendors.map(vendor => (
@@ -181,6 +203,11 @@ export default function Services() {
             </option>
           ))}
         </select>
+        {currentUserRole === 'staff' && (
+          <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.5rem' }}>
+            Staff can only manage services for their assigned vendor
+          </p>
+        )}
       </div>
 
       <button
@@ -262,8 +289,8 @@ export default function Services() {
             <input
               type="number"
               required
-              min="15"
-              step="15"
+              min="5"
+              step="5"
               value={newService.duration}
               onChange={(e) => setNewService({ ...newService, duration: parseInt(e.target.value) })}
               style={{

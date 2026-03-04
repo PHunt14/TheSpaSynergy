@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { generateClient } from 'aws-amplify/data'
-import { getCurrentUser } from 'aws-amplify/auth'
+import { fetchAuthSession } from 'aws-amplify/auth'
 
 const client = generateClient()
 
@@ -14,8 +14,11 @@ export default function Settings() {
   const [smsAlertPhone, setSmsAlertPhone] = useState('')
   const [smsAlertsEnabled, setSmsAlertsEnabled] = useState(false)
   const [message, setMessage] = useState('')
+  const [currentUserRole, setCurrentUserRole] = useState(null)
+  const [currentUserVendorId, setCurrentUserVendorId] = useState(null)
 
   useEffect(() => {
+    loadCurrentUser()
     loadVendors()
   }, [])
 
@@ -24,6 +27,21 @@ export default function Settings() {
       loadVendorSettings(selectedVendorId)
     }
   }, [selectedVendorId])
+
+  const loadCurrentUser = async () => {
+    try {
+      const session = await fetchAuthSession()
+      const vendorId = session.tokens?.idToken?.payload['custom:vendorId']
+      const role = session.tokens?.idToken?.payload['custom:role'] || 'staff'
+      setCurrentUserRole(role)
+      setCurrentUserVendorId(vendorId)
+      if (role === 'staff' && vendorId) {
+        setSelectedVendorId(vendorId)
+      }
+    } catch (error) {
+      console.error('Error loading current user:', error)
+    }
+  }
 
   const loadVendors = async () => {
     try {
@@ -70,11 +88,23 @@ export default function Settings() {
         return
       }
 
-      await client.models.Vendor.update({
-        vendorId: selectedVendorId,
-        smsAlertPhone: formattedPhone,
-        smsAlertsEnabled
+      const response = await fetch('/api/vendors', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vendorId: selectedVendorId,
+          smsAlertPhone: formattedPhone,
+          smsAlertsEnabled
+        })
       })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        setMessage('Error saving settings: ' + (data.error || 'Unknown error'))
+        setSaving(false)
+        return
+      }
 
       setMessage('Settings saved successfully!')
       setTimeout(() => setMessage(''), 3000)
@@ -110,13 +140,15 @@ export default function Settings() {
           <select
             value={selectedVendorId}
             onChange={(e) => setSelectedVendorId(e.target.value)}
+            disabled={currentUserRole === 'staff'}
             style={{
               width: '100%',
               padding: '0.75rem',
               borderRadius: '8px',
               border: '1px solid var(--color-border)',
               fontSize: '1rem',
-              background: 'white'
+              background: currentUserRole === 'staff' ? '#f5f5f5' : 'white',
+              cursor: currentUserRole === 'staff' ? 'not-allowed' : 'pointer'
             }}
           >
             {vendors.map(vendor => (
@@ -125,6 +157,11 @@ export default function Settings() {
               </option>
             ))}
           </select>
+          {currentUserRole === 'staff' && (
+            <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.5rem' }}>
+              Staff can only manage their assigned vendor
+            </p>
+          )}
         </div>
 
         <div style={{ marginBottom: '1.5rem' }}>

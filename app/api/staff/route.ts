@@ -1,5 +1,10 @@
-import { CognitoIdentityProviderClient, AdminCreateUserCommand, ListUsersCommand, AdminDeleteUserCommand, AdminUpdateUserAttributesCommand } from '@aws-sdk/client-cognito-identity-provider';
+import { CognitoIdentityProviderClient, AdminCreateUserCommand, ListUsersCommand, AdminDeleteUserCommand, AdminUpdateUserAttributesCommand, AdminGetUserCommand } from '@aws-sdk/client-cognito-identity-provider';
 import config from '@/amplify_outputs.json';
+import { cookies } from 'next/headers';
+import { fetchAuthSession } from 'aws-amplify/auth/server';
+import { Amplify } from 'aws-amplify';
+
+Amplify.configure(config, { ssr: true });
 
 const client = new CognitoIdentityProviderClient({ region: config.auth.aws_region });
 
@@ -8,9 +13,26 @@ const getUserPoolId = () => {
   return config.auth.user_pool_id;
 };
 
+// Get current user from session
+const getCurrentUserFromSession = async () => {
+  try {
+    const session = await fetchAuthSession({ cookies });
+    const idToken = session.tokens?.idToken;
+    if (!idToken) return null;
+    
+    return {
+      role: idToken.payload['custom:role'] as string || 'staff',
+      vendorId: idToken.payload['custom:vendorId'] as string
+    };
+  } catch (error) {
+    console.error('Error getting session:', error);
+    return null;
+  }
+};
+
 export async function POST(request: Request) {
   try {
-    const { email, vendorId, role } = await request.json();
+    const { email, firstName, lastName, vendorId, role } = await request.json();
 
     if (!email || !role) {
       return Response.json({ error: 'Email and role required' }, { status: 400 });
@@ -39,6 +61,20 @@ export async function POST(request: Request) {
         Value: role
       }
     ];
+
+    if (firstName) {
+      userAttributes.push({
+        Name: 'given_name',
+        Value: firstName
+      });
+    }
+
+    if (lastName) {
+      userAttributes.push({
+        Name: 'family_name',
+        Value: lastName
+      });
+    }
 
     // Only add vendorId for staff users
     if (role === 'staff' && vendorId) {
@@ -86,6 +122,8 @@ export async function GET(request: Request) {
     const users = response.Users?.map(user => ({
       username: user.Username,
       email: user.Attributes?.find(attr => attr.Name === 'email')?.Value,
+      firstName: user.Attributes?.find(attr => attr.Name === 'given_name')?.Value,
+      lastName: user.Attributes?.find(attr => attr.Name === 'family_name')?.Value,
       role: user.Attributes?.find(attr => attr.Name === 'custom:role')?.Value || 'staff',
       vendorId: user.Attributes?.find(attr => attr.Name === 'custom:vendorId')?.Value,
       status: user.UserStatus,
@@ -116,6 +154,22 @@ export async function DELETE(request: Request) {
       return Response.json({ error: 'User pool not configured' }, { status: 500 });
     }
 
+    const currentUser = await getCurrentUserFromSession();
+    // Only enforce restrictions for staff
+    if (currentUser?.role === 'staff') {
+      const getUserCommand = new AdminGetUserCommand({
+        UserPoolId: userPoolId,
+        Username: username
+      });
+      const targetUser = await client.send(getUserCommand);
+      const targetRole = targetUser.UserAttributes?.find(attr => attr.Name === 'custom:role')?.Value || 'staff';
+      const targetVendorId = targetUser.UserAttributes?.find(attr => attr.Name === 'custom:vendorId')?.Value;
+
+      if (targetRole !== 'staff' || targetVendorId !== currentUser.vendorId) {
+        return Response.json({ error: 'Unauthorized: Staff can only delete staff from their own vendor' }, { status: 403 });
+      }
+    }
+
     const command = new AdminDeleteUserCommand({
       UserPoolId: userPoolId,
       Username: username
@@ -135,7 +189,7 @@ export async function DELETE(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    const { username, role, vendorId } = await request.json();
+    const { username, role, vendorId, firstName, lastName } = await request.json();
 
     if (!username || !role) {
       return Response.json({ error: 'Username and role required' }, { status: 400 });
@@ -146,12 +200,45 @@ export async function PATCH(request: Request) {
       return Response.json({ error: 'User pool not configured' }, { status: 500 });
     }
 
+    const currentUser = await getCurrentUserFromSession();
+    // Only enforce restrictions for staff
+    if (currentUser?.role === 'staff') {
+      const getUserCommand = new AdminGetUserCommand({
+        UserPoolId: userPoolId,
+        Username: username
+      });
+      const targetUser = await client.send(getUserCommand);
+      const targetRole = targetUser.UserAttributes?.find(attr => attr.Name === 'custom:role')?.Value || 'staff';
+      const targetVendorId = targetUser.UserAttributes?.find(attr => attr.Name === 'custom:vendorId')?.Value;
+
+      if (targetRole !== 'staff' || targetVendorId !== currentUser.vendorId) {
+        return Response.json({ error: 'Unauthorized: Staff can only edit staff from their own vendor' }, { status: 403 });
+      }
+      if (role !== 'staff' || vendorId !== currentUser.vendorId) {
+        return Response.json({ error: 'Unauthorized: Staff cannot change role or vendor' }, { status: 403 });
+      }
+    }
+
     const attributes = [
       {
         Name: 'custom:role',
         Value: role
       }
     ];
+
+    if (firstName !== undefined) {
+      attributes.push({
+        Name: 'given_name',
+        Value: firstName
+      });
+    }
+
+    if (lastName !== undefined) {
+      attributes.push({
+        Name: 'family_name',
+        Value: lastName
+      });
+    }
 
     if (vendorId) {
       attributes.push({

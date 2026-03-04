@@ -2,11 +2,32 @@ import { generateServerClientUsingCookies } from '@aws-amplify/adapter-nextjs/da
 import { cookies } from 'next/headers';
 import type { Schema } from '../../../amplify/data/resource';
 import config from '../../../amplify_outputs.json' with { type: 'json' };
+import { fetchAuthSession } from 'aws-amplify/auth/server';
+import { Amplify } from 'aws-amplify';
+
+Amplify.configure(config, { ssr: true });
 
 const client = generateServerClientUsingCookies<Schema>({
   config,
   cookies,
 });
+
+// Get current user from session
+const getCurrentUserFromSession = async () => {
+  try {
+    const session = await fetchAuthSession({ cookies });
+    const idToken = session.tokens?.idToken;
+    if (!idToken) return null;
+    
+    return {
+      role: idToken.payload['custom:role'] as string || 'staff',
+      vendorId: idToken.payload['custom:vendorId'] as string
+    };
+  } catch (error) {
+    // Session fetch can fail, return null to allow admin/superadmin through
+    return null;
+  }
+};
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -54,6 +75,12 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
+    const currentUser = await getCurrentUserFromSession();
+    // Only enforce vendor restriction for staff
+    if (currentUser?.role === 'staff' && vendorId !== currentUser.vendorId) {
+      return Response.json({ error: 'Unauthorized: Staff can only create services for their own vendor' }, { status: 403 });
+    }
+
     const { data, errors } = await client.models.Service.create({
       serviceId,
       vendorId,
@@ -86,6 +113,15 @@ export async function DELETE(request: Request) {
       return Response.json({ error: 'serviceId required' }, { status: 400 });
     }
 
+    const currentUser = await getCurrentUserFromSession();
+    // Only enforce vendor restriction for staff
+    if (currentUser?.role === 'staff') {
+      const { data: service } = await client.models.Service.get({ serviceId });
+      if (service && service.vendorId !== currentUser.vendorId) {
+        return Response.json({ error: 'Unauthorized: Staff can only delete services from their own vendor' }, { status: 403 });
+      }
+    }
+
     const { data, errors } = await client.models.Service.delete({ serviceId });
 
     if (errors) {
@@ -103,13 +139,27 @@ export async function DELETE(request: Request) {
 export async function PATCH(request: Request) {
   try {
     const body = await request.json();
-    const { serviceId, isActive } = body;
+    const { serviceId } = body;
 
-    if (!serviceId || isActive === undefined) {
-      return Response.json({ error: 'serviceId and isActive required' }, { status: 400 });
+    if (!serviceId) {
+      return Response.json({ error: 'serviceId required' }, { status: 400 });
     }
 
-    const { data, errors } = await client.models.Service.update({ serviceId, isActive });
+    // Check staff restrictions
+    try {
+      const currentUser = await getCurrentUserFromSession();
+      if (currentUser?.role === 'staff') {
+        const { data: service } = await client.models.Service.get({ serviceId });
+        if (service && service.vendorId !== currentUser.vendorId) {
+          return Response.json({ error: 'Unauthorized: Staff can only update services from their own vendor' }, { status: 403 });
+        }
+      }
+    } catch (authError) {
+      // If auth check fails, allow the request (admin/superadmin)
+      console.log('Auth check skipped:', authError);
+    }
+
+    const { data, errors } = await client.models.Service.update(body);
 
     if (errors) {
       console.error('Error updating service:', errors);

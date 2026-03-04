@@ -34,8 +34,48 @@ export async function GET(request: Request) {
           serviceId: appointment.serviceId 
         });
 
+        // Parse customer JSON if it's a string
+        let customer = appointment.customer;
+        if (typeof customer === 'string') {
+          try {
+            customer = JSON.parse(customer);
+          } catch (e) {
+            console.error('Error parsing customer data:', e);
+          }
+        }
+
+        // Format dateTime to human-readable format
+        let formattedDateTime = appointment.dateTime;
+        try {
+          // Extract just the ISO date part before any space or extra characters
+          let dateStr = appointment.dateTime;
+          if (typeof dateStr === 'string') {
+            // Remove any trailing time format like " 4:00 PM" or "T11:00 AM:00"
+            dateStr = dateStr.split(' ')[0].split('T')[0] + 'T' + dateStr.split('T')[1]?.split(' ')[0];
+            // If there's a malformed part, just take the first valid ISO part
+            if (dateStr.includes('ZT')) {
+              dateStr = dateStr.split('ZT')[0] + 'Z';
+            }
+          }
+          const date = new Date(dateStr);
+          if (!isNaN(date.getTime())) {
+            formattedDateTime = date.toLocaleString('en-US', {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric',
+              hour: 'numeric',
+              minute: '2-digit',
+              hour12: true
+            });
+          }
+        } catch (e) {
+          console.error('Error formatting date:', e);
+        }
+
         return {
           ...appointment,
+          dateTime: formattedDateTime,
+          customer,
           service
         };
       })
