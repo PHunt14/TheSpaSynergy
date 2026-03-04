@@ -106,12 +106,12 @@ const services = [
   { serviceId: 'svc-kera-wax-brows', vendorId: 'vendor-kera', category: 'Waxing', name: 'Brows', description: 'Eyebrow shaping and waxing', duration: 15, price: 15, isActive: true },
   { serviceId: 'svc-kera-wax-lips', vendorId: 'vendor-kera', category: 'Waxing', name: 'Lips', description: 'Upper lip hair removal', duration: 10, price: 10, isActive: true },
   { serviceId: 'svc-kera-wax-chin', vendorId: 'vendor-kera', category: 'Waxing', name: 'Chin', description: 'Chin hair removal', duration: 10, price: 10, isActive: true },
-  { serviceId: 'svc-kera-wax-face-combo', vendorId: 'vendor-kera', category: 'Waxing', name: 'Brows, Lips & Chin', description: 'Complete facial waxing package', duration: 30, price: 30, isActive: true },
-  { serviceId: 'svc-kera-wax-underarms', vendorId: 'vendor-kera', category: 'Waxing', name: 'Underarms', description: 'Underarm hair removal', duration: 20, price: 20, isActive: true },
-  { serviceId: 'svc-kera-wax-arms', vendorId: 'vendor-kera', category: 'Waxing', name: 'Arms', description: 'Full arm hair removal', duration: 30, price: 40, isActive: true },
-  { serviceId: 'svc-kera-wax-back', vendorId: 'vendor-kera', category: 'Waxing', name: 'Back', description: 'Full back hair removal', duration: 45, price: 55, isActive: true },
-  { serviceId: 'svc-kera-wax-chest', vendorId: 'vendor-kera', category: 'Waxing', name: 'Chest', description: 'Chest hair removal', duration: 40, price: 45, isActive: true },
-  { serviceId: 'svc-kera-wax-brazilian', vendorId: 'vendor-kera', category: 'Waxing', name: 'Brazilian', description: 'Complete bikini area hair removal', duration: 45, price: 70, isActive: true }
+  { serviceId: 'svc-kera-wax-face-combo', vendorId: 'vendor-kera', category: 'Waxing', name: 'Brows, Lips & Chin', description: 'Complete facial waxing package', duration: 30, price: 30, isActive: true, requiresConsultation: true },
+  { serviceId: 'svc-kera-wax-underarms', vendorId: 'vendor-kera', category: 'Waxing', name: 'Underarms', description: 'Underarm hair removal', duration: 20, price: 20, isActive: true, requiresConsultation: true },
+  { serviceId: 'svc-kera-wax-arms', vendorId: 'vendor-kera', category: 'Waxing', name: 'Arms', description: 'Full arm hair removal', duration: 30, price: 40, isActive: true, requiresConsultation: true },
+  { serviceId: 'svc-kera-wax-back', vendorId: 'vendor-kera', category: 'Waxing', name: 'Back', description: 'Full back hair removal', duration: 45, price: 55, isActive: true, requiresConsultation: true },
+  { serviceId: 'svc-kera-wax-chest', vendorId: 'vendor-kera', category: 'Waxing', name: 'Chest', description: 'Chest hair removal', duration: 40, price: 45, isActive: true, requiresConsultation: true },
+  { serviceId: 'svc-kera-wax-brazilian', vendorId: 'vendor-kera', category: 'Waxing', name: 'Brazilian', description: 'Complete bikini area hair removal', duration: 45, price: 70, isActive: true, requiresConsultation: true }
 ];
 
 const bundles = [

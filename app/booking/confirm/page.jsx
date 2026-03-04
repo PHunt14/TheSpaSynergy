@@ -18,7 +18,7 @@ function ConfirmPageContent() {
   const [loading, setLoading] = useState(false)
   const [card, setCard] = useState(null)
   const [serviceDetails, setServiceDetails] = useState(null)
-  const [paymentMethod, setPaymentMethod] = useState('card') // 'card' or 'in-person'
+  const [paymentMethod, setPaymentMethod] = useState('in-person') // 'card' or 'in-person'
 
   useEffect(() => {
     // Fetch service details for pricing
@@ -27,6 +27,10 @@ function ConfirmPageContent() {
       .then(data => {
         const selectedService = data.services?.find(s => s.serviceId === service)
         setServiceDetails(selectedService)
+        // Force in-person payment for consultation services
+        if (selectedService?.requiresConsultation) {
+          setPaymentMethod('in-person')
+        }
       })
   }, [vendor, service])
 
@@ -174,6 +178,20 @@ function ConfirmPageContent() {
   return (
     <main>
       <h1>Confirm Booking</h1>
+      {serviceDetails?.requiresConsultation && (
+        <div style={{
+          background: '#fff3cd',
+          border: '1px solid #ffc107',
+          borderRadius: '8px',
+          padding: '1rem',
+          marginBottom: '1rem'
+        }}>
+          <strong>⚠️ Consultation Required</strong>
+          <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.9rem' }}>
+            The vendor will contact you to confirm your preferred date and time.
+          </p>
+        </div>
+      )}
       <p style={{ color: 'var(--color-text-light)' }}>
         Review your appointment details and enter your information.
       </p>
@@ -257,48 +275,60 @@ function ConfirmPageContent() {
           <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600' }}>
             Payment Method *
           </label>
-          <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
-            <label style={{ 
-              flex: 1,
+          {serviceDetails?.requiresConsultation ? (
+            <div style={{
               padding: '1rem',
               borderRadius: '8px',
-              border: '2px solid',
-              borderColor: paymentMethod === 'card' ? 'var(--color-primary)' : 'var(--color-border)',
-              background: paymentMethod === 'card' ? 'var(--color-accent)' : 'white',
-              cursor: 'pointer',
+              border: '2px solid var(--color-primary)',
+              background: 'var(--color-accent)',
               textAlign: 'center'
             }}>
-              <input
-                type="radio"
-                name="paymentMethod"
-                value="card"
-                checked={paymentMethod === 'card'}
-                onChange={(e) => setPaymentMethod(e.target.value)}
-                style={{ marginRight: '0.5rem' }}
-              />
-              Pay Now (Card)
-            </label>
-            <label style={{ 
-              flex: 1,
-              padding: '1rem',
-              borderRadius: '8px',
-              border: '2px solid',
-              borderColor: paymentMethod === 'in-person' ? 'var(--color-primary)' : 'var(--color-border)',
-              background: paymentMethod === 'in-person' ? 'var(--color-accent)' : 'white',
-              cursor: 'pointer',
-              textAlign: 'center'
-            }}>
-              <input
-                type="radio"
-                name="paymentMethod"
-                value="in-person"
-                checked={paymentMethod === 'in-person'}
-                onChange={(e) => setPaymentMethod(e.target.value)}
-                style={{ marginRight: '0.5rem' }}
-              />
-              Pay In-Person
-            </label>
-          </div>
+              Pay In-Person (Required for consultation services)
+            </div>
+          ) : (
+            <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
+              <label style={{ 
+                flex: 1,
+                padding: '1rem',
+                borderRadius: '8px',
+                border: '2px solid',
+                borderColor: paymentMethod === 'card' ? 'var(--color-primary)' : 'var(--color-border)',
+                background: paymentMethod === 'card' ? 'var(--color-accent)' : 'white',
+                cursor: 'pointer',
+                textAlign: 'center'
+              }}>
+                <input
+                  type="radio"
+                  name="paymentMethod"
+                  value="card"
+                  checked={paymentMethod === 'card'}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                  style={{ marginRight: '0.5rem' }}
+                />
+                Pay Now (Card)
+              </label>
+              <label style={{ 
+                flex: 1,
+                padding: '1rem',
+                borderRadius: '8px',
+                border: '2px solid',
+                borderColor: paymentMethod === 'in-person' ? 'var(--color-primary)' : 'var(--color-border)',
+                background: paymentMethod === 'in-person' ? 'var(--color-accent)' : 'white',
+                cursor: 'pointer',
+                textAlign: 'center'
+              }}>
+                <input
+                  type="radio"
+                  name="paymentMethod"
+                  value="in-person"
+                  checked={paymentMethod === 'in-person'}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                  style={{ marginRight: '0.5rem' }}
+                />
+                Pay In-Person
+              </label>
+            </div>
+          )}
         </div>
 
         {paymentMethod === 'card' && (

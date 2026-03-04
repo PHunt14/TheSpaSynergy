@@ -62,16 +62,32 @@ function TimePageContent() {
     <main>
       <h1>Select Date & Time</h1>
       {serviceInfo && (
-        <p style={{ color: 'var(--color-text-light)', marginBottom: '0.5rem' }}>
-          {serviceInfo.name} • {serviceInfo.duration} min • ${serviceInfo.price}
-        </p>
+        <>
+          <p style={{ color: 'var(--color-text-light)', marginBottom: '0.5rem' }}>
+            {serviceInfo.name} • {serviceInfo.duration} min • ${serviceInfo.price}
+          </p>
+          {serviceInfo.requiresConsultation && (
+            <div style={{
+              background: '#fff3cd',
+              border: '1px solid #ffc107',
+              borderRadius: '8px',
+              padding: '1rem',
+              marginBottom: '1rem'
+            }}>
+              <strong>⚠️ Consultation Required</strong>
+              <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.9rem' }}>
+                This service requires a consultation. Select your preferred date and time below, and the vendor will contact you to confirm.
+              </p>
+            </div>
+          )}
+        </>
       )}
       <p style={{ color: 'var(--color-text-light)' }}>
-        Choose a date and time that works for you.
+        {serviceInfo?.requiresConsultation ? 'Choose your preferred date and time.' : 'Choose a date and time that works for you.'}
       </p>
 
       <div style={{ marginTop: '1.5rem' }}>
-        <h3>Select Your Date</h3>
+        <h3>{serviceInfo?.requiresConsultation ? 'Preferred Date' : 'Select Your Date'}</h3>
         <div className="spa-datepicker">
           <DatePicker
             selected={selectedDate}
@@ -83,7 +99,7 @@ function TimePageContent() {
       </div>
 
       <div style={{ marginTop: '2rem' }}>
-        <h3>Available Times</h3>
+        <h3>{serviceInfo?.requiresConsultation ? 'Preferred Time' : 'Available Times'}</h3>
         {loading && <p>Loading available times...</p>}
         
         {!loading && availableSlots.length === 0 && (

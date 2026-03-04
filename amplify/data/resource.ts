@@ -29,6 +29,7 @@ const schema = a.schema({
       duration: a.integer().required(),
       price: a.float().required(),
       isActive: a.boolean().default(true),
+      requiresConsultation: a.boolean().default(false),
     })
     .identifier(['serviceId'])
     .secondaryIndexes((index) => [index('vendorId')])

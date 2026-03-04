@@ -8,12 +8,15 @@ export default function Services() {
   const [selectedVendor, setSelectedVendor] = useState('vendor-winsome')
   const [loading, setLoading] = useState(true)
   const [showAddForm, setShowAddForm] = useState(false)
+  const [editingService, setEditingService] = useState(null)
   const [newService, setNewService] = useState({
     name: '',
     category: '',
     description: '',
     duration: 30,
-    price: 0
+    price: 0,
+    requiresConsultation: false,
+    resourceType: 'staff'
   })
 
   useEffect(() => {
@@ -43,32 +46,34 @@ export default function Services() {
   const handleAddService = async (e) => {
     e.preventDefault()
     
-    const serviceId = `svc-${Date.now()}`
+    const serviceId = editingService ? editingService.serviceId : `svc-${Date.now()}`
+    const method = editingService ? 'PATCH' : 'POST'
     
     try {
       const response = await fetch('/api/services', {
-        method: 'POST',
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           serviceId,
           vendorId: selectedVendor,
           ...newService,
-          isActive: true
+          isActive: editingService ? editingService.isActive : true
         })
       })
 
       if (response.ok) {
-        alert('Service added successfully!')
+        alert(editingService ? 'Service updated successfully!' : 'Service added successfully!')
         setShowAddForm(false)
-        setNewService({ name: '', category: '', description: '', duration: 30, price: 0 })
+        setEditingService(null)
+        setNewService({ name: '', category: '', description: '', duration: 30, price: 0, requiresConsultation: false, resourceType: 'staff' })
         const data = await fetch(`/api/services?vendorId=${selectedVendor}`).then(r => r.json())
         setServices(data.services || [])
       } else {
-        alert('Failed to add service')
+        alert('Failed to save service')
       }
     } catch (error) {
-      console.error('Error adding service:', error)
-      alert('Error adding service')
+      console.error('Error saving service:', error)
+      alert('Error saving service')
     }
   }
 
@@ -93,6 +98,26 @@ export default function Services() {
       console.error('Error updating service:', error)
       alert('Error updating service')
     }
+  }
+
+  const handleEdit = (service) => {
+    setEditingService(service)
+    setNewService({
+      name: service.name,
+      category: service.category || '',
+      description: service.description || '',
+      duration: service.duration,
+      price: service.price,
+      requiresConsultation: service.requiresConsultation || false,
+      resourceType: service.resourceType || 'staff'
+    })
+    setShowAddForm(true)
+  }
+
+  const handleCancelEdit = () => {
+    setEditingService(null)
+    setShowAddForm(false)
+    setNewService({ name: '', category: '', description: '', duration: 30, price: 0, requiresConsultation: false, resourceType: 'staff' })
   }
 
   const handleDelete = async (service) => {
@@ -146,7 +171,14 @@ export default function Services() {
       </div>
 
       <button
-        onClick={() => setShowAddForm(!showAddForm)}
+        onClick={() => {
+          if (showAddForm && editingService) {
+            handleCancelEdit()
+          } else {
+            setShowAddForm(!showAddForm)
+            if (showAddForm) setEditingService(null)
+          }
+        }}
         className="cta"
         style={{ marginBottom: '2rem' }}
       >
@@ -160,7 +192,7 @@ export default function Services() {
           borderRadius: '8px',
           marginBottom: '2rem'
         }}>
-          <h3>Add New Service</h3>
+          <h3>{editingService ? 'Edit Service' : 'Add New Service'}</h3>
           
           <div style={{ marginBottom: '1rem' }}>
             <label style={{ display: 'block', marginBottom: '0.5rem' }}>Service Name *</label>
@@ -250,7 +282,37 @@ export default function Services() {
             />
           </div>
 
-          <button type="submit" className="cta">Save Service</button>
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={newService.requiresConsultation}
+                onChange={(e) => setNewService({ ...newService, requiresConsultation: e.target.checked })}
+                style={{ width: '20px', height: '20px', cursor: 'pointer' }}
+              />
+              <span>Requires Consultation (customer must call to schedule)</span>
+            </label>
+          </div>
+
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Resource Type</label>
+            <select
+              value={newService.resourceType}
+              onChange={(e) => setNewService({ ...newService, resourceType: e.target.value })}
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                borderRadius: '8px',
+                border: '1px solid var(--color-border)',
+                fontSize: '1rem'
+              }}
+            >
+              <option value="staff">Staff</option>
+              <option value="sauna">Sauna</option>
+            </select>
+          </div>
+
+          <button type="submit" className="cta">{editingService ? 'Update Service' : 'Save Service'}</button>
         </form>
       )}
 
@@ -283,9 +345,23 @@ export default function Services() {
                 )}
                 <p style={{ color: 'var(--color-text-light)', fontSize: '0.9rem' }}>
                   {service.category && `${service.category} • `}{service.duration} min • ${service.price}
+                  {service.requiresConsultation && ' • ⚠️ Requires Consultation'}
                 </p>
               </div>
               <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                <button
+                  onClick={() => handleEdit(service)}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    borderRadius: '8px',
+                    border: 'none',
+                    cursor: 'pointer',
+                    background: 'var(--color-primary)',
+                    color: 'white'
+                  }}
+                >
+                  Edit
+                </button>
                 <button
                   onClick={() => handleToggleActive(service)}
                   style={{
