@@ -11,14 +11,16 @@ const client = generateServerClientUsingCookies<Schema>({
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const vendorId = searchParams.get('vendorId');
+  const includeInactive = searchParams.get('includeInactive');
 
   try {
     if (vendorId) {
+      const filter = includeInactive === 'true' 
+        ? { vendorId: { eq: vendorId } }
+        : { vendorId: { eq: vendorId }, isActive: { eq: true } };
+
       const { data: services, errors } = await client.models.Service.list({
-        filter: { 
-          vendorId: { eq: vendorId },
-          isActive: { eq: true }
-        } as any
+        filter: filter as any
       });
 
       if (errors) {

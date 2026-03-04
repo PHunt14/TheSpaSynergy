@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 export default function Services() {
   const [services, setServices] = useState([])
   const [vendors, setVendors] = useState([])
+  const [staffMembers, setStaffMembers] = useState([])
   const [selectedVendor, setSelectedVendor] = useState('vendor-winsome')
   const [loading, setLoading] = useState(true)
   const [showAddForm, setShowAddForm] = useState(false)
@@ -16,7 +17,9 @@ export default function Services() {
     duration: 30,
     price: 0,
     requiresConsultation: false,
-    resourceType: 'staff'
+    resourceType: 'staff',
+    staffRestriction: 'all',
+    allowedStaff: []
   })
 
   useEffect(() => {
@@ -25,13 +28,20 @@ export default function Services() {
       .then(data => {
         setVendors(data.vendors || [])
       })
+    
+    // Load staff members
+    fetch('/api/staff')
+      .then(res => res.json())
+      .then(data => {
+        setStaffMembers(data.users || [])
+      })
   }, [])
 
   useEffect(() => {
     if (!selectedVendor) return
 
     setLoading(true)
-    fetch(`/api/services?vendorId=${selectedVendor}`)
+    fetch(`/api/services?vendorId=${selectedVendor}&includeInactive=true`)
       .then(res => res.json())
       .then(data => {
         setServices(data.services || [])
@@ -57,6 +67,7 @@ export default function Services() {
           serviceId,
           vendorId: selectedVendor,
           ...newService,
+          allowedStaff: newService.staffRestriction === 'all' ? null : newService.allowedStaff,
           isActive: editingService ? editingService.isActive : true
         })
       })
@@ -65,8 +76,8 @@ export default function Services() {
         alert(editingService ? 'Service updated successfully!' : 'Service added successfully!')
         setShowAddForm(false)
         setEditingService(null)
-        setNewService({ name: '', category: '', description: '', duration: 30, price: 0, requiresConsultation: false, resourceType: 'staff' })
-        const data = await fetch(`/api/services?vendorId=${selectedVendor}`).then(r => r.json())
+        setNewService({ name: '', category: '', description: '', duration: 30, price: 0, requiresConsultation: false, resourceType: 'staff', staffRestriction: 'all', allowedStaff: [] })
+        const data = await fetch(`/api/services?vendorId=${selectedVendor}&includeInactive=true`).then(r => r.json())
         setServices(data.services || [])
       } else {
         alert('Failed to save service')
@@ -89,7 +100,7 @@ export default function Services() {
       })
 
       if (response.ok) {
-        const data = await fetch(`/api/services?vendorId=${selectedVendor}`).then(r => r.json())
+        const data = await fetch(`/api/services?vendorId=${selectedVendor}&includeInactive=true`).then(r => r.json())
         setServices(data.services || [])
       } else {
         alert('Failed to update service')
@@ -109,7 +120,9 @@ export default function Services() {
       duration: service.duration,
       price: service.price,
       requiresConsultation: service.requiresConsultation || false,
-      resourceType: service.resourceType || 'staff'
+      resourceType: service.resourceType || 'staff',
+      staffRestriction: (service.allowedStaff && service.allowedStaff.length > 0) ? 'specific' : 'all',
+      allowedStaff: service.allowedStaff || []
     })
     setShowAddForm(true)
   }
@@ -117,7 +130,7 @@ export default function Services() {
   const handleCancelEdit = () => {
     setEditingService(null)
     setShowAddForm(false)
-    setNewService({ name: '', category: '', description: '', duration: 30, price: 0, requiresConsultation: false, resourceType: 'staff' })
+    setNewService({ name: '', category: '', description: '', duration: 30, price: 0, requiresConsultation: false, resourceType: 'staff', staffRestriction: 'all', allowedStaff: [] })
   }
 
   const handleDelete = async (service) => {
@@ -129,7 +142,7 @@ export default function Services() {
       })
 
       if (response.ok) {
-        const data = await fetch(`/api/services?vendorId=${selectedVendor}`).then(r => r.json())
+        const data = await fetch(`/api/services?vendorId=${selectedVendor}&includeInactive=true`).then(r => r.json())
         setServices(data.services || [])
       } else {
         alert('Failed to delete service')
@@ -311,6 +324,68 @@ export default function Services() {
               <option value="sauna">Sauna</option>
             </select>
           </div>
+
+          {newService.resourceType === 'staff' && (
+            <>
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.5rem' }}>Staff Assignment</label>
+                <select
+                  value={newService.staffRestriction}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setNewService({ 
+                      ...newService, 
+                      staffRestriction: value,
+                      allowedStaff: value === 'all' ? [] : newService.allowedStaff
+                    })
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    borderRadius: '8px',
+                    border: '1px solid var(--color-border)',
+                    fontSize: '1rem'
+                  }}
+                >
+                  <option value="all">All Staff Members</option>
+                  <option value="specific">Specific Staff Members</option>
+                </select>
+              </div>
+
+              {newService.staffRestriction === 'specific' && (
+                <div style={{ marginBottom: '1rem' }}>
+                  <label style={{ display: 'block', marginBottom: '0.5rem' }}>Select Staff Members</label>
+                  <select
+                    multiple
+                    value={newService.allowedStaff}
+                    onChange={(e) => {
+                      const selected = Array.from(e.target.selectedOptions, option => option.value)
+                      setNewService({ ...newService, allowedStaff: selected })
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem',
+                      borderRadius: '8px',
+                      border: '1px solid var(--color-border)',
+                      fontSize: '1rem',
+                      minHeight: '120px'
+                    }}
+                  >
+                    {staffMembers
+                      .filter(staff => staff.vendorId === selectedVendor || staff.role === 'superadmin')
+                      .map(staff => (
+                        <option key={staff.username} value={staff.username}>
+                          {staff.email}
+                        </option>
+                      ))}
+                  </select>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.5rem' }}>
+                    Hold Ctrl (Cmd on Mac) to select multiple staff members
+                  </p>
+                </div>
+              )}
+            </>
+          )}
 
           <button type="submit" className="cta">{editingService ? 'Update Service' : 'Save Service'}</button>
         </form>
