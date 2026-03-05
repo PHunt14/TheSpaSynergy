@@ -16,7 +16,8 @@ const getUserPoolId = () => {
 // Get current user from session
 const getCurrentUserFromSession = async () => {
   try {
-    const session = await fetchAuthSession({ cookies });
+    const cookieStore = await cookies();
+    const session = await fetchAuthSession();
     const idToken = session.tokens?.idToken;
     if (!idToken) return null;
     
@@ -201,8 +202,8 @@ export async function PATCH(request: Request) {
       const targetEmail = targetUser.UserAttributes?.find(attr => attr.Name === 'email')?.Value;
       
       // Get current user's email from session
-      const session = await fetchAuthSession({ cookies });
-      const currentEmail = session.tokens?.idToken?.payload['email'];
+      const session2 = await fetchAuthSession();
+      const currentEmail = session2.tokens?.idToken?.payload['email'];
       
       if (targetEmail !== currentEmail) {
         return Response.json({ error: 'Unauthorized: Staff can only edit their own account' }, { status: 403 });
