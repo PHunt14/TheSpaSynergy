@@ -4,22 +4,28 @@ import { Amplify } from 'aws-amplify'
 import config from '@/amplify_outputs.json'
 import { cookies } from 'next/headers'
 import { fetchAuthSession } from 'aws-amplify/auth/server'
+import { createServerRunner } from '@aws-amplify/adapter-nextjs'
 
 Amplify.configure(config, { ssr: true })
+const { runWithAmplifyServerContext } = createServerRunner({ config })
 const client = generateClient<Schema>()
 
 // Get current user from session
 const getCurrentUserFromSession = async () => {
   try {
-    const cookieStore = await cookies();
-    const session = await fetchAuthSession();
-    const idToken = session.tokens?.idToken;
-    if (!idToken) return null;
-    
-    return {
-      role: idToken.payload['custom:role'] as string || 'staff',
-      vendorId: idToken.payload['custom:vendorId'] as string
-    };
+    return await runWithAmplifyServerContext({
+      nextServerContext: { cookies },
+      operation: async (contextSpec) => {
+        const session = await fetchAuthSession(contextSpec);
+        const idToken = session.tokens?.idToken;
+        if (!idToken) return null;
+        
+        return {
+          role: idToken.payload['custom:role'] as string || 'staff',
+          vendorId: idToken.payload['custom:vendorId'] as string
+        };
+      }
+    });
   } catch (error) {
     console.error('Error getting session:', error);
     return null;

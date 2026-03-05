@@ -4,8 +4,11 @@ import type { Schema } from '../../../amplify/data/resource';
 import config from '../../../amplify_outputs.json' with { type: 'json' };
 import { fetchAuthSession } from 'aws-amplify/auth/server';
 import { Amplify } from 'aws-amplify';
+import { createServerRunner } from '@aws-amplify/adapter-nextjs';
 
 Amplify.configure(config, { ssr: true });
+
+const { runWithAmplifyServerContext } = createServerRunner({ config });
 
 const client = generateServerClientUsingCookies<Schema>({
   config,
@@ -15,15 +18,19 @@ const client = generateServerClientUsingCookies<Schema>({
 // Get current user from session
 const getCurrentUserFromSession = async () => {
   try {
-    const cookieStore = await cookies();
-    const session = await fetchAuthSession();
-    const idToken = session.tokens?.idToken;
-    if (!idToken) return null;
-    
-    return {
-      role: idToken.payload['custom:role'] as string || 'staff',
-      vendorId: idToken.payload['custom:vendorId'] as string
-    };
+    return await runWithAmplifyServerContext({
+      nextServerContext: { cookies },
+      operation: async (contextSpec) => {
+        const session = await fetchAuthSession(contextSpec);
+        const idToken = session.tokens?.idToken;
+        if (!idToken) return null;
+        
+        return {
+          role: idToken.payload['custom:role'] as string || 'staff',
+          vendorId: idToken.payload['custom:vendorId'] as string
+        };
+      }
+    });
   } catch (error) {
     // Session fetch can fail, return null to allow admin/superadmin through
     return null;
