@@ -11,7 +11,8 @@ const client = generateClient<Schema>()
 // Get current user from session
 const getCurrentUserFromSession = async () => {
   try {
-    const session = await fetchAuthSession({ cookies });
+    const cookieStore = await cookies();
+    const session = await fetchAuthSession();
     const idToken = session.tokens?.idToken;
     if (!idToken) return null;
     
