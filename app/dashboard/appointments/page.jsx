@@ -11,6 +11,8 @@ export default function Appointments() {
   const [vendors, setVendors] = useState([])
   const [showReschedule, setShowReschedule] = useState(null)
   const [newDateTime, setNewDateTime] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(20)
 
   useEffect(() => {
     loadUserVendor()
@@ -36,14 +38,13 @@ export default function Appointments() {
         .then(res => res.json())
         .then(data => {
           setVendors(data.vendors || [])
-          if (data.vendors?.length > 0) {
+          // Only set initial vendor if not already set
+          if (!userVendorId && data.vendors?.length > 0) {
             setUserVendorId(data.vendors[0].vendorId)
           }
         })
-    } else if (userVendorId) {
-      loadAppointments()
     }
-  }, [userVendorId, userRole])
+  }, [userRole])
 
   const loadAppointments = () => {
     if (!userVendorId) return
@@ -125,6 +126,12 @@ export default function Appointments() {
     }
   }
 
+  // Pagination logic
+  const indexOfLastItem = currentPage * itemsPerPage
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage
+  const currentAppointments = appointments.slice(indexOfFirstItem, indexOfLastItem)
+  const totalPages = Math.ceil(appointments.length / itemsPerPage)
+
   return (
     <div>
       <h1>Appointments</h1>
@@ -168,7 +175,34 @@ export default function Appointments() {
       )}
 
       {!loading && appointments.length > 0 && (
-        <div style={{ overflowX: 'auto' }}>
+        <>
+          <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <label style={{ marginRight: '0.5rem' }}>Show:</label>
+              <select
+                value={itemsPerPage}
+                onChange={(e) => {
+                  setItemsPerPage(Number(e.target.value))
+                  setCurrentPage(1)
+                }}
+                style={{
+                  padding: '0.5rem',
+                  borderRadius: '4px',
+                  border: '1px solid var(--color-border)'
+                }}
+              >
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+              <span style={{ marginLeft: '1rem', color: 'var(--color-text-light)' }}>
+                Showing {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, appointments.length)} of {appointments.length}
+              </span>
+            </div>
+          </div>
+
+          <div style={{ overflowX: 'auto' }}>
           <table style={{
             width: '100%',
             borderCollapse: 'collapse',
@@ -188,7 +222,7 @@ export default function Appointments() {
               </tr>
             </thead>
             <tbody>
-              {appointments.map(apt => (
+              {currentAppointments.map(apt => (
                 <tr key={apt.appointmentId} style={{ borderBottom: '1px solid var(--color-border)' }}>
                   <td style={{ padding: '1rem' }}>{apt.dateTime}</td>
                   <td style={{ padding: '1rem' }}>
@@ -255,6 +289,41 @@ export default function Appointments() {
             </tbody>
           </table>
         </div>
+
+        {totalPages > 1 && (
+          <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'center', gap: '0.5rem' }}>
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+              style={{
+                padding: '0.5rem 1rem',
+                borderRadius: '4px',
+                border: '1px solid var(--color-border)',
+                background: currentPage === 1 ? '#f5f5f5' : 'white',
+                cursor: currentPage === 1 ? 'not-allowed' : 'pointer'
+              }}
+            >
+              Previous
+            </button>
+            <span style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center' }}>
+              Page {currentPage} of {totalPages}
+            </span>
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+              style={{
+                padding: '0.5rem 1rem',
+                borderRadius: '4px',
+                border: '1px solid var(--color-border)',
+                background: currentPage === totalPages ? '#f5f5f5' : 'white',
+                cursor: currentPage === totalPages ? 'not-allowed' : 'pointer'
+              }}
+            >
+              Next
+            </button>
+          </div>
+        )}
+      </>
       )}
 
       {showReschedule && (

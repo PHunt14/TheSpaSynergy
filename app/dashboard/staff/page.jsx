@@ -5,6 +5,8 @@ import { fetchAuthSession } from 'aws-amplify/auth'
 
 export default function Staff() {
   const [email, setEmail] = useState('')
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
   const [role, setRole] = useState('staff')
   const [loading, setLoading] = useState(false)
   const [users, setUsers] = useState([])
@@ -13,6 +15,7 @@ export default function Staff() {
   const [selectedVendor, setSelectedVendor] = useState('')
   const [currentUserRole, setCurrentUserRole] = useState(null)
   const [currentUserVendorId, setCurrentUserVendorId] = useState(null)
+  const [currentUserEmail, setCurrentUserEmail] = useState(null)
   const [editingUser, setEditingUser] = useState(null)
 
   useEffect(() => {
@@ -26,8 +29,10 @@ export default function Staff() {
       const session = await fetchAuthSession()
       const vendorId = session.tokens?.idToken?.payload['custom:vendorId']
       const role = session.tokens?.idToken?.payload['custom:role'] || 'staff'
+      const email = session.tokens?.idToken?.payload['email']
       setCurrentUserRole(role)
       setCurrentUserVendorId(vendorId)
+      setCurrentUserEmail(email)
       if (role === 'staff' && vendorId) {
         setSelectedVendor(vendorId)
       }
@@ -75,6 +80,8 @@ export default function Staff() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           email,
+          firstName,
+          lastName,
           vendorId,
           role
         })
@@ -85,6 +92,8 @@ export default function Staff() {
       if (response.ok) {
         alert(data.message)
         setEmail('')
+        setFirstName('')
+        setLastName('')
         loadUsers()
       } else {
         alert('Error: ' + data.error)
@@ -97,12 +106,18 @@ export default function Staff() {
     }
   }
 
-  const handleUpdate = async (username, newRole, newVendorId) => {
+  const handleUpdate = async (username, newRole, newVendorId, newFirstName, newLastName) => {
     try {
       const response = await fetch('/api/staff', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, role: newRole, vendorId: newVendorId })
+        body: JSON.stringify({ 
+          username, 
+          role: newRole, 
+          vendorId: newVendorId,
+          firstName: newFirstName,
+          lastName: newLastName
+        })
       })
 
       if (response.ok) {
@@ -206,6 +221,42 @@ export default function Staff() {
           )}
           <div style={{ marginBottom: '1rem' }}>
             <label style={{ display: 'block', marginBottom: '0.5rem' }}>
+              First Name
+            </label>
+            <input
+              type="text"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              placeholder="John"
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                borderRadius: '8px',
+                border: '1px solid var(--color-border)',
+                fontSize: '1rem'
+              }}
+            />
+          </div>
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'block', marginBottom: '0.5rem' }}>
+              Last Name
+            </label>
+            <input
+              type="text"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              placeholder="Doe"
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                borderRadius: '8px',
+                border: '1px solid var(--color-border)',
+                fontSize: '1rem'
+              }}
+            />
+          </div>
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'block', marginBottom: '0.5rem' }}>
               Email Address *
             </label>
             <input
@@ -253,6 +304,7 @@ export default function Staff() {
             }}>
               <thead>
                 <tr style={{ background: 'var(--color-primary)', color: 'white' }}>
+                  <th style={{ padding: '1rem', textAlign: 'left' }}>Name</th>
                   <th style={{ padding: '1rem', textAlign: 'left' }}>Email</th>
                   <th style={{ padding: '1rem', textAlign: 'left' }}>Role</th>
                   <th style={{ padding: '1rem', textAlign: 'left' }}>Vendor</th>
@@ -263,12 +315,37 @@ export default function Staff() {
               <tbody>
                 {users.map(user => (
                   <tr key={user.username} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                    <td style={{ padding: '1rem' }}>{user.email}</td>
                     <td style={{ padding: '1rem' }}>
                       {editingUser === user.username ? (
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <input
+                            type="text"
+                            defaultValue={user.firstName || ''}
+                            placeholder="First"
+                            onChange={(e) => user.editFirstName = e.target.value}
+                            style={{ padding: '0.5rem', borderRadius: '4px', flex: 1 }}
+                          />
+                          <input
+                            type="text"
+                            defaultValue={user.lastName || ''}
+                            placeholder="Last"
+                            onChange={(e) => user.editLastName = e.target.value}
+                            style={{ padding: '0.5rem', borderRadius: '4px', flex: 1 }}
+                          />
+                        </div>
+                      ) : (
+                        user.firstName || user.lastName 
+                          ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
+                          : '-'
+                      )}
+                    </td>
+                    <td style={{ padding: '1rem' }}>{user.email}</td>
+                    <td style={{ padding: '1rem' }}>
+                      {editingUser === user.username && (currentUserRole !== 'staff' || user.email === currentUserEmail) ? (
                         <select
                           defaultValue={user.role}
                           onChange={(e) => user.editRole = e.target.value}
+                          disabled={currentUserRole === 'staff'}
                           style={{ padding: '0.5rem', borderRadius: '4px' }}
                         >
                           <option value="staff">Staff</option>
@@ -288,10 +365,11 @@ export default function Staff() {
                       )}
                     </td>
                     <td style={{ padding: '1rem' }}>
-                      {editingUser === user.username ? (
+                      {editingUser === user.username && (currentUserRole !== 'staff' || user.email === currentUserEmail) ? (
                         <select
                           defaultValue={user.vendorId || ''}
                           onChange={(e) => user.editVendorId = e.target.value}
+                          disabled={currentUserRole === 'staff'}
                           style={{ padding: '0.5rem', borderRadius: '4px' }}
                         >
                           <option value="">All</option>
@@ -318,7 +396,13 @@ export default function Staff() {
                       {editingUser === user.username ? (
                         <>
                           <button
-                            onClick={() => handleUpdate(user.username, user.editRole || user.role, user.editVendorId || user.vendorId)}
+                            onClick={() => handleUpdate(
+                              user.username, 
+                              user.editRole || user.role, 
+                              user.editVendorId || user.vendorId,
+                              user.editFirstName !== undefined ? user.editFirstName : user.firstName,
+                              user.editLastName !== undefined ? user.editLastName : user.lastName
+                            )}
                             style={{
                               padding: '0.5rem 1rem',
                               borderRadius: '4px',
@@ -348,34 +432,40 @@ export default function Staff() {
                         </>
                       ) : (
                         <>
-                          <button
-                            onClick={() => setEditingUser(user.username)}
-                            style={{
-                              padding: '0.5rem 1rem',
-                              borderRadius: '4px',
-                              border: 'none',
-                              background: '#2196F3',
-                              color: 'white',
-                              cursor: 'pointer',
-                              fontSize: '0.85rem'
-                            }}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleDelete(user.username, user.email)}
-                            style={{
-                              padding: '0.5rem 1rem',
-                              borderRadius: '4px',
-                              border: 'none',
-                              background: '#F44336',
-                              color: 'white',
-                              cursor: 'pointer',
-                              fontSize: '0.85rem'
-                            }}
-                          >
-                            Delete
-                          </button>
+                          {/* Staff can only edit their own account */}
+                          {(currentUserRole !== 'staff' || user.email === currentUserEmail) && (
+                            <button
+                              onClick={() => setEditingUser(user.username)}
+                              style={{
+                                padding: '0.5rem 1rem',
+                                borderRadius: '4px',
+                                border: 'none',
+                                background: '#2196F3',
+                                color: 'white',
+                                cursor: 'pointer',
+                                fontSize: '0.85rem'
+                              }}
+                            >
+                              Edit
+                            </button>
+                          )}
+                          {/* Only admin/superadmin can delete users */}
+                          {(currentUserRole === 'admin' || currentUserRole === 'superadmin') && (
+                            <button
+                              onClick={() => handleDelete(user.username, user.email)}
+                              style={{
+                                padding: '0.5rem 1rem',
+                                borderRadius: '4px',
+                                border: 'none',
+                                background: '#F44336',
+                                color: 'white',
+                                cursor: 'pointer',
+                                fontSize: '0.85rem'
+                              }}
+                            >
+                              Delete
+                            </button>
+                          )}
                         </>
                       )}
                     </td>
