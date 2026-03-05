@@ -25,10 +25,17 @@ const getCurrentUserFromSession = async () => {
   }
 };
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const includeInactive = searchParams.get('includeInactive');
+
+    const filter = includeInactive === 'true' 
+      ? {} 
+      : { isActive: { eq: true } };
+
     const { data: vendors, errors } = await client.models.Vendor.list({
-      filter: { isActive: { eq: true } } as any
+      filter: filter as any
     });
 
     if (errors) {
@@ -40,6 +47,38 @@ export async function GET() {
   } catch (error) {
     console.error('Error fetching vendors:', error);
     return Response.json({ error: 'Failed to fetch vendors' }, { status: 500 });
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const { vendorId, name, email, description, phone, bufferMinutes, isActive, workingHours } = body;
+
+    if (!vendorId || !name || !email) {
+      return Response.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+
+    const { data, errors } = await client.models.Vendor.create({
+      vendorId,
+      name,
+      email,
+      description,
+      phone,
+      bufferMinutes: bufferMinutes || 15,
+      isActive: isActive !== undefined ? isActive : true,
+      workingHours: workingHours ? JSON.stringify(workingHours) : null
+    });
+
+    if (errors) {
+      console.error('Error creating vendor:', errors);
+      return Response.json({ error: 'Failed to create vendor' }, { status: 500 });
+    }
+
+    return Response.json({ success: true, data });
+  } catch (error) {
+    console.error('Error creating vendor:', error);
+    return Response.json({ error: 'Failed to create vendor' }, { status: 500 });
   }
 }
 
@@ -69,5 +108,28 @@ export async function PATCH(request: Request) {
   } catch (error) {
     console.error('Error updating vendor:', error);
     return Response.json({ error: 'Failed to update vendor' }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const vendorId = searchParams.get('vendorId');
+
+    if (!vendorId) {
+      return Response.json({ error: 'vendorId required' }, { status: 400 });
+    }
+
+    const { data, errors } = await client.models.Vendor.delete({ vendorId });
+
+    if (errors) {
+      console.error('Error deleting vendor:', errors);
+      return Response.json({ error: 'Failed to delete vendor' }, { status: 500 });
+    }
+
+    return Response.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting vendor:', error);
+    return Response.json({ error: 'Failed to delete vendor' }, { status: 500 });
   }
 }
