@@ -3,8 +3,11 @@ import config from '@/amplify_outputs.json';
 import { cookies } from 'next/headers';
 import { fetchAuthSession } from 'aws-amplify/auth/server';
 import { Amplify } from 'aws-amplify';
+import { createServerRunner } from '@aws-amplify/adapter-nextjs';
 
 Amplify.configure(config, { ssr: true });
+
+const { runWithAmplifyServerContext } = createServerRunner({ config });
 
 const client = new CognitoIdentityProviderClient({ region: config.auth.aws_region });
 
@@ -16,15 +19,19 @@ const getUserPoolId = () => {
 // Get current user from session
 const getCurrentUserFromSession = async () => {
   try {
-    const cookieStore = await cookies();
-    const session = await fetchAuthSession();
-    const idToken = session.tokens?.idToken;
-    if (!idToken) return null;
-    
-    return {
-      role: idToken.payload['custom:role'] as string || 'staff',
-      vendorId: idToken.payload['custom:vendorId'] as string
-    };
+    return await runWithAmplifyServerContext({
+      nextServerContext: { cookies },
+      operation: async (contextSpec) => {
+        const session = await fetchAuthSession(contextSpec);
+        const idToken = session.tokens?.idToken;
+        if (!idToken) return null;
+        
+        return {
+          role: idToken.payload['custom:role'] as string || 'staff',
+          vendorId: idToken.payload['custom:vendorId'] as string
+        };
+      }
+    });
   } catch (error) {
     console.error('Error getting session:', error);
     return null;
@@ -202,8 +209,14 @@ export async function PATCH(request: Request) {
       const targetEmail = targetUser.UserAttributes?.find(attr => attr.Name === 'email')?.Value;
       
       // Get current user's email from session
-      const session2 = await fetchAuthSession();
-      const currentEmail = session2.tokens?.idToken?.payload['email'];
+      const emailResult = await runWithAmplifyServerContext({
+        nextServerContext: { cookies },
+        operation: async (contextSpec) => {
+          const session = await fetchAuthSession(contextSpec);
+          return session.tokens?.idToken?.payload['email'] as string;
+        }
+      });
+      const currentEmail = emailResult;
       
       if (targetEmail !== currentEmail) {
         return Response.json({ error: 'Unauthorized: Staff can only edit their own account' }, { status: 403 });
