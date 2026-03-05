@@ -78,17 +78,25 @@ export default function Services() {
     const serviceId = editingService ? editingService.serviceId : `svc-${Date.now()}`
     const method = editingService ? 'PATCH' : 'POST'
     
+    const serviceData = {
+      serviceId,
+      vendorId: selectedVendor,
+      name: newService.name,
+      category: newService.category,
+      description: newService.description,
+      duration: newService.duration,
+      price: newService.price,
+      requiresConsultation: newService.requiresConsultation,
+      resourceType: newService.resourceType,
+      allowedStaff: newService.staffRestriction === 'all' ? null : newService.allowedStaff,
+      isActive: editingService ? editingService.isActive : true
+    }
+    
     try {
       const response = await fetch('/api/services', {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          serviceId,
-          vendorId: selectedVendor,
-          ...newService,
-          allowedStaff: newService.staffRestriction === 'all' ? null : newService.allowedStaff,
-          isActive: editingService ? editingService.isActive : true
-        })
+        body: JSON.stringify(serviceData)
       })
 
       if (response.ok) {
