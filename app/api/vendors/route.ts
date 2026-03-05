@@ -74,7 +74,7 @@ export async function POST(request: Request) {
       phone,
       bufferMinutes: bufferMinutes || 15,
       isActive: isActive !== undefined ? isActive : true,
-      workingHours: workingHours ? JSON.stringify(workingHours) : null
+      workingHours: workingHours ? JSON.stringify(workingHours) as any : null
     });
 
     if (errors) {
@@ -104,7 +104,7 @@ export async function PATCH(request: Request) {
       return Response.json({ error: 'Unauthorized: Staff can only update their own vendor' }, { status: 403 });
     }
 
-    const { data, errors } = await client.models.Vendor.update(body);
+    const { data, errors } = await client.models.Vendor.update(body as any);
 
     if (errors) {
       console.error('Error updating vendor:', errors);
