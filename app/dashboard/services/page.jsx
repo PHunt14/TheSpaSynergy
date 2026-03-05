@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { fetchAuthSession } from 'aws-amplify/auth'
 
 export default function Services() {
@@ -13,6 +13,7 @@ export default function Services() {
   const [editingService, setEditingService] = useState(null)
   const [currentUserRole, setCurrentUserRole] = useState(null)
   const [currentUserVendorId, setCurrentUserVendorId] = useState(null)
+  const formRef = useRef(null)
   const [newService, setNewService] = useState({
     name: '',
     category: '',
@@ -152,6 +153,7 @@ export default function Services() {
       allowedStaff: service.allowedStaff || []
     })
     setShowAddForm(true)
+    setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
   }
 
   const handleCancelEdit = () => {
@@ -234,7 +236,7 @@ export default function Services() {
       </button>
 
       {showAddForm && (
-        <form onSubmit={handleAddService} style={{
+        <form ref={formRef} onSubmit={handleAddService} style={{
           background: 'var(--color-accent)',
           padding: '1.5rem',
           borderRadius: '8px',

@@ -60,4 +60,5 @@ Deployed via AWS Amplify with automatic CI/CD from Git repository.
 - Relaxation, Beauty, and Wellness blocks should go to those specific services
 - Get pictures
 - Get Selene Glow services and information for listing
-- error updating a service as an admin, how about a staff?
+- admin should be able to add a new vendor
+

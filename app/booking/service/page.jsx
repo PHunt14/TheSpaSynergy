@@ -1,16 +1,18 @@
 'use client'
 
 import { useSearchParams } from 'next/navigation'
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter } from 'next/navigation'
 
 function ServicePageContent() {
   const params = useSearchParams()
   const router = useRouter()
   const vendor = params.get('vendor')
+  const selectedCategory = params.get('category')
   const [services, setServices] = useState([])
   const [vendorInfo, setVendorInfo] = useState(null)
   const [loading, setLoading] = useState(true)
+  const categoryRefs = useRef({})
 
   useEffect(() => {
     if (!vendor) return
@@ -36,6 +38,19 @@ function ServicePageContent() {
         setLoading(false)
       })
   }, [vendor])
+
+  useEffect(() => {
+    if (!loading && selectedCategory && categoryRefs.current[selectedCategory]) {
+      setTimeout(() => {
+        const element = categoryRefs.current[selectedCategory]
+        if (element) {
+          const yOffset = -100 // Scroll 100px above the element
+          const y = element.getBoundingClientRect().top + window.pageYOffset + yOffset
+          window.scrollTo({ top: y, behavior: 'smooth' })
+        }
+      }, 100)
+    }
+  }, [loading, selectedCategory])
 
   if (loading) return <main><h1>Loading...</h1></main>
 
@@ -84,11 +99,21 @@ function ServicePageContent() {
 
       <div style={{ marginTop: '1.5rem' }}>
         {Object.entries(services).map(([category, categoryServices]) => (
-          <div key={category} style={{ marginBottom: '2rem' }}>
+          <div 
+            key={category} 
+            ref={el => categoryRefs.current[category] = el}
+            style={{ 
+              marginBottom: '2rem',
+              padding: selectedCategory === category ? '1rem' : '0',
+              background: selectedCategory === category ? 'var(--color-accent)' : 'transparent',
+              borderRadius: '12px',
+              transition: 'all 0.3s ease'
+            }}
+          >
             <h2 style={{ 
               fontSize: '1.2rem', 
               marginBottom: '1rem',
-              color: 'var(--color-primary)',
+              color: selectedCategory === category ? 'var(--color-primary-dark)' : 'var(--color-primary)',
               borderBottom: '2px solid var(--color-primary)',
               paddingBottom: '0.5rem',
               textAlign: 'center'
