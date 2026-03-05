@@ -155,19 +155,9 @@ export async function DELETE(request: Request) {
     }
 
     const currentUser = await getCurrentUserFromSession();
-    // Only enforce restrictions for staff
+    // Staff cannot delete any users
     if (currentUser?.role === 'staff') {
-      const getUserCommand = new AdminGetUserCommand({
-        UserPoolId: userPoolId,
-        Username: username
-      });
-      const targetUser = await client.send(getUserCommand);
-      const targetRole = targetUser.UserAttributes?.find(attr => attr.Name === 'custom:role')?.Value || 'staff';
-      const targetVendorId = targetUser.UserAttributes?.find(attr => attr.Name === 'custom:vendorId')?.Value;
-
-      if (targetRole !== 'staff' || targetVendorId !== currentUser.vendorId) {
-        return Response.json({ error: 'Unauthorized: Staff can only delete staff from their own vendor' }, { status: 403 });
-      }
+      return Response.json({ error: 'Unauthorized: Staff cannot delete users' }, { status: 403 });
     }
 
     const command = new AdminDeleteUserCommand({
@@ -201,20 +191,26 @@ export async function PATCH(request: Request) {
     }
 
     const currentUser = await getCurrentUserFromSession();
-    // Only enforce restrictions for staff
+    // Staff can only edit their own account
     if (currentUser?.role === 'staff') {
       const getUserCommand = new AdminGetUserCommand({
         UserPoolId: userPoolId,
         Username: username
       });
       const targetUser = await client.send(getUserCommand);
+      const targetEmail = targetUser.UserAttributes?.find(attr => attr.Name === 'email')?.Value;
+      
+      // Get current user's email from session
+      const session = await fetchAuthSession({ cookies });
+      const currentEmail = session.tokens?.idToken?.payload['email'];
+      
+      if (targetEmail !== currentEmail) {
+        return Response.json({ error: 'Unauthorized: Staff can only edit their own account' }, { status: 403 });
+      }
+      // Staff cannot change their own role or vendor
       const targetRole = targetUser.UserAttributes?.find(attr => attr.Name === 'custom:role')?.Value || 'staff';
       const targetVendorId = targetUser.UserAttributes?.find(attr => attr.Name === 'custom:vendorId')?.Value;
-
-      if (targetRole !== 'staff' || targetVendorId !== currentUser.vendorId) {
-        return Response.json({ error: 'Unauthorized: Staff can only edit staff from their own vendor' }, { status: 403 });
-      }
-      if (role !== 'staff' || vendorId !== currentUser.vendorId) {
+      if (role !== targetRole || vendorId !== targetVendorId) {
         return Response.json({ error: 'Unauthorized: Staff cannot change role or vendor' }, { status: 403 });
       }
     }

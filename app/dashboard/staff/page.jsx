@@ -15,6 +15,7 @@ export default function Staff() {
   const [selectedVendor, setSelectedVendor] = useState('')
   const [currentUserRole, setCurrentUserRole] = useState(null)
   const [currentUserVendorId, setCurrentUserVendorId] = useState(null)
+  const [currentUserEmail, setCurrentUserEmail] = useState(null)
   const [editingUser, setEditingUser] = useState(null)
 
   useEffect(() => {
@@ -28,8 +29,10 @@ export default function Staff() {
       const session = await fetchAuthSession()
       const vendorId = session.tokens?.idToken?.payload['custom:vendorId']
       const role = session.tokens?.idToken?.payload['custom:role'] || 'staff'
+      const email = session.tokens?.idToken?.payload['email']
       setCurrentUserRole(role)
       setCurrentUserVendorId(vendorId)
+      setCurrentUserEmail(email)
       if (role === 'staff' && vendorId) {
         setSelectedVendor(vendorId)
       }
@@ -338,10 +341,11 @@ export default function Staff() {
                     </td>
                     <td style={{ padding: '1rem' }}>{user.email}</td>
                     <td style={{ padding: '1rem' }}>
-                      {editingUser === user.username ? (
+                      {editingUser === user.username && (currentUserRole !== 'staff' || user.email === currentUserEmail) ? (
                         <select
                           defaultValue={user.role}
                           onChange={(e) => user.editRole = e.target.value}
+                          disabled={currentUserRole === 'staff'}
                           style={{ padding: '0.5rem', borderRadius: '4px' }}
                         >
                           <option value="staff">Staff</option>
@@ -361,10 +365,11 @@ export default function Staff() {
                       )}
                     </td>
                     <td style={{ padding: '1rem' }}>
-                      {editingUser === user.username ? (
+                      {editingUser === user.username && (currentUserRole !== 'staff' || user.email === currentUserEmail) ? (
                         <select
                           defaultValue={user.vendorId || ''}
                           onChange={(e) => user.editVendorId = e.target.value}
+                          disabled={currentUserRole === 'staff'}
                           style={{ padding: '0.5rem', borderRadius: '4px' }}
                         >
                           <option value="">All</option>
@@ -427,34 +432,40 @@ export default function Staff() {
                         </>
                       ) : (
                         <>
-                          <button
-                            onClick={() => setEditingUser(user.username)}
-                            style={{
-                              padding: '0.5rem 1rem',
-                              borderRadius: '4px',
-                              border: 'none',
-                              background: '#2196F3',
-                              color: 'white',
-                              cursor: 'pointer',
-                              fontSize: '0.85rem'
-                            }}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleDelete(user.username, user.email)}
-                            style={{
-                              padding: '0.5rem 1rem',
-                              borderRadius: '4px',
-                              border: 'none',
-                              background: '#F44336',
-                              color: 'white',
-                              cursor: 'pointer',
-                              fontSize: '0.85rem'
-                            }}
-                          >
-                            Delete
-                          </button>
+                          {/* Staff can only edit their own account */}
+                          {(currentUserRole !== 'staff' || user.email === currentUserEmail) && (
+                            <button
+                              onClick={() => setEditingUser(user.username)}
+                              style={{
+                                padding: '0.5rem 1rem',
+                                borderRadius: '4px',
+                                border: 'none',
+                                background: '#2196F3',
+                                color: 'white',
+                                cursor: 'pointer',
+                                fontSize: '0.85rem'
+                              }}
+                            >
+                              Edit
+                            </button>
+                          )}
+                          {/* Only admin/superadmin can delete users */}
+                          {(currentUserRole === 'admin' || currentUserRole === 'superadmin') && (
+                            <button
+                              onClick={() => handleDelete(user.username, user.email)}
+                              style={{
+                                padding: '0.5rem 1rem',
+                                borderRadius: '4px',
+                                border: 'none',
+                                background: '#F44336',
+                                color: 'white',
+                                cursor: 'pointer',
+                                fontSize: '0.85rem'
+                              }}
+                            >
+                              Delete
+                            </button>
+                          )}
                         </>
                       )}
                     </td>
