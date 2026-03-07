@@ -46,7 +46,7 @@ const vendors = [
   },
   {
     vendorId: 'vendor-selene',
-    name: 'Selene Glow',
+    name: 'Selene Glow Studio',
     description: 'Massage and Wellness',
     email: 'contact@seleneglow.com',
     phone: '301-992-3224',

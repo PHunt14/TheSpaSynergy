@@ -97,72 +97,84 @@ export default function VendorDetailPage() {
         </p>
       )}
 
-      <div className="grid-3-cols" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '2rem', marginBottom: '3rem' }}>
-        <style jsx>{`
-          @media (max-width: 768px) {
-            div[style*="repeat(3, 1fr)"] {
-              grid-template-columns: 1fr !important;
-            }
-          }
-        `}</style>
-        <div style={{
-          background: 'var(--color-accent)',
-          padding: '0.5rem',
-          borderRadius: '12px',
-          textAlign: 'center'
-        }}>
-          <div style={{
-            width: '100%',
-            height: '150px',
-            background: 'linear-gradient(135deg, #667eea, #764ba2)',
-            borderRadius: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'white'
-          }}>
-            [Gallery Photo 1]
+      {/* Staff & Owner Profiles */}
+      {vendorId === 'vendor-selene' && (
+        <div style={{ marginBottom: '3rem', textAlign: 'center' }}>
+          <h2 style={{ marginBottom: '1.5rem' }}>Meet Our Team</h2>
+          <div style={{ marginBottom: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <img 
+              src="https://the-spa-synergy-public.s3.amazonaws.com/vendorPictures/JylianHafer_SeleneGlow_Profile00.jpeg" 
+              alt="Jylian Hafer - Owner of Selene Glow Studio"
+              style={{ width: '100%', maxWidth: '300px', height: 'auto', borderRadius: '12px', marginBottom: '0', border: '3px solid var(--color-primary)' }}
+            />
+            <div style={{ width: '3px', height: '20px', background: 'var(--color-primary)' }}></div>
+            <div style={{ border: '3px solid var(--color-primary)', borderRadius: '12px', padding: '1.5rem', maxWidth: '600px' }}>
+              <p style={{ fontSize: '1rem', lineHeight: '1.6', color: 'var(--color-text)', textAlign: 'left', margin: 0 }}>
+                Jylian Hafer is the founder of Selene Glow Studio and a licensed beauty professional with over 15 years of experience in the beauty and wellness industry. With training and licensure in cosmetology, barbering, nail technology, and esthetics, Jylian brings a well-rounded and personalized approach to skincare and self-care. She believes that healthy, radiant skin is achieved through both professional treatments and intentional rituals of care. At Selene Glow Studio, her goal is to create a calming space where clients feel welcomed, supported, and empowered to glow with confidence - where radiance meets ritual.
+              </p>
+            </div>
           </div>
         </div>
-        <div style={{
-          background: 'var(--color-accent)',
-          padding: '0.5rem',
-          borderRadius: '12px',
-          textAlign: 'center'
-        }}>
-          <div style={{
-            width: '100%',
-            height: '150px',
-            background: 'linear-gradient(135deg, #f093fb, #f5576c)',
-            borderRadius: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'white'
-          }}>
-            [Gallery Photo 2]
+      )}
+
+      {vendorId === 'vendor-kera' && (
+        <div style={{ marginBottom: '3rem', textAlign: 'center' }}>
+          <h2 style={{ marginBottom: '1.5rem' }}>Meet Our Team</h2>
+          <div style={{ marginBottom: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <div style={{
+              width: '100%',
+              maxWidth: '300px',
+              height: '300px',
+              background: 'linear-gradient(135deg, #667eea, #764ba2)',
+              borderRadius: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'white',
+              marginBottom: '0',
+              border: '3px solid var(--color-primary)'
+            }}>
+              [Owner Photo]
+            </div>
+          </div>
+          <div style={{ marginBottom: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <img 
+              src="https://the-spa-synergy-public.s3.amazonaws.com/vendorPictures/TrinitySwire_Kera_Profile00.jpeg" 
+              alt="Trinity Swire - Independent Stylist at The Kera Studio"
+              style={{ width: '100%', maxWidth: '300px', height: 'auto', borderRadius: '12px', marginBottom: '0', border: '3px solid var(--color-primary)' }}
+            />
+            <div style={{ width: '3px', height: '20px', background: 'var(--color-primary)' }}></div>
+            <div style={{ border: '3px solid var(--color-primary)', borderRadius: '12px', padding: '1.5rem', maxWidth: '600px' }}>
+              <p style={{ fontSize: '1rem', lineHeight: '1.6', color: 'var(--color-text)', textAlign: 'left', margin: 0 }}>
+                Meet Trinity Swire! Independent Stylist and service provider with The Kera Studio
+              </p>
+            </div>
           </div>
         </div>
-        <div style={{
-          background: 'var(--color-accent)',
-          padding: '0.5rem',
-          borderRadius: '12px',
-          textAlign: 'center'
-        }}>
-          <div style={{
-            width: '100%',
-            height: '150px',
-            background: 'linear-gradient(135deg, #4facfe, #00f2fe)',
-            borderRadius: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'white'
-          }}>
-            [Gallery Photo 3]
+      )}
+
+      {vendorId === 'vendor-winsome' && (
+        <div style={{ marginBottom: '3rem', textAlign: 'center' }}>
+          <h2 style={{ marginBottom: '1.5rem' }}>Meet Our Team</h2>
+          <div style={{ marginBottom: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <div style={{
+              width: '100%',
+              maxWidth: '300px',
+              height: '300px',
+              background: 'linear-gradient(135deg, #A8C3B0, #2F4F4F)',
+              borderRadius: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'white',
+              marginBottom: '0',
+              border: '3px solid var(--color-primary)'
+            }}>
+              [Owner Photo]
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       <h2 style={{ marginBottom: '1.5rem' }}>Service Categories</h2>
       {services.length === 0 ? (
