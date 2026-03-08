@@ -17,3 +17,17 @@ backend.sendSms.resources.lambda.addToRolePolicy(
     resources: ['*'],
   })
 );
+
+// Grant Cognito admin permissions to authenticated users
+backend.auth.resources.authenticatedUserIamRole.addToPrincipalPolicy(
+  new PolicyStatement({
+    actions: [
+      'cognito-idp:AdminCreateUser',
+      'cognito-idp:AdminDeleteUser',
+      'cognito-idp:AdminUpdateUserAttributes',
+      'cognito-idp:AdminGetUser',
+      'cognito-idp:ListUsers',
+    ],
+    resources: [backend.auth.resources.userPool.userPoolArn],
+  })
+);
