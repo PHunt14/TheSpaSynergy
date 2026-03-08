@@ -26,10 +26,43 @@ export async function POST(request: Request) {
       description: body.description,
       serviceIds: body.serviceIds,
       price: body.price,
+      discountPercent: body.discountPercent ?? 0,
       isActive: body.isActive ?? true,
     })
     return Response.json({ bundle })
   } catch (error) {
     return Response.json({ error: 'Failed to create bundle' }, { status: 500 })
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const body = await request.json()
+    const updateData: any = {
+      bundleId: body.bundleId as any,
+    }
+    if (body.name !== undefined) updateData.name = body.name
+    if (body.description !== undefined) updateData.description = body.description
+    if (body.serviceIds !== undefined) updateData.serviceIds = body.serviceIds
+    if (body.price !== undefined) updateData.price = body.price
+    if (body.discountPercent !== undefined) updateData.discountPercent = body.discountPercent
+    if (body.isActive !== undefined) updateData.isActive = body.isActive
+    
+    const { data: bundle } = await client.models.Bundle.update(updateData)
+    return Response.json({ bundle })
+  } catch (error) {
+    console.error('Bundle update error:', error)
+    return Response.json({ error: 'Failed to update bundle' }, { status: 500 })
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const bundleId = searchParams.get('bundleId')
+    await client.models.Bundle.delete({ bundleId: bundleId as any })
+    return Response.json({ success: true })
+  } catch (error) {
+    return Response.json({ error: 'Failed to delete bundle' }, { status: 500 })
   }
 }

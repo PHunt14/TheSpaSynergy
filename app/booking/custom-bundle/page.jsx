@@ -33,6 +33,33 @@ export default function CustomBundlePage() {
   const totalPrice = selectedServices.reduce((sum, s) => sum + s.price, 0)
   const totalDuration = selectedServices.reduce((sum, s) => sum + s.duration, 0)
 
+  const getDiscount = async () => {
+    try {
+      const res = await fetch('/api/bundle-settings')
+      const data = await res.json()
+      const count = selectedServices.length
+      if (count === 1) return data.settings?.discount1Service || 0
+      if (count === 2) return data.settings?.discount2Services || 0
+      if (count === 3) return data.settings?.discount3Services || 0
+      if (count >= 4) return data.settings?.discount4PlusServices || 0
+      return 0
+    } catch {
+      return 0
+    }
+  }
+
+  const [discount, setDiscount] = useState(0)
+
+  useEffect(() => {
+    if (selectedServices.length > 0) {
+      getDiscount().then(setDiscount)
+    } else {
+      setDiscount(0)
+    }
+  }, [selectedServices.length])
+
+  const discountedPrice = totalPrice * (1 - discount / 100)
+
   const servicesByVendor = allServices.reduce((acc, service) => {
     if (!acc[service.vendorId]) acc[service.vendorId] = {}
     const category = service.category || 'Other'
@@ -72,7 +99,19 @@ export default function CustomBundlePage() {
           <hr style={{ margin: '1rem 0', border: 'none', borderTop: '1px solid var(--color-border)' }} />
           <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '1.2rem' }}>
             <span>Total: {totalDuration} min</span>
-            <span>${totalPrice.toFixed(2)}</span>
+            <div style={{ textAlign: 'right' }}>
+              {discount > 0 && (
+                <div style={{ fontSize: '0.9rem', color: 'var(--color-primary)', marginBottom: '0.25rem' }}>
+                  {discount}% discount applied
+                </div>
+              )}
+              {discount > 0 && (
+                <div style={{ fontSize: '0.9rem', textDecoration: 'line-through', color: 'var(--color-text-light)' }}>
+                  ${totalPrice.toFixed(2)}
+                </div>
+              )}
+              <div>${discountedPrice.toFixed(2)}</div>
+            </div>
           </div>
           <Link
             href={`/booking/bundle-time?services=${selectedServices.map(s => s.serviceId).join(',')}`}
