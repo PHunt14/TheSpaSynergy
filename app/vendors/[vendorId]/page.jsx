@@ -10,6 +10,7 @@ export default function VendorDetailPage() {
   const [vendor, setVendor] = useState(null)
   const [services, setServices] = useState([])
   const [loading, setLoading] = useState(true)
+  const [selectedProfile, setSelectedProfile] = useState(null)
 
   const groupedServices = services.reduce((acc, service) => {
     const category = service.category || 'Other'
@@ -74,7 +75,7 @@ export default function VendorDetailPage() {
 
       <div style={{
         height: '300px',
-        background: 'linear-gradient(135deg, var(--color-primary), var(--color-secondary))',
+        background: (vendorId === 'vendor-kera' || vendorId === 'vendor-winsome') ? 'var(--color-bg)' : 'linear-gradient(135deg, var(--color-primary), var(--color-secondary))',
         borderRadius: '12px',
         display: 'flex',
         alignItems: 'center',
@@ -82,9 +83,24 @@ export default function VendorDetailPage() {
         color: 'white',
         fontSize: '1.5rem',
         fontWeight: 'bold',
-        marginBottom: '2rem'
+        marginBottom: '2rem',
+        overflow: 'hidden'
       }}>
-        [Hero Image]
+        {vendorId === 'vendor-kera' ? (
+          <img 
+            src="https://the-spa-synergy-public.s3.amazonaws.com/vendorPictures/Kera_Logo00.jpg" 
+            alt="The Kera Studio Logo"
+            style={{ maxWidth: '90%', maxHeight: '90%', objectFit: 'contain', borderRadius: '12px' }}
+          />
+        ) : vendorId === 'vendor-winsome' ? (
+          <img 
+            src="https://the-spa-synergy-public.s3.amazonaws.com/vendorPictures/Winsome_Hero00.jpg" 
+            alt="Winsome Woods"
+            style={{ maxWidth: '90%', maxHeight: '90%', objectFit: 'contain', borderRadius: '12px' }}
+          />
+        ) : (
+          '[Hero Image]'
+        )}
       </div>
 
       <h1>{vendor.name}</h1>
@@ -105,12 +121,16 @@ export default function VendorDetailPage() {
             <img 
               src="https://the-spa-synergy-public.s3.amazonaws.com/vendorPictures/JylianHafer_SeleneGlow_Profile00.jpeg" 
               alt="Jylian Hafer - Owner of Selene Glow Studio"
-              style={{ width: '100%', maxWidth: '300px', height: 'auto', borderRadius: '12px', marginBottom: '0', border: '3px solid var(--color-primary)' }}
+              onClick={() => setSelectedProfile({
+                name: 'Jylian Hafer',
+                bio: 'Jylian Hafer is the founder of Selene Glow Studio and a licensed beauty professional with over 15 years of experience in the beauty and wellness industry. With training and licensure in cosmetology, barbering, nail technology, and esthetics, Jylian brings a well-rounded and personalized approach to skincare and self-care. She believes that healthy, radiant skin is achieved through both professional treatments and intentional rituals of care. At Selene Glow Studio, her goal is to create a calming space where clients feel welcomed, supported, and empowered to glow with confidence - where radiance meets ritual.'
+              })}
+              style={{ width: '100%', maxWidth: '300px', height: 'auto', borderRadius: '12px', marginBottom: '0', border: '3px solid var(--color-primary)', cursor: 'pointer' }}
             />
             <div style={{ width: '3px', height: '20px', background: 'var(--color-primary)' }}></div>
             <div style={{ border: '3px solid var(--color-primary)', borderRadius: '12px', padding: '1.5rem', maxWidth: '600px' }}>
-              <p style={{ fontSize: '1rem', lineHeight: '1.6', color: 'var(--color-text)', textAlign: 'left', margin: 0 }}>
-                Jylian Hafer is the founder of Selene Glow Studio and a licensed beauty professional with over 15 years of experience in the beauty and wellness industry. With training and licensure in cosmetology, barbering, nail technology, and esthetics, Jylian brings a well-rounded and personalized approach to skincare and self-care. She believes that healthy, radiant skin is achieved through both professional treatments and intentional rituals of care. At Selene Glow Studio, her goal is to create a calming space where clients feel welcomed, supported, and empowered to glow with confidence - where radiance meets ritual.
+              <p style={{ fontSize: '1rem', fontWeight: '600', color: 'var(--color-text)', margin: 0 }}>
+                Jylian Hafer
               </p>
             </div>
           </div>
@@ -121,32 +141,36 @@ export default function VendorDetailPage() {
         <div style={{ marginBottom: '3rem', textAlign: 'center' }}>
           <h2 style={{ marginBottom: '1.5rem' }}>Meet Our Team</h2>
           <div style={{ marginBottom: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <div style={{
-              width: '100%',
-              maxWidth: '300px',
-              height: '300px',
-              background: 'linear-gradient(135deg, #667eea, #764ba2)',
-              borderRadius: '12px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'white',
-              marginBottom: '0',
-              border: '3px solid var(--color-primary)'
-            }}>
-              [Owner Photo]
+            <img 
+              src="https://the-spa-synergy-public.s3.amazonaws.com/vendorPictures/StaceyGreen_Kera_Profile00.jpg" 
+              alt="Stacey Green - Owner of The Kera Studio"
+              onClick={() => setSelectedProfile({
+                name: 'Stacey Green',
+                bio: 'Stacey is the owner of The Kera Studio. Stacey has been in the beauty industry for over 24 years, specializing in the maintenance and care of hair, skin & nails, and customizing your routines, lessons and services for your needs and goals.'
+              })}
+              style={{ width: '100%', maxWidth: '300px', height: 'auto', borderRadius: '12px', marginBottom: '0', border: '3px solid var(--color-primary)', cursor: 'pointer' }}
+            />
+            <div style={{ width: '3px', height: '20px', background: 'var(--color-primary)' }}></div>
+            <div style={{ border: '3px solid var(--color-primary)', borderRadius: '12px', padding: '1.5rem', maxWidth: '600px' }}>
+              <p style={{ fontSize: '1rem', fontWeight: '600', color: 'var(--color-text)', margin: 0 }}>
+                Stacey Green
+              </p>
             </div>
           </div>
           <div style={{ marginBottom: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <img 
               src="https://the-spa-synergy-public.s3.amazonaws.com/vendorPictures/TrinitySwire_Kera_Profile00.jpeg" 
               alt="Trinity Swire - Independent Stylist at The Kera Studio"
-              style={{ width: '100%', maxWidth: '300px', height: 'auto', borderRadius: '12px', marginBottom: '0', border: '3px solid var(--color-primary)' }}
+              onClick={() => setSelectedProfile({
+                name: 'Trinity Swire',
+                bio: 'Meet Trinity Swire! Independent Stylist and service provider with The Kera Studio'
+              })}
+              style={{ width: '100%', maxWidth: '300px', height: 'auto', borderRadius: '12px', marginBottom: '0', border: '3px solid var(--color-primary)', cursor: 'pointer' }}
             />
             <div style={{ width: '3px', height: '20px', background: 'var(--color-primary)' }}></div>
             <div style={{ border: '3px solid var(--color-primary)', borderRadius: '12px', padding: '1.5rem', maxWidth: '600px' }}>
-              <p style={{ fontSize: '1rem', lineHeight: '1.6', color: 'var(--color-text)', textAlign: 'left', margin: 0 }}>
-                Meet Trinity Swire! Independent Stylist and service provider with The Kera Studio
+              <p style={{ fontSize: '1rem', fontWeight: '600', color: 'var(--color-text)', margin: 0 }}>
+                Trinity Swire
               </p>
             </div>
           </div>
@@ -157,21 +181,73 @@ export default function VendorDetailPage() {
         <div style={{ marginBottom: '3rem', textAlign: 'center' }}>
           <h2 style={{ marginBottom: '1.5rem' }}>Meet Our Team</h2>
           <div style={{ marginBottom: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <div style={{
-              width: '100%',
-              maxWidth: '300px',
-              height: '300px',
-              background: 'linear-gradient(135deg, #A8C3B0, #2F4F4F)',
-              borderRadius: '12px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'white',
-              marginBottom: '0',
-              border: '3px solid var(--color-primary)'
-            }}>
-              [Owner Photo]
+            <img 
+              src="https://the-spa-synergy-public.s3.amazonaws.com/vendorPictures/Makaila_Winsome_Profile01.jpg" 
+              alt="Makaila - Owner of Winsome Woods"
+              onClick={() => setSelectedProfile({
+                name: 'Makaila',
+                bio: 'Makaila has been in the massage and natural healing world for almost 2 decades. Focusing on energy and natural remedies for stress relief and relaxation, with services that are ever expanding as she learns the communities needs.'
+              })}
+              style={{ width: '100%', maxWidth: '300px', height: 'auto', borderRadius: '12px', marginBottom: '0', border: '3px solid var(--color-primary)', cursor: 'pointer' }}
+            />
+            <div style={{ width: '3px', height: '20px', background: 'var(--color-primary)' }}></div>
+            <div style={{ border: '3px solid var(--color-primary)', borderRadius: '12px', padding: '1.5rem', maxWidth: '600px' }}>
+              <p style={{ fontSize: '1rem', fontWeight: '600', color: 'var(--color-text)', margin: 0 }}>
+                Makaila
+              </p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Profile Overlay Modal */}
+      {selectedProfile && (
+        <div 
+          onClick={() => setSelectedProfile(null)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.8)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '2rem'
+          }}
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'white',
+              borderRadius: '12px',
+              padding: '2rem',
+              maxWidth: '600px',
+              width: '100%',
+              position: 'relative'
+            }}
+          >
+            <button
+              onClick={() => setSelectedProfile(null)}
+              style={{
+                position: 'absolute',
+                top: '1rem',
+                right: '1rem',
+                background: 'none',
+                border: 'none',
+                fontSize: '1.5rem',
+                cursor: 'pointer',
+                color: 'var(--color-text)'
+              }}
+            >
+              ×
+            </button>
+            <h3 style={{ marginBottom: '1rem', color: 'var(--color-primary-dark)' }}>{selectedProfile.name}</h3>
+            <p style={{ fontSize: '1rem', lineHeight: '1.6', color: 'var(--color-text)' }}>
+              {selectedProfile.bio}
+            </p>
           </div>
         </div>
       )}

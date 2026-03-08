@@ -9,26 +9,26 @@ const vendors = [
   {
     vendorId: 'vendor-winsome',
     name: 'Winsome Woods',
-    description: 'Massage and Wellness',
+    description: 'Natural remedies for stress relief',
     email: 'contact@winsomewoods.com',
     phone: '301-992-3224',
     squareAccountId: 'PLACEHOLDER_SQUARE_ID_1',
     isActive: true,
     workingHours: {
-      monday: { start: '12:00', end: '17:00' },
-      tuesday: { start: '12:00', end: '17:00' },
-      wednesday: { start: '12:00', end: '17:00' },
-      thursday: { start: '12:00', end: '17:00' },
-      friday: { start: '12:00', end: '17:00' },
-      saturday: { start: '12:00', end: '17:00' },
-      sunday: { start: null, end: null }
+      monday: { start: '9:00', end: '18:00' },
+      tuesday: { start: '9:00', end: '18:00' },
+      wednesday: { start: '9:00', end: '18:00' },
+      thursday: { start: '9:00', end: '18:00' },
+      friday: { start: '9:00', end: '18:00' },
+      saturday: { start: '12:00', end: '18:00' },
+      sunday: { start: '12:00', end: '18:00' }
     },
     bufferMinutes: 15
   },
   {
     vendorId: 'vendor-kera',
     name: 'The Kera Studio',
-    description: 'Hair and Beauty Studio',
+    description: 'Providing our guests a place for reflection and peace',
     email: 'thekerastudio@gmail.com',
     phone: '240-329-6537',
     squareAccountId: 'PLACEHOLDER_SQUARE_ID_3',
@@ -47,7 +47,7 @@ const vendors = [
   {
     vendorId: 'vendor-selene',
     name: 'Selene Glow Studio',
-    description: 'Massage and Wellness',
+    description: 'Where Radiance meets Ritual',
     email: 'contact@seleneglow.com',
     phone: '301-992-3224',
     squareAccountId: 'PLACEHOLDER_SQUARE_ID_1',
@@ -97,10 +97,6 @@ const services = [
   { serviceId: 'svc-kera-pedicure', vendorId: 'vendor-kera', category: 'Nail Care', name: 'Pedicure', description: 'Relaxing foot and nail treatment', duration: 45, price: 45, isActive: true },
   { serviceId: 'svc-kera-foot-soak', vendorId: 'vendor-kera', category: 'Nail Care', name: 'Foot Soak', description: 'Soothing foot bath and massage', duration: 30, price: 18, isActive: true },
   { serviceId: 'svc-kera-wedding', vendorId: 'vendor-kera', category: 'Wedding', name: 'Wedding Trial', description: 'Complimentary bridal hair and makeup trial', duration: 60, price: 0, isActive: true },
-  { serviceId: 'svc-kera-manicure-reg-polish', vendorId: 'vendor-kera', category: 'Selene Glow', name: 'Manicure & Regular Polish', description: 'Classic manicure with regular polish', duration: 30, price: 25, isActive: true },
-  { serviceId: 'svc-kera-manicure-gel-polish', vendorId: 'vendor-kera', category: 'Selene Glow', name: 'Manicure & Gel Polish', description: 'Long-lasting gel polish manicure', duration: 30, price: 35, isActive: true },
-  { serviceId: 'svc-kera-deluxe-manicure', vendorId: 'vendor-kera', category: 'Selene Glow', name: 'Deluxe Manicure', description: 'Premium manicure with hand treatment', duration: 30, price: 45, isActive: true },
-  { serviceId: 'svc-kera-polish', vendorId: 'vendor-kera', category: 'Selene Glow', name: 'Polish - Hands', description: 'Polish change for hands', duration: 30, price: 15, isActive: true },
   { serviceId: 'svc-kera-sauna-25', vendorId: 'vendor-kera', category: 'Sauna', resourceType: 'sauna', name: 'Sauna - 25 min', description: 'Infrared sauna session for detox and relaxation', duration: 25, price: 10, isActive: true },
   { serviceId: 'svc-kera-sauna-45', vendorId: 'vendor-kera', category: 'Sauna', resourceType: 'sauna', name: 'Sauna - 45 min', description: 'Extended infrared sauna session', duration: 45, price: 18, isActive: true },
   { serviceId: 'svc-kera-wax-brows', vendorId: 'vendor-kera', category: 'Waxing', name: 'Brows', description: 'Eyebrow shaping and waxing', duration: 15, price: 15, isActive: true },
@@ -111,7 +107,12 @@ const services = [
   { serviceId: 'svc-kera-wax-arms', vendorId: 'vendor-kera', category: 'Waxing', name: 'Arms', description: 'Full arm hair removal', duration: 30, price: 40, isActive: true, requiresConsultation: true },
   { serviceId: 'svc-kera-wax-back', vendorId: 'vendor-kera', category: 'Waxing', name: 'Back', description: 'Full back hair removal', duration: 45, price: 55, isActive: true, requiresConsultation: true },
   { serviceId: 'svc-kera-wax-chest', vendorId: 'vendor-kera', category: 'Waxing', name: 'Chest', description: 'Chest hair removal', duration: 40, price: 45, isActive: true, requiresConsultation: true },
-  { serviceId: 'svc-kera-wax-brazilian', vendorId: 'vendor-kera', category: 'Waxing', name: 'Brazilian', description: 'Complete bikini area hair removal', duration: 45, price: 70, isActive: true, requiresConsultation: true }
+  { serviceId: 'svc-kera-wax-brazilian', vendorId: 'vendor-kera', category: 'Waxing', name: 'Brazilian', description: 'Complete bikini area hair removal', duration: 45, price: 70, isActive: true, requiresConsultation: true },
+
+  { serviceId: 'svc-selene-manicure-reg-polish', vendorId: 'vendor-selene', category: 'Nails', name: 'Manicure & Regular Polish', description: 'Classic manicure with regular polish', duration: 30, price: 25, isActive: true },
+  { serviceId: 'svc-selene-manicure-gel-polish', vendorId: 'vendor-selene', category: 'Nails', name: 'Manicure & Gel Polish', description: 'Long-lasting gel polish manicure', duration: 30, price: 35, isActive: true },
+  { serviceId: 'svc-selene-deluxe-manicure', vendorId: 'vendor-selene', category: 'Nails', name: 'Deluxe Manicure', description: 'Premium manicure with hand treatment', duration: 30, price: 45, isActive: true },
+  { serviceId: 'svc-selene-polish', vendorId: 'vendor-selene', category: 'Nails', name: 'Polish - Hands', description: 'Polish change for hands', duration: 30, price: 15, isActive: true },
 ];
 
 const bundles = [
