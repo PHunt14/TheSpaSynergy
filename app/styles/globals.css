@@ -166,6 +166,7 @@ h1, h2, h3 {
   position: sticky;
   top: 0;
   z-index: 100;
+  position: relative;
 }
 
 .nav-inner {
@@ -175,6 +176,8 @@ h1, h2, h3 {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  position: relative;
+  z-index: 1;
 }
 
 .nav-logo {
@@ -310,6 +313,7 @@ html, body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
 .layout-content {
@@ -610,5 +614,49 @@ html, body {
     width: 2rem;
     height: 2rem;
     line-height: 2rem;
+  }
+}
+
+
+/* Cherry Blossom Decorations */
+.blossom-corner-top-right {
+  position: absolute;
+  top: -20px;
+  right: -40px;
+  opacity: 0.12;
+  width: 350px;
+  pointer-events: none;
+}
+
+.blossom-corner-bottom-left {
+  position: absolute;
+  bottom: -20px;
+  left: -40px;
+  opacity: 0.12;
+  width: 350px;
+  pointer-events: none;
+  transform: scaleX(-1);
+}
+
+.blossom-divider {
+  width: 200px;
+  margin: 2rem auto;
+  opacity: 0.25;
+}
+
+.blossom-header-accent {
+  width: 150px;
+  margin: 0 auto 1rem;
+  opacity: 0.3;
+}
+
+@media (max-width: 768px) {
+  .blossom-corner-top-right,
+  .blossom-corner-bottom-left {
+    width: 250px;
+  }
+  
+  .blossom-divider {
+    width: 150px;
   }
 }

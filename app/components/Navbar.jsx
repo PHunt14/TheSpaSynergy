@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
+import CherryBlossomBorder from './CherryBlossomBorder'
 
 export default function Navbar() {
   const [vendors, setVendors] = useState([])
@@ -55,6 +56,7 @@ export default function Navbar() {
           <Link href="/contact">Contact</Link>
         </div>
       </div>
+      <CherryBlossomBorder style={{ position: 'absolute', bottom: 0, left: 0, opacity: 0.6, zIndex: 0 }} />
     </nav>
   )
 }

@@ -4,6 +4,6 @@
 .env.local.example
 
 # Amplify
-amplify_outputs.json
+amplify_outputs*.json
 .amplify/
 ampx-reports/

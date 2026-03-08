@@ -1,3 +1,7 @@
+import CherryBlossom from './components/CherryBlossom';
+import CherryBlossomHero from './components/CherryBlossomHero';
+import CherryBlossomHeading from './components/CherryBlossomHeading';
+
 export const metadata = {
   title: 'The Spa Synergy | Luxury Spa & Wellness Services in Fort Ritchie, MD',
   description: 'Book premium spa, beauty, and wellness services at The Spa Synergy in Fort Ritchie, MD. Expert massage, hair styling, and private suite rentals.',
@@ -25,7 +29,9 @@ export default function Home() {
       </section>
 
       <section style={{ padding: '4rem 2rem', maxWidth: '1200px', margin: '0 auto' }}>
-        <h2 style={{ textAlign: 'center', marginBottom: '3rem' }}>Experience Luxury & Wellness</h2>
+        <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
+          <CherryBlossomHeading text="Experience Luxury & Wellness" />
+        </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '2rem' }}>
           <div style={{
             borderRadius: '12px',
