@@ -51,17 +51,32 @@ export default function VendorsPage() {
           >
             <div style={{
               height: '200px',
-              background: 'linear-gradient(135deg, var(--color-primary), var(--color-secondary))',
+              background: (vendor.vendorId === 'vendor-kera' || vendor.vendorId === 'vendor-winsome') ? 'var(--color-bg)' : 'linear-gradient(135deg, var(--color-primary), var(--color-secondary))',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               color: 'white',
               fontSize: '1.2rem',
-              fontWeight: 'bold'
+              fontWeight: 'bold',
+              borderRadius: '12px 12px 0 0'
             }}>
-              [Vendor Photo]
+              {vendor.vendorId === 'vendor-kera' ? (
+                <img 
+                  src="https://the-spa-synergy-public.s3.amazonaws.com/vendorPictures/Kera_Logo00.jpg" 
+                  alt="The Kera Studio Logo"
+                  style={{ maxWidth: '90%', maxHeight: '90%', objectFit: 'contain' }}
+                />
+              ) : vendor.vendorId === 'vendor-winsome' ? (
+                <img 
+                  src="https://the-spa-synergy-public.s3.amazonaws.com/vendorPictures/Winsome_Hero00.jpg" 
+                  alt="Winsome Woods"
+                  style={{ maxWidth: '90%', maxHeight: '90%', objectFit: 'contain' }}
+                />
+              ) : (
+                '[Vendor Photo]'
+              )}
             </div>
-            <div style={{ padding: '1.5rem' }}>
+            <div style={{ padding: '1.5rem', borderRadius: '0 0 12px 12px' }}>
               <h3 style={{ marginBottom: '0.5rem' }}>{vendor.name}</h3>
               <p style={{ color: 'var(--color-text-light)', fontSize: '0.95rem' }}>
                 {vendor.description || 'Professional services tailored to your needs.'}
