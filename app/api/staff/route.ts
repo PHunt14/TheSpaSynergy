@@ -9,7 +9,19 @@ Amplify.configure(config, { ssr: true });
 
 const { runWithAmplifyServerContext } = createServerRunner({ config });
 
-const client = new CognitoIdentityProviderClient({ region: config.auth.aws_region });
+const getClientWithCredentials = async () => {
+  const session = await runWithAmplifyServerContext({
+    nextServerContext: { cookies },
+    operation: async (contextSpec) => {
+      return await fetchAuthSession(contextSpec);
+    }
+  });
+  
+  return new CognitoIdentityProviderClient({ 
+    region: config.auth.aws_region,
+    credentials: session.credentials
+  });
+};
 
 // Get User Pool ID from amplify config
 const getUserPoolId = () => {
@@ -54,6 +66,8 @@ export async function POST(request: Request) {
     if (!userPoolId) {
       return Response.json({ error: 'User pool not configured' }, { status: 500 });
     }
+
+    const client = await getClientWithCredentials();
 
     const userAttributes = [
       {
@@ -121,6 +135,8 @@ export async function GET(request: Request) {
       return Response.json({ error: 'User pool not configured' }, { status: 500 });
     }
 
+    const client = await getClientWithCredentials();
+
     const command = new ListUsersCommand({
       UserPoolId: userPoolId
     });
@@ -168,6 +184,8 @@ export async function DELETE(request: Request) {
       return Response.json({ error: 'Unauthorized: Staff cannot delete users' }, { status: 403 });
     }
 
+    const client = await getClientWithCredentials();
+
     const command = new AdminDeleteUserCommand({
       UserPoolId: userPoolId,
       Username: username
@@ -197,6 +215,8 @@ export async function PATCH(request: Request) {
     if (!userPoolId) {
       return Response.json({ error: 'User pool not configured' }, { status: 500 });
     }
+
+    const client = await getClientWithCredentials();
 
     const currentUser = await getCurrentUserFromSession();
     // Staff can only edit their own account
