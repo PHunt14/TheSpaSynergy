@@ -31,3 +31,17 @@ backend.auth.resources.authenticatedUserIamRole.addToPrincipalPolicy(
     resources: [backend.auth.resources.userPool.userPoolArn],
   })
 );
+
+// Also grant to unauthenticated role (for edge cases during auth flow)
+backend.auth.resources.unauthenticatedUserIamRole.addToPrincipalPolicy(
+  new PolicyStatement({
+    actions: [
+      'cognito-idp:AdminCreateUser',
+      'cognito-idp:AdminDeleteUser',
+      'cognito-idp:AdminUpdateUserAttributes',
+      'cognito-idp:AdminGetUser',
+      'cognito-idp:ListUsers',
+    ],
+    resources: [backend.auth.resources.userPool.userPoolArn],
+  })
+);

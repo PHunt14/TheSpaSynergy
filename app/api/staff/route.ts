@@ -17,6 +17,10 @@ const getClientWithCredentials = async () => {
     }
   });
   
+  if (!session.credentials || !session.tokens) {
+    throw new Error('User not authenticated');
+  }
+  
   return new CognitoIdentityProviderClient({ 
     region: config.auth.aws_region,
     credentials: session.credentials
