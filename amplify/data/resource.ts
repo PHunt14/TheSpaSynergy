@@ -43,9 +43,21 @@ const schema = a.schema({
       description: a.string(),
       serviceIds: a.string().array().required(),
       price: a.float().required(),
+      discountPercent: a.float().default(0),
       isActive: a.boolean().default(true),
     })
     .identifier(['bundleId'])
+    .authorization((allow) => [allow.publicApiKey()]),
+
+  BundleSettings: a
+    .model({
+      settingsId: a.id().required(),
+      discount1Service: a.float().default(0),
+      discount2Services: a.float().default(0),
+      discount3Services: a.float().default(0),
+      discount4PlusServices: a.float().default(0),
+    })
+    .identifier(['settingsId'])
     .authorization((allow) => [allow.publicApiKey()]),
 
   Appointment: a
