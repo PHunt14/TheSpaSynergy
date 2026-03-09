@@ -49,7 +49,8 @@ export async function POST(request: Request) {
 
     // Send confirmation email to customer (non-blocking)
     try {
-      await fetch(`${request.headers.get('origin')}/api/send-email`, {
+      console.log('Sending confirmation email to:', customer.email);
+      const emailResponse = await fetch(`${request.headers.get('origin')}/api/send-email`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -60,6 +61,11 @@ export async function POST(request: Request) {
           dateTime
         })
       });
+      console.log('Email API response status:', emailResponse.status);
+      if (!emailResponse.ok) {
+        const errorText = await emailResponse.text();
+        console.error('Email API error:', errorText);
+      }
     } catch (emailError) {
       console.error('Email notification failed:', emailError);
     }
