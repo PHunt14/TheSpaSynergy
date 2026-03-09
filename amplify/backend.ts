@@ -3,17 +3,27 @@ import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { auth } from './auth/resource.js';
 import { data } from './data/resource.js';
 import { sendSms } from './functions/send-sms/resource.js';
+import { sendEmail } from './functions/send-email/resource.js';
 
 const backend = defineBackend({
   auth,
   data,
   sendSms,
+  sendEmail,
 });
 
 // Grant SNS publish permissions to the Lambda function
 backend.sendSms.resources.lambda.addToRolePolicy(
   new PolicyStatement({
     actions: ['sns:Publish'],
+    resources: ['*'],
+  })
+);
+
+// Grant SES send email permissions to the Lambda function
+backend.sendEmail.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    actions: ['ses:SendEmail', 'ses:SendRawEmail'],
     resources: ['*'],
   })
 );
@@ -43,5 +53,13 @@ backend.auth.resources.unauthenticatedUserIamRole.addToPrincipalPolicy(
       'cognito-idp:ListUsers',
     ],
     resources: [backend.auth.resources.userPool.userPoolArn],
+  })
+);
+
+// Grant SES permissions for sending appointment emails
+backend.auth.resources.unauthenticatedUserIamRole.addToPrincipalPolicy(
+  new PolicyStatement({
+    actions: ['ses:SendEmail', 'ses:SendRawEmail'],
+    resources: ['*'],
   })
 );

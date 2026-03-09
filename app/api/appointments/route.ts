@@ -45,7 +45,23 @@ export async function POST(request: Request) {
       });
     } catch (smsError) {
       console.error('SMS notification failed:', smsError);
-      // Don't fail the appointment creation if SMS fails
+    }
+
+    // Send confirmation email to customer (non-blocking)
+    try {
+      await fetch(`${request.headers.get('origin')}/api/send-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          appointmentId, 
+          customerEmail: customer.email,
+          vendorId,
+          serviceId,
+          dateTime
+        })
+      });
+    } catch (emailError) {
+      console.error('Email notification failed:', emailError);
     }
 
     return Response.json({ 

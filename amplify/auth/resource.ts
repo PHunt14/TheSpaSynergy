@@ -14,4 +14,9 @@ export const auth = defineAuth({
       mutable: true,
     },
   },
+  senders: {
+    email: {
+      fromEmail: 'noreply@thespasynergy.com',
+    },
+  },
 });
