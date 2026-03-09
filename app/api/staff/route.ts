@@ -121,11 +121,9 @@ export async function POST(request: Request) {
     });
   } catch (error: any) {
     console.error('Error inviting user:', error);
-    console.error('Error details:', JSON.stringify(error, null, 2));
     return Response.json({ 
       error: 'Failed to invite user',
-      details: error.message,
-      code: error.code || error.name
+      details: error.message 
     }, { status: 500 });
   }
 }

@@ -74,12 +74,14 @@ function AutoLogout({ signOut, children }) {
   }
 
   useEffect(() => {
-    const events = ['mousedown', 'keydown', 'scroll', 'touchstart']
-    events.forEach(event => document.addEventListener(event, resetTimeout))
+    const events = ['mousedown', 'keydown', 'scroll', 'touchstart', 'mousemove', 'click']
+    const resetHandler = () => resetTimeout()
+    
+    events.forEach(event => document.addEventListener(event, resetHandler, { passive: true }))
     resetTimeout()
 
     return () => {
-      events.forEach(event => document.removeEventListener(event, resetTimeout))
+      events.forEach(event => document.removeEventListener(event, resetHandler))
       if (timeoutRef.current) clearTimeout(timeoutRef.current)
     }
   }, [])
