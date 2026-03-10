@@ -62,10 +62,4 @@ backend.auth.resources.unauthenticatedUserIamRole.addToPrincipalPolicy(
   })
 );
 
-// Grant SES permissions for sending appointment emails
-backend.auth.resources.unauthenticatedUserIamRole.addToPrincipalPolicy(
-  new PolicyStatement({
-    actions: [],
-    resources: [],
-  })
-);
+
