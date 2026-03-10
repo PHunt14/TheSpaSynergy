@@ -7,3 +7,6 @@
 amplify_outputs*.json
 .amplify/
 ampx-reports/
+
+# Dev tools
+scripts/dev-tools/

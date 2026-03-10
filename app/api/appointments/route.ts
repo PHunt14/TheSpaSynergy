@@ -49,22 +49,30 @@ export async function POST(request: Request) {
 
     // Send confirmation email to customer (non-blocking)
     try {
-      console.log('Sending confirmation email to:', customer.email);
-      const emailResponse = await fetch(`${request.headers.get('origin')}/api/send-email`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          appointmentId, 
-          customerEmail: customer.email,
-          vendorId,
-          serviceId,
-          dateTime
-        })
-      });
-      console.log('Email API response status:', emailResponse.status);
-      if (!emailResponse.ok) {
-        const errorText = await emailResponse.text();
-        console.error('Email API error:', errorText);
+      const emailFunctionUrl = process.env.SEND_EMAIL_FUNCTION_URL;
+      if (emailFunctionUrl) {
+        console.log('Sending confirmation email to:', customer.email);
+        const emailResponse = await fetch(emailFunctionUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            to: customer.email,
+            subject: 'Appointment Confirmation - The Spa Synergy',
+            appointmentDetails: {
+              appointmentId,
+              vendorId,
+              serviceId,
+              dateTime
+            }
+          })
+        });
+        console.log('Email API response status:', emailResponse.status);
+        if (!emailResponse.ok) {
+          const errorText = await emailResponse.text();
+          console.error('Email API error:', errorText);
+        }
+      } else {
+        console.warn('SEND_EMAIL_FUNCTION_URL not configured');
       }
     } catch (emailError) {
       console.error('Email notification failed:', emailError);
