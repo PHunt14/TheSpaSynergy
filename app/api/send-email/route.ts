@@ -6,7 +6,7 @@ import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 
 Amplify.configure(config, { ssr: true });
 const client = generateClient<Schema>();
-const sesClient = new SESClient({ region: 'us-east-1' });
+const sesClient = new SESClient({ region: process.env.AWS_REGION || 'us-east-1' });
 
 export async function POST(request: Request) {
   try {
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
     `;
 
     await sesClient.send(new SendEmailCommand({
-      Source: 'noreply@thespasynergy.com',
+      Source: process.env.SES_FROM_EMAIL || 'noreply@thespasynergy.com',
       Destination: { ToAddresses: [customerEmail] },
       Message: {
         Subject: { Data: 'Appointment Confirmation - The Spa Synergy' },

@@ -1,12 +1,12 @@
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 
-const sesClient = new SESClient({ region: 'us-east-1' });
+const sesClient = new SESClient({ region: process.env.AWS_REGION || 'us-east-1' });
 
 export const handler = async (event: any) => {
   const { to, subject, body, appointmentDetails } = JSON.parse(event.body || '{}');
 
   const params = {
-    Source: 'noreply@thespasynergy.com',
+    Source: process.env.SES_FROM_EMAIL || 'noreply@thespasynergy.com',
     Destination: {
       ToAddresses: [to],
     },
