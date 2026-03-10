@@ -1,4 +1,4 @@
-import { CognitoIdentityProviderClient, AdminCreateUserCommand, ListUsersCommand, AdminDeleteUserCommand, AdminUpdateUserAttributesCommand, AdminGetUserCommand } from '@aws-sdk/client-cognito-identity-provider';
+import { CognitoIdentityProviderClient, AdminCreateUserCommand, ListUsersCommand, AdminDeleteUserCommand, AdminUpdateUserAttributesCommand, AdminGetUserCommand, AdminSetUserPasswordCommand } from '@aws-sdk/client-cognito-identity-provider';
 import config from '@/amplify_outputs.json';
 import { cookies } from 'next/headers';
 import { fetchAuthSession } from 'aws-amplify/auth/server';
@@ -110,10 +110,46 @@ export async function POST(request: Request) {
       UserPoolId: userPoolId,
       Username: email,
       UserAttributes: userAttributes,
-      DesiredDeliveryMediums: ['EMAIL']
+      DesiredDeliveryMediums: ['EMAIL'],
+      MessageAction: 'SUPPRESS'
     });
 
     await client.send(command);
+
+    // Generate a temporary password
+    const tempPassword = Math.random().toString(36).slice(-12) + 'Aa1!';
+    
+    // Set the temporary password and mark it as temporary
+    const setPasswordCommand = new AdminSetUserPasswordCommand({
+      UserPoolId: userPoolId,
+      Username: email,
+      Password: tempPassword,
+      Permanent: false
+    });
+    
+    await client.send(setPasswordCommand);
+
+    // Send custom email with temporary password
+    try {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/send-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: email,
+          subject: 'Welcome to The Spa Synergy Dashboard',
+          html: `
+            <h2>Welcome to The Spa Synergy Dashboard</h2>
+            <p>You have been invited to access the vendor dashboard.</p>
+            <p><strong>Login URL:</strong> ${process.env.NEXT_PUBLIC_SITE_URL || 'https://thespasynergy.com'}/dashboard</p>
+            <p><strong>Username:</strong> ${email}</p>
+            <p><strong>Temporary Password:</strong> ${tempPassword}</p>
+            <p>You will be required to change your password on first login.</p>
+          `
+        })
+      });
+    } catch (emailError) {
+      console.error('Failed to send email:', emailError);
+    }
 
     return Response.json({ 
       success: true,
