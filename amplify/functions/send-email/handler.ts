@@ -2,11 +2,11 @@ import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 import { generateClient } from 'aws-amplify/data';
 import type { Schema } from '../../data/resource.js';
 
-const sesClient = new SESClient({ region: process.env.AWS_REGION || 'us-east-1' });
+const sesClient = new SESClient({ region: 'us-east-1' });
 const dataClient = generateClient<Schema>();
 
 export const handler = async (event: any) => {
-  const { to, subject, appointmentDetails } = JSON.parse(event.body || '{}');
+  const { to, appointmentDetails } = JSON.parse(event.body || '{}');
 
   try {
     const [vendorRes, serviceRes] = await Promise.all([
@@ -51,10 +51,10 @@ export const handler = async (event: any) => {
     `;
 
     await sesClient.send(new SendEmailCommand({
-      Source: process.env.SES_FROM_EMAIL || 'noreply@thespasynergy.com',
+      Source: process.env.SES_FROM_EMAIL || 'patrick@fortinbras.net',
       Destination: { ToAddresses: [to] },
       Message: {
-        Subject: { Data: subject || 'Appointment Confirmation - The Spa Synergy' },
+        Subject: { Data: 'Appointment Confirmation - The Spa Synergy' },
         Body: { Html: { Data: emailBody } }
       }
     }));

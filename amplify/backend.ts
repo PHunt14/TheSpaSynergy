@@ -1,5 +1,6 @@
 import { defineBackend } from '@aws-amplify/backend';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
+import { FunctionUrlAuthType } from 'aws-cdk-lib/aws-lambda';
 import { auth } from './auth/resource.js';
 import { data } from './data/resource.js';
 import { sendSms } from './functions/send-sms/resource.js';
@@ -27,6 +28,11 @@ backend.sendEmail.resources.lambda.addToRolePolicy(
     resources: ['*'],
   })
 );
+
+// Add public function URL for email sending
+backend.sendEmail.resources.lambda.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
+});
 
 // Grant Cognito admin permissions to authenticated users
 backend.auth.resources.authenticatedUserIamRole.addToPrincipalPolicy(
@@ -59,7 +65,7 @@ backend.auth.resources.unauthenticatedUserIamRole.addToPrincipalPolicy(
 // Grant SES permissions for sending appointment emails
 backend.auth.resources.unauthenticatedUserIamRole.addToPrincipalPolicy(
   new PolicyStatement({
-    actions: ['lambda:InvokeFunction'],
-    resources: [backend.sendEmail.resources.lambda.functionArn],
+    actions: [],
+    resources: [],
   })
 );
