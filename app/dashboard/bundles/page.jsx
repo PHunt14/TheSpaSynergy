@@ -27,12 +27,8 @@ export default function BundlesManagement() {
   const loadCurrentUser = async () => {
     try {
       const session = await fetchAuthSession()
-      const role = session.tokens?.idToken?.payload['custom:role'] || 'staff'
+      const role = session.tokens?.idToken?.payload['custom:role'] || 'vendor'
       setCurrentUserRole(role)
-      if (role === 'staff') {
-        alert('Access denied. Admin only.')
-        window.location.href = '/dashboard'
-      }
     } catch (error) {
       console.error('Error loading user:', error)
     }
@@ -213,7 +209,6 @@ export default function BundlesManagement() {
   }
 
   if (loading) return <div>Loading...</div>
-  if (currentUserRole === 'staff') return null
 
   return (
     <div>

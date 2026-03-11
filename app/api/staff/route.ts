@@ -1,4 +1,4 @@
-import { CognitoIdentityProviderClient, AdminCreateUserCommand, ListUsersCommand, AdminDeleteUserCommand, AdminUpdateUserAttributesCommand, AdminGetUserCommand, AdminSetUserPasswordCommand } from '@aws-sdk/client-cognito-identity-provider';
+import { CognitoIdentityProviderClient, AdminCreateUserCommand, ListUsersCommand, AdminDeleteUserCommand, AdminUpdateUserAttributesCommand, AdminGetUserCommand } from '@aws-sdk/client-cognito-identity-provider';
 import config from '@/amplify_outputs.json';
 import { cookies } from 'next/headers';
 import { fetchAuthSession } from 'aws-amplify/auth/server';
@@ -58,8 +58,8 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Email and role required' }, { status: 400 });
     }
 
-    if (role === 'staff' && !vendorId) {
-      return Response.json({ error: 'VendorId required for staff role' }, { status: 400 });
+    if (role === 'vendor' && !vendorId) {
+      return Response.json({ error: 'VendorId required for vendor role' }, { status: 400 });
     }
 
     const userPoolId = getUserPoolId();
@@ -98,8 +98,8 @@ export async function POST(request: Request) {
       });
     }
 
-    // Only add vendorId for staff users
-    if (role === 'staff' && vendorId) {
+    // Only add vendorId for vendor users
+    if (role === 'vendor' && vendorId) {
       userAttributes.push({
         Name: 'custom:vendorId',
         Value: vendorId
@@ -110,46 +110,10 @@ export async function POST(request: Request) {
       UserPoolId: userPoolId,
       Username: email,
       UserAttributes: userAttributes,
-      DesiredDeliveryMediums: ['EMAIL'],
-      MessageAction: 'SUPPRESS'
+      DesiredDeliveryMediums: ['EMAIL']
     });
 
     await client.send(command);
-
-    // Generate a temporary password
-    const tempPassword = Math.random().toString(36).slice(-12) + 'Aa1!';
-    
-    // Set the temporary password and mark it as temporary
-    const setPasswordCommand = new AdminSetUserPasswordCommand({
-      UserPoolId: userPoolId,
-      Username: email,
-      Password: tempPassword,
-      Permanent: false
-    });
-    
-    await client.send(setPasswordCommand);
-
-    // Send custom email with temporary password
-    try {
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/send-email`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          to: email,
-          subject: 'Welcome to The Spa Synergy Dashboard',
-          html: `
-            <h2>Welcome to The Spa Synergy Dashboard</h2>
-            <p>You have been invited to access the vendor dashboard.</p>
-            <p><strong>Login URL:</strong> ${process.env.NEXT_PUBLIC_SITE_URL || 'https://thespasynergy.com'}/dashboard</p>
-            <p><strong>Username:</strong> ${email}</p>
-            <p><strong>Temporary Password:</strong> ${tempPassword}</p>
-            <p>You will be required to change your password on first login.</p>
-          `
-        })
-      });
-    } catch (emailError) {
-      console.error('Failed to send email:', emailError);
-    }
 
     return Response.json({ 
       success: true,
@@ -215,9 +179,9 @@ export async function DELETE(request: Request) {
     }
 
     const currentUser = await getCurrentUserFromSession();
-    // Staff cannot delete any users
-    if (currentUser?.role === 'staff') {
-      return Response.json({ error: 'Unauthorized: Staff cannot delete users' }, { status: 403 });
+    // Vendor cannot delete any users
+    if (currentUser?.role === 'vendor') {
+      return Response.json({ error: 'Unauthorized: Vendor cannot delete users' }, { status: 403 });
     }
 
     const client = await getClientWithCredentials();
@@ -255,8 +219,8 @@ export async function PATCH(request: Request) {
     const client = await getClientWithCredentials();
 
     const currentUser = await getCurrentUserFromSession();
-    // Staff can only edit their own account
-    if (currentUser?.role === 'staff') {
+    // Vendor can only edit their own account
+    if (currentUser?.role === 'vendor') {
       const getUserCommand = new AdminGetUserCommand({
         UserPoolId: userPoolId,
         Username: username
@@ -275,13 +239,13 @@ export async function PATCH(request: Request) {
       const currentEmail = emailResult;
       
       if (targetEmail !== currentEmail) {
-        return Response.json({ error: 'Unauthorized: Staff can only edit their own account' }, { status: 403 });
+        return Response.json({ error: 'Unauthorized: Vendor can only edit their own account' }, { status: 403 });
       }
-      // Staff cannot change their own role or vendor
+      // Vendor cannot change their own role or vendor
       const targetRole = targetUser.UserAttributes?.find(attr => attr.Name === 'custom:role')?.Value || 'staff';
       const targetVendorId = targetUser.UserAttributes?.find(attr => attr.Name === 'custom:vendorId')?.Value;
       if (role !== targetRole || vendorId !== targetVendorId) {
-        return Response.json({ error: 'Unauthorized: Staff cannot change role or vendor' }, { status: 403 });
+        return Response.json({ error: 'Unauthorized: Vendor cannot change role or vendor' }, { status: 403 });
       }
     }
 

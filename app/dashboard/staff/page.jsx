@@ -7,7 +7,7 @@ export default function Staff() {
   const [email, setEmail] = useState('')
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
-  const [role, setRole] = useState('staff')
+  const [role, setRole] = useState('vendor')
   const [loading, setLoading] = useState(false)
   const [users, setUsers] = useState([])
   const [loadingUsers, setLoadingUsers] = useState(true)
@@ -28,12 +28,12 @@ export default function Staff() {
     try {
       const session = await fetchAuthSession()
       const vendorId = session.tokens?.idToken?.payload['custom:vendorId']
-      const role = session.tokens?.idToken?.payload['custom:role'] || 'staff'
+      const role = session.tokens?.idToken?.payload['custom:role'] || 'vendor'
       const email = session.tokens?.idToken?.payload['email']
       setCurrentUserRole(role)
       setCurrentUserVendorId(vendorId)
       setCurrentUserEmail(email)
-      if (role === 'staff' && vendorId) {
+      if (role === 'vendor' && vendorId) {
         setSelectedVendor(vendorId)
       }
     } catch (error) {
@@ -71,7 +71,7 @@ export default function Staff() {
     e.preventDefault()
     if (!email) return
 
-    const vendorId = currentUserRole === 'staff' ? currentUserVendorId : selectedVendor
+    const vendorId = currentUserRole === 'vendor' ? currentUserVendorId : selectedVendor
 
     setLoading(true)
     try {
@@ -155,9 +155,9 @@ export default function Staff() {
 
   return (
     <div>
-      <h1>Staff Management</h1>
+      <h1>Vendor Management</h1>
       <p style={{ color: 'var(--color-text-light)', marginBottom: '2rem' }}>
-        Invite new staff members to access the dashboard.
+        Invite new vendors to access the dashboard.
       </p>
 
       <div style={{
@@ -169,7 +169,7 @@ export default function Staff() {
       }}>
         <h3>Invite New User</h3>
         <form onSubmit={handleInvite}>
-          {(currentUserRole === 'admin' || currentUserRole === 'superadmin') && (
+          {currentUserRole === 'admin' && (
             <>
               <div style={{ marginBottom: '1rem' }}>
                 <label style={{ display: 'block', marginBottom: '0.5rem' }}>
@@ -187,12 +187,11 @@ export default function Staff() {
                     fontSize: '1rem'
                   }}
                 >
-                  <option value="staff">Staff (Vendor Access)</option>
+                  <option value="vendor">Vendor (Vendor Access)</option>
                   <option value="admin">Admin (All Vendors)</option>
-                  {currentUserRole === 'superadmin' && <option value="superadmin">Super Admin (Full Access)</option>}
                 </select>
               </div>
-              {role === 'staff' && (
+              {role === 'vendor' && (
                 <div style={{ marginBottom: '1rem' }}>
                   <label style={{ display: 'block', marginBottom: '0.5rem' }}>
                     Assign to Vendor *
@@ -341,23 +340,22 @@ export default function Staff() {
                     </td>
                     <td style={{ padding: '1rem' }}>{user.email}</td>
                     <td style={{ padding: '1rem' }}>
-                      {editingUser === user.username && (currentUserRole !== 'staff' || user.email === currentUserEmail) ? (
+                      {editingUser === user.username && (currentUserRole !== 'vendor' || user.email === currentUserEmail) ? (
                         <select
                           defaultValue={user.role}
                           onChange={(e) => user.editRole = e.target.value}
-                          disabled={currentUserRole === 'staff'}
+                          disabled={currentUserRole === 'vendor'}
                           style={{ padding: '0.5rem', borderRadius: '4px' }}
                         >
-                          <option value="staff">Staff</option>
+                          <option value="vendor">Vendor</option>
                           <option value="admin">Admin</option>
-                          {currentUserRole === 'superadmin' && <option value="superadmin">Super Admin</option>}
                         </select>
                       ) : (
                         <span style={{
                           padding: '0.25rem 0.75rem',
                           borderRadius: '12px',
                           fontSize: '0.85rem',
-                          background: user.role === 'superadmin' ? '#9C27B0' : user.role === 'admin' ? '#2196F3' : '#4CAF50',
+                          background: user.role === 'admin' ? '#2196F3' : '#4CAF50',
                           color: 'white'
                         }}>
                           {user.role}
@@ -365,11 +363,11 @@ export default function Staff() {
                       )}
                     </td>
                     <td style={{ padding: '1rem' }}>
-                      {editingUser === user.username && (currentUserRole !== 'staff' || user.email === currentUserEmail) ? (
+                      {editingUser === user.username && (currentUserRole !== 'vendor' || user.email === currentUserEmail) ? (
                         <select
                           defaultValue={user.vendorId || ''}
                           onChange={(e) => user.editVendorId = e.target.value}
-                          disabled={currentUserRole === 'staff'}
+                          disabled={currentUserRole === 'vendor'}
                           style={{ padding: '0.5rem', borderRadius: '4px' }}
                         >
                           <option value="">All</option>
@@ -432,8 +430,8 @@ export default function Staff() {
                         </>
                       ) : (
                         <>
-                          {/* Staff can only edit their own account */}
-                          {(currentUserRole !== 'staff' || user.email === currentUserEmail) && (
+                          {/* Vendor can only edit their own account */}
+                          {(currentUserRole !== 'vendor' || user.email === currentUserEmail) && (
                             <button
                               onClick={() => setEditingUser(user.username)}
                               style={{
@@ -449,8 +447,8 @@ export default function Staff() {
                               Edit
                             </button>
                           )}
-                          {/* Only admin/superadmin can delete users */}
-                          {(currentUserRole === 'admin' || currentUserRole === 'superadmin') && (
+                          {/* Only admin can delete users */}
+                          {currentUserRole === 'admin' && (
                             <button
                               onClick={() => handleDelete(user.username, user.email)}
                               style={{
