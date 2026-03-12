@@ -27,7 +27,7 @@ export default function Vendors() {
   const loadCurrentUser = async () => {
     try {
       const session = await fetchAuthSession()
-      const role = session.tokens?.idToken?.payload['custom:role'] || 'staff'
+      const role = session.tokens?.idToken?.payload['custom:role'] || 'vendor'
       setCurrentUserRole(role)
     } catch (error) {
       console.error('Error loading current user:', error)
@@ -158,7 +158,7 @@ export default function Vendors() {
     }
   }
 
-  if (currentUserRole === 'staff') {
+  if (currentUserRole === 'vendor') {
     return (
       <div>
         <h1>Vendors</h1>

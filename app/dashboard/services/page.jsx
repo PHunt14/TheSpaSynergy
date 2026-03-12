@@ -46,10 +46,10 @@ export default function Services() {
     try {
       const session = await fetchAuthSession()
       const vendorId = session.tokens?.idToken?.payload['custom:vendorId']
-      const role = session.tokens?.idToken?.payload['custom:role'] || 'staff'
+      const role = session.tokens?.idToken?.payload['custom:role'] || 'vendor'
       setCurrentUserRole(role)
       setCurrentUserVendorId(vendorId)
-      if (role === 'staff' && vendorId) {
+      if ((role === 'vendor' || role === 'owner') && vendorId) {
         setSelectedVendor(vendorId)
       }
     } catch (error) {
@@ -196,15 +196,15 @@ export default function Services() {
         <select
           value={selectedVendor}
           onChange={(e) => setSelectedVendor(e.target.value)}
-          disabled={currentUserRole === 'staff'}
+          disabled={currentUserRole === 'vendor' || currentUserRole === 'owner'}
           style={{
             padding: '0.75rem',
             borderRadius: '8px',
             border: '1px solid var(--color-border)',
             fontSize: '1rem',
             minWidth: '250px',
-            background: currentUserRole === 'staff' ? '#f5f5f5' : 'white',
-            cursor: currentUserRole === 'staff' ? 'not-allowed' : 'pointer'
+            background: (currentUserRole === 'vendor' || currentUserRole === 'owner') ? '#f5f5f5' : 'white',
+            cursor: (currentUserRole === 'vendor' || currentUserRole === 'owner') ? 'not-allowed' : 'pointer'
           }}
         >
           {vendors.map(vendor => (
@@ -213,9 +213,9 @@ export default function Services() {
             </option>
           ))}
         </select>
-        {currentUserRole === 'staff' && (
+        {(currentUserRole === 'vendor' || currentUserRole === 'owner') && (
           <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.5rem' }}>
-            Staff can only manage services for their assigned vendor
+            Vendors can only manage services for their assigned vendor
           </p>
         )}
       </div>
@@ -409,7 +409,7 @@ export default function Services() {
                     }}
                   >
                     {staffMembers
-                      .filter(staff => staff.vendorId === selectedVendor || staff.role === 'superadmin')
+                      .filter(staff => staff.vendorId === selectedVendor || staff.role === 'owner')
                       .map(staff => (
                         <option key={staff.username} value={staff.username}>
                           {staff.email}

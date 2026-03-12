@@ -71,10 +71,10 @@ export default function Settings() {
     try {
       const session = await fetchAuthSession()
       const vendorId = session.tokens?.idToken?.payload['custom:vendorId']
-      const role = session.tokens?.idToken?.payload['custom:role'] || 'staff'
+      const role = session.tokens?.idToken?.payload['custom:role'] || 'vendor'
       setCurrentUserRole(role)
       setCurrentUserVendorId(vendorId)
-      if (role === 'staff' && vendorId) {
+      if ((role === 'vendor' || role === 'owner') && vendorId) {
         setSelectedVendorId(vendorId)
       }
     } catch (error) {
@@ -233,6 +233,7 @@ export default function Settings() {
         Manage payment integration and notification preferences for vendors.
       </p>
 
+      {(currentUserRole === 'owner' || currentUserRole === 'admin') && (
       <div style={{
         background: 'var(--color-accent)',
         borderRadius: '12px',
@@ -249,15 +250,15 @@ export default function Settings() {
           <select
             value={selectedVendorId}
             onChange={(e) => setSelectedVendorId(e.target.value)}
-            disabled={currentUserRole === 'staff'}
+            disabled={currentUserRole === 'vendor' || currentUserRole === 'owner'}
             style={{
               width: '100%',
               padding: '0.75rem',
               borderRadius: '8px',
               border: '1px solid var(--color-border)',
               fontSize: '1rem',
-              background: currentUserRole === 'staff' ? '#f5f5f5' : 'white',
-              cursor: currentUserRole === 'staff' ? 'not-allowed' : 'pointer'
+              background: (currentUserRole === 'vendor' || currentUserRole === 'owner') ? '#f5f5f5' : 'white',
+              cursor: (currentUserRole === 'vendor' || currentUserRole === 'owner') ? 'not-allowed' : 'pointer'
             }}
           >
             {vendors.map(vendor => (
@@ -428,6 +429,7 @@ export default function Settings() {
           </div>
         )}
       </div>
+      )}
 
       <div style={{
         background: 'var(--color-accent)',
