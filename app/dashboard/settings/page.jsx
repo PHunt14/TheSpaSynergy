@@ -16,6 +16,9 @@ export default function Settings() {
   const [squareConnected, setSquareConnected] = useState(false)
   const [squareConnectedAt, setSquareConnectedAt] = useState(null)
   const [connectingSquare, setConnectingSquare] = useState(false)
+  const [showSquareForm, setShowSquareForm] = useState(false)
+  const [squareAccessToken, setSquareAccessToken] = useState('')
+  const [squareLocationId, setSquareLocationId] = useState('')
   const [message, setMessage] = useState('')
   const [currentUserRole, setCurrentUserRole] = useState(null)
   const [currentUserVendorId, setCurrentUserVendorId] = useState(null)
@@ -102,6 +105,9 @@ export default function Settings() {
         setSmsAlertsEnabled(vendorData.smsAlertsEnabled || false)
         setSquareConnected(!!vendorData.squareAccessToken)
         setSquareConnectedAt(vendorData.squareConnectedAt)
+        setSquareAccessToken('')
+        setSquareLocationId('')
+        setShowSquareForm(false)
       }
     } catch (error) {
       console.error('Error loading settings:', error)
@@ -109,24 +115,33 @@ export default function Settings() {
   }
 
   const handleConnectSquare = async () => {
+    if (!squareAccessToken || !squareLocationId) {
+      setMessage('Please enter both Access Token and Location ID')
+      return
+    }
+
     setConnectingSquare(true)
     setMessage('')
     
     try {
-      const response = await fetch('/api/square/connect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ vendorId: selectedVendorId })
+      // Update vendor with Square credentials
+      const { data, errors } = await client.models.Vendor.update({
+        vendorId: selectedVendorId,
+        squareAccessToken: squareAccessToken.trim(),
+        squareLocationId: squareLocationId.trim(),
+        squareConnectedAt: new Date().toISOString()
       })
 
-      const data = await response.json()
-      
-      if (data.authUrl) {
-        // Open Square OAuth in new tab
-        window.open(data.authUrl, '_blank')
-        setMessage('Square authorization opened in new tab. Please complete the connection and refresh this page.')
+      if (errors) {
+        setMessage('Error connecting Square: ' + errors[0]?.message)
       } else {
-        setMessage('Error: ' + (data.error || 'Failed to generate authorization URL'))
+        setSquareConnected(true)
+        setSquareConnectedAt(new Date().toISOString())
+        setShowSquareForm(false)
+        setSquareAccessToken('')
+        setSquareLocationId('')
+        setMessage('Square account connected successfully!')
+        setTimeout(() => setMessage(''), 3000)
       }
     } catch (error) {
       console.error('Error connecting Square:', error)
@@ -142,19 +157,20 @@ export default function Settings() {
     }
 
     try {
-      const response = await fetch('/api/square/disconnect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ vendorId: selectedVendorId })
+      const { data, errors } = await client.models.Vendor.update({
+        vendorId: selectedVendorId,
+        squareAccessToken: null,
+        squareLocationId: null,
+        squareConnectedAt: null
       })
 
-      if (response.ok) {
+      if (errors) {
+        setMessage('Error disconnecting Square: ' + errors[0]?.message)
+      } else {
         setSquareConnected(false)
         setSquareConnectedAt(null)
         setMessage('Square account disconnected successfully')
         setTimeout(() => setMessage(''), 3000)
-      } else {
-        setMessage('Error disconnecting Square account')
       }
     } catch (error) {
       console.error('Error disconnecting Square:', error)
@@ -291,22 +307,124 @@ export default function Settings() {
           </div>
         ) : (
           <div>
-            <p style={{ fontSize: '0.9rem', color: 'var(--color-text-light)', marginBottom: '1rem' }}>
-              Connect your Square account to receive payments directly when customers book bundles that include your services.
-            </p>
-            <ul style={{ fontSize: '0.9rem', color: 'var(--color-text-light)', marginBottom: '1.5rem', paddingLeft: '1.5rem' }}>
-              <li>Receive payments automatically split from bundle bookings</li>
-              <li>Funds deposited directly to your Square account</li>
-              <li>No manual payment distribution needed</li>
-              <li>Secure OAuth authentication</li>
-            </ul>
-            <button
-              onClick={handleConnectSquare}
-              disabled={connectingSquare}
-              className="cta"
-            >
-              {connectingSquare ? 'Opening Square...' : 'Connect Square Account'}
-            </button>
+            {!showSquareForm ? (
+              <div>
+                <p style={{ fontSize: '0.9rem', color: 'var(--color-text-light)', marginBottom: '1rem' }}>
+                  Connect your Square account to receive payments directly when customers book bundles that include your services.
+                </p>
+                <ul style={{ fontSize: '0.9rem', color: 'var(--color-text-light)', marginBottom: '1.5rem', paddingLeft: '1.5rem' }}>
+                  <li>Receive payments automatically split from bundle bookings</li>
+                  <li>Funds deposited directly to your Square account</li>
+                  <li>No manual payment distribution needed</li>
+                </ul>
+                <button
+                  onClick={() => setShowSquareForm(true)}
+                  className="cta"
+                >
+                  Connect Square Account
+                </button>
+              </div>
+            ) : (
+              <div>
+                <p style={{ fontSize: '0.9rem', color: 'var(--color-text-light)', marginBottom: '1.5rem' }}>
+                  Enter your Square credentials from your Square Developer Dashboard.
+                </p>
+
+                <div style={{ marginBottom: '1rem' }}>
+                  <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
+                    Square Access Token
+                  </label>
+                  <input
+                    type="text"
+                    value={squareAccessToken}
+                    onChange={(e) => setSquareAccessToken(e.target.value)}
+                    placeholder="EAAAl..."
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem',
+                      borderRadius: '8px',
+                      border: '1px solid var(--color-border)',
+                      fontSize: '1rem',
+                      fontFamily: 'monospace'
+                    }}
+                  />
+                  <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.5rem' }}>
+                    From Square Dashboard → Sandbox (or Production) tab
+                  </p>
+                </div>
+
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
+                    Square Location ID
+                  </label>
+                  <input
+                    type="text"
+                    value={squareLocationId}
+                    onChange={(e) => setSquareLocationId(e.target.value)}
+                    placeholder="L..."
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem',
+                      borderRadius: '8px',
+                      border: '1px solid var(--color-border)',
+                      fontSize: '1rem',
+                      fontFamily: 'monospace'
+                    }}
+                  />
+                  <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.5rem' }}>
+                    From Square Dashboard → Locations → Location ID
+                  </p>
+                </div>
+
+                <div style={{ display: 'flex', gap: '1rem' }}>
+                  <button
+                    onClick={handleConnectSquare}
+                    disabled={connectingSquare}
+                    className="cta"
+                  >
+                    {connectingSquare ? 'Connecting...' : 'Save & Connect'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowSquareForm(false)
+                      setSquareAccessToken('')
+                      setSquareLocationId('')
+                    }}
+                    style={{
+                      padding: '0.75rem 1.5rem',
+                      background: '#6c757d',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontSize: '1rem',
+                      fontWeight: '500'
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+
+                <div style={{
+                  marginTop: '1.5rem',
+                  padding: '1rem',
+                  background: '#f8f9fa',
+                  borderRadius: '8px',
+                  fontSize: '0.85rem',
+                  color: '#495057'
+                }}>
+                  <strong>How to get your credentials:</strong>
+                  <ol style={{ marginTop: '0.5rem', marginBottom: 0, paddingLeft: '1.5rem' }}>
+                    <li>Go to <a href="https://developer.squareup.com" target="_blank" rel="noopener noreferrer">developer.squareup.com</a></li>
+                    <li>Select your application</li>
+                    <li>Go to <strong>Sandbox</strong> tab (or Production for live)</li>
+                    <li>Copy <strong>Sandbox Access Token</strong></li>
+                    <li>Go to <strong>Sandbox Test Accounts</strong> → Open → Locations</li>
+                    <li>Copy <strong>Location ID</strong></li>
+                  </ol>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
