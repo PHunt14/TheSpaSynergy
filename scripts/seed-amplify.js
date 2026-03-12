@@ -12,7 +12,7 @@ const vendors = [
     description: 'Natural remedies for stress relief',
     email: 'contact@winsomewoods.com',
     phone: '301-992-3224',
-    squareAccountId: 'PLACEHOLDER_SQUARE_ID_1',
+    isHouse: false,
     isActive: true,
     workingHours: {
       monday: { start: '9:00', end: '18:00' },
@@ -31,7 +31,7 @@ const vendors = [
     description: 'Providing our guests a place for reflection and peace',
     email: 'thekerastudio@gmail.com',
     phone: '240-329-6537',
-    squareAccountId: 'PLACEHOLDER_SQUARE_ID_3',
+    isHouse: true,
     isActive: true,
     workingHours: {
       monday: { start: null, end: null },
@@ -50,7 +50,7 @@ const vendors = [
     description: 'Where Radiance meets Ritual',
     email: 'contact@seleneglow.com',
     phone: '301-992-3224',
-    squareAccountId: 'PLACEHOLDER_SQUARE_ID_1',
+    isHouse: false,
     isActive: true,
     workingHours: {
       monday: { start: '12:00', end: '17:00' },
@@ -66,20 +66,20 @@ const vendors = [
 ];
 
 const services = [
-  // Winsome Woods
-  { serviceId: 'svc-winsome-massage-60', vendorId: 'vendor-winsome', category: 'Massage', name: 'Massage - 60 min', description: 'Relaxing full-body massage', duration: 60, price: 65, isActive: true },
-  { serviceId: 'svc-winsome-massage-90', vendorId: 'vendor-winsome', category: 'Massage', name: 'Massage - 90 min', description: 'Extended full-body massage for deep relaxation', duration: 90, price: 120, isActive: true },
-  { serviceId: 'svc-winsome-reiki', vendorId: 'vendor-winsome', category: 'Wellness', name: 'Reiki', description: 'Energy healing session', duration: 30, price: 75, isActive: true },
-  { serviceId: 'svc-winsome-sound-healing-30', vendorId: 'vendor-winsome', category: 'Wellness', name: 'Sound Healing - 30 min', description: 'Therapeutic sound bath experience', duration: 30, price: 35, isActive: true },
-  { serviceId: 'svc-winsome-sound-healing-60', vendorId: 'vendor-winsome', category: 'Wellness', name: 'Sound Healing - 60 min', description: 'Extended sound bath for deep meditation', duration: 60, price: 50, isActive: true },
-  { serviceId: 'svc-winsome-redlight-therapy', vendorId: 'vendor-winsome', category: 'Red Light', name: 'Red Light Therapy', description: 'Rejuvenating red light treatment', duration: 30, price: 25, isActive: true },
-  { serviceId: 'svc-winsome-tarot-30', vendorId: 'vendor-winsome', category: 'Tarot', name: 'Tarot Reading - 30 min', description: 'Insightful tarot card reading', duration: 30, price: 20, isActive: true },
-  { serviceId: 'svc-winsome-tarot-60', vendorId: 'vendor-winsome', category: 'Tarot', name: 'Tarot Reading - 60 min', description: 'In-depth tarot consultation', duration: 60, price: 45, isActive: true },
-  { serviceId: 'svc-winsome-salt-soak', vendorId: 'vendor-winsome', category: 'Wellness', name: 'Foot Salt Soak', description: 'Relaxing mineral salt foot bath', duration: 30, price: 15, isActive: true },
-  { serviceId: 'svc-winsome-salt-soak-detox', vendorId: 'vendor-winsome', category: 'Wellness', name: 'Ionic Foot Detox', description: 'Detoxifying ionic foot bath', duration: 30, price: 20, isActive: true },
+  // Winsome Woods (subletting space - pays house fee)
+  { serviceId: 'svc-winsome-massage-60', vendorId: 'vendor-winsome', category: 'Massage', name: 'Massage - 60 min', description: 'Relaxing full-body massage', duration: 60, price: 65, houseFeeEnabled: true, houseFeeAmount: 20, isActive: true },
+  { serviceId: 'svc-winsome-massage-90', vendorId: 'vendor-winsome', category: 'Massage', name: 'Massage - 90 min', description: 'Extended full-body massage for deep relaxation', duration: 90, price: 120, houseFeeEnabled: true, houseFeeAmount: 30, isActive: true },
+  { serviceId: 'svc-winsome-reiki', vendorId: 'vendor-winsome', category: 'Wellness', name: 'Reiki', description: 'Energy healing session', duration: 30, price: 75, houseFeeEnabled: true, houseFeeAmount: 20, isActive: true },
+  { serviceId: 'svc-winsome-sound-healing-30', vendorId: 'vendor-winsome', category: 'Wellness', name: 'Sound Healing - 30 min', description: 'Therapeutic sound bath experience', duration: 30, price: 35, houseFeeEnabled: true, houseFeeAmount: 10, isActive: true },
+  { serviceId: 'svc-winsome-sound-healing-60', vendorId: 'vendor-winsome', category: 'Wellness', name: 'Sound Healing - 60 min', description: 'Extended sound bath for deep meditation', duration: 60, price: 50, houseFeeEnabled: true, houseFeeAmount: 15, isActive: true },
+  { serviceId: 'svc-winsome-redlight-therapy', vendorId: 'vendor-winsome', category: 'Red Light', name: 'Red Light Therapy', description: 'Rejuvenating red light treatment', duration: 30, price: 25, houseFeeEnabled: true, houseFeeAmount: 8, isActive: true },
+  { serviceId: 'svc-winsome-tarot-30', vendorId: 'vendor-winsome', category: 'Tarot', name: 'Tarot Reading - 30 min', description: 'Insightful tarot card reading', duration: 30, price: 20, houseFeeEnabled: true, houseFeeAmount: 5, isActive: true },
+  { serviceId: 'svc-winsome-tarot-60', vendorId: 'vendor-winsome', category: 'Tarot', name: 'Tarot Reading - 60 min', description: 'In-depth tarot consultation', duration: 60, price: 45, houseFeeEnabled: true, houseFeeAmount: 12, isActive: true },
+  { serviceId: 'svc-winsome-salt-soak', vendorId: 'vendor-winsome', category: 'Wellness', name: 'Foot Salt Soak', description: 'Relaxing mineral salt foot bath', duration: 30, price: 15, houseFeeEnabled: true, houseFeeAmount: 5, isActive: true },
+  { serviceId: 'svc-winsome-salt-soak-detox', vendorId: 'vendor-winsome', category: 'Wellness', name: 'Ionic Foot Detox', description: 'Detoxifying ionic foot bath', duration: 30, price: 20, houseFeeEnabled: true, houseFeeAmount: 6, isActive: true },
   
-  // The Kera Studio
-  { serviceId: 'svc-kera-head-bath', vendorId: 'vendor-kera', category: 'Spa Room', name: 'Head Bath', description: 'Luxurious scalp treatment and massage', duration: 60, price: 115, isActive: true },
+  // The Kera Studio (house - no house fees on their own services)
+  { serviceId: 'svc-kera-head-bath', vendorId: 'vendor-kera', category: 'Spa Room', name: 'Head Bath', description: 'Luxurious scalp treatment and massage', duration: 60, price: 115, houseFeeEnabled: false, isActive: true },
   { serviceId: 'svc-kera-facial', vendorId: 'vendor-kera', category: 'Spa Room', name: 'Facial', description: 'Deep cleansing and rejuvenating facial', duration: 60, price: 65, isActive: true },
   { serviceId: 'svc-kera-mini-facial', vendorId: 'vendor-kera', category: 'Spa Room', name: 'Mini Facial', description: 'Quick refresh facial treatment', duration: 30, price: 30, isActive: true },
   { serviceId: 'svc-kera-beard-facial', vendorId: 'vendor-kera', category: 'Spa Room', name: 'Beard Facial', description: 'Specialized beard grooming and facial', duration: 60, price: 65, isActive: true },
@@ -109,10 +109,11 @@ const services = [
   { serviceId: 'svc-kera-wax-chest', vendorId: 'vendor-kera', category: 'Waxing', name: 'Chest', description: 'Chest hair removal', duration: 40, price: 45, isActive: true, requiresConsultation: true },
   { serviceId: 'svc-kera-wax-brazilian', vendorId: 'vendor-kera', category: 'Waxing', name: 'Brazilian', description: 'Complete bikini area hair removal', duration: 45, price: 70, isActive: true, requiresConsultation: true },
 
-  { serviceId: 'svc-selene-manicure-reg-polish', vendorId: 'vendor-selene', category: 'Nails', name: 'Manicure & Regular Polish', description: 'Classic manicure with regular polish', duration: 30, price: 25, isActive: true },
-  { serviceId: 'svc-selene-manicure-gel-polish', vendorId: 'vendor-selene', category: 'Nails', name: 'Manicure & Gel Polish', description: 'Long-lasting gel polish manicure', duration: 30, price: 35, isActive: true },
-  { serviceId: 'svc-selene-deluxe-manicure', vendorId: 'vendor-selene', category: 'Nails', name: 'Deluxe Manicure', description: 'Premium manicure with hand treatment', duration: 30, price: 45, isActive: true },
-  { serviceId: 'svc-selene-polish', vendorId: 'vendor-selene', category: 'Nails', name: 'Polish - Hands', description: 'Polish change for hands', duration: 30, price: 15, isActive: true },
+  // Selene Glow Studio (subletting space - pays house fee)
+  { serviceId: 'svc-selene-manicure-reg-polish', vendorId: 'vendor-selene', category: 'Nails', name: 'Manicure & Regular Polish', description: 'Classic manicure with regular polish', duration: 30, price: 25, houseFeeEnabled: true, houseFeeAmount: 8, isActive: true },
+  { serviceId: 'svc-selene-manicure-gel-polish', vendorId: 'vendor-selene', category: 'Nails', name: 'Manicure & Gel Polish', description: 'Long-lasting gel polish manicure', duration: 30, price: 35, houseFeeEnabled: true, houseFeeAmount: 10, isActive: true },
+  { serviceId: 'svc-selene-deluxe-manicure', vendorId: 'vendor-selene', category: 'Nails', name: 'Deluxe Manicure', description: 'Premium manicure with hand treatment', duration: 30, price: 45, houseFeeEnabled: true, houseFeeAmount: 12, isActive: true },
+  { serviceId: 'svc-selene-polish', vendorId: 'vendor-selene', category: 'Nails', name: 'Polish - Hands', description: 'Polish change for hands', duration: 30, price: 15, houseFeeEnabled: true, houseFeeAmount: 5, isActive: true },
 ];
 
 const bundles = [

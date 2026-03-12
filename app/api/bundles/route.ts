@@ -25,6 +25,7 @@ export async function POST(request: Request) {
       name: body.name,
       description: body.description,
       serviceIds: body.serviceIds,
+      vendorIds: body.vendorIds || [],
       price: body.price,
       discountPercent: body.discountPercent ?? 0,
       isActive: body.isActive ?? true,
@@ -44,6 +45,7 @@ export async function PATCH(request: Request) {
     if (body.name !== undefined) updateData.name = body.name
     if (body.description !== undefined) updateData.description = body.description
     if (body.serviceIds !== undefined) updateData.serviceIds = body.serviceIds
+    if (body.vendorIds !== undefined) updateData.vendorIds = body.vendorIds
     if (body.price !== undefined) updateData.price = body.price
     if (body.discountPercent !== undefined) updateData.discountPercent = body.discountPercent
     if (body.isActive !== undefined) updateData.isActive = body.isActive
