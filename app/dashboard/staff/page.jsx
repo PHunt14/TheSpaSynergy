@@ -188,10 +188,11 @@ export default function Staff() {
                   }}
                 >
                   <option value="vendor">Vendor (Vendor Access)</option>
+                  <option value="owner">Owner (Vendor Access + Square)</option>
                   <option value="admin">Admin (All Vendors)</option>
                 </select>
               </div>
-              {role === 'vendor' && (
+              {(role === 'vendor' || role === 'owner') && (
                 <div style={{ marginBottom: '1rem' }}>
                   <label style={{ display: 'block', marginBottom: '0.5rem' }}>
                     Assign to Vendor *
@@ -348,6 +349,7 @@ export default function Staff() {
                           style={{ padding: '0.5rem', borderRadius: '4px' }}
                         >
                           <option value="vendor">Vendor</option>
+                          <option value="owner">Owner</option>
                           <option value="admin">Admin</option>
                         </select>
                       ) : (
@@ -355,7 +357,7 @@ export default function Staff() {
                           padding: '0.25rem 0.75rem',
                           borderRadius: '12px',
                           fontSize: '0.85rem',
-                          background: user.role === 'admin' ? '#2196F3' : '#4CAF50',
+                          background: user.role === 'admin' ? '#2196F3' : user.role === 'owner' ? '#9C27B0' : '#4CAF50',
                           color: 'white'
                         }}>
                           {user.role}

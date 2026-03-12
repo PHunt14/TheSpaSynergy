@@ -22,7 +22,9 @@ Luxury spa and wellness booking platform serving Fort Ritchie, MD and surroundin
 
 ### Vendor Dashboard
 - Cognito authentication with 1-hour inactivity timeout
-- Role-based access (superadmin, admin, staff)
+- Role-based access (owner, admin, vendor)
+- Owner role: exclusive access to Square payment integration
+- Admin role: can access Square payment integration and manage all vendors
 - Appointments management
 - Services management (add, edit, toggle active/inactive)
 - Staff management with inline editing

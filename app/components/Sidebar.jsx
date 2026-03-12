@@ -7,6 +7,7 @@ export default function Sidebar() {
 
       <nav className="sidebar-nav">
         <Link href="/dashboard">Overview</Link>
+        <Link href="/dashboard/calendar">Calendar</Link>
         <Link href="/dashboard/appointments">Appointments</Link>
         <Link href="/dashboard/services">Services</Link>
         <Link href="/dashboard/bundles">Bundles</Link>

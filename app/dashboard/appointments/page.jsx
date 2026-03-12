@@ -22,7 +22,7 @@ export default function Appointments() {
     try {
       const session = await fetchAuthSession()
       const vendorId = session.tokens?.idToken?.payload['custom:vendorId']
-      const role = session.tokens?.idToken?.payload['custom:role'] || 'staff'
+      const role = session.tokens?.idToken?.payload['custom:role'] || 'vendor'
       setUserVendorId(vendorId)
       setUserRole(role)
     } catch (error) {
@@ -32,8 +32,8 @@ export default function Appointments() {
   }
 
   useEffect(() => {
-    if (userRole === 'admin' || userRole === 'superadmin') {
-      // Admin/superadmin can see all vendors
+    if (userRole === 'admin') {
+      // Admin can see all vendors
       fetch('/api/vendors')
         .then(res => res.json())
         .then(data => {
@@ -139,7 +139,7 @@ export default function Appointments() {
         View and manage your bookings.
       </p>
 
-      {(userRole === 'admin' || userRole === 'superadmin') && vendors.length > 0 && (
+      {userRole === 'admin' && vendors.length > 0 && (
         <div style={{ marginBottom: '2rem' }}>
           <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
             Select Vendor:

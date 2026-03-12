@@ -1,5 +1,5 @@
-// Run this script to make yourself a superadmin
-// Usage: node scripts/make-superadmin.js YOUR_EMAIL@example.com
+// Run this script to make a user an admin
+// Usage: node scripts/make-admin.js YOUR_EMAIL@example.com
 
 import { CognitoIdentityProviderClient, AdminUpdateUserAttributesCommand } from '@aws-sdk/client-cognito-identity-provider';
 import config from '../amplify_outputs.json' assert { type: 'json' };
@@ -10,11 +10,11 @@ const userPoolId = config.auth.user_pool_id;
 const email = process.argv[2];
 
 if (!email) {
-  console.error('Usage: node scripts/make-superadmin.js YOUR_EMAIL@example.com');
+  console.error('Usage: node scripts/make-admin.js YOUR_EMAIL@example.com');
   process.exit(1);
 }
 
-async function makeSuperAdmin() {
+async function makeAdmin() {
   try {
     const command = new AdminUpdateUserAttributesCommand({
       UserPoolId: userPoolId,
@@ -22,17 +22,17 @@ async function makeSuperAdmin() {
       UserAttributes: [
         {
           Name: 'custom:role',
-          Value: 'superadmin'
+          Value: 'admin'
         }
       ]
     });
 
     await client.send(command);
-    console.log(`✅ Successfully set ${email} as superadmin`);
+    console.log(`✅ Successfully set ${email} as admin`);
     console.log('Please log out and log back in for changes to take effect.');
   } catch (error) {
     console.error('Error:', error.message);
   }
 }
 
-makeSuperAdmin();
+makeAdmin();
