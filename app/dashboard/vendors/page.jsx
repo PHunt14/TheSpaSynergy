@@ -16,7 +16,17 @@ export default function Vendors() {
     email: '',
     phone: '',
     bufferMinutes: 15,
-    isActive: true
+    isActive: true,
+    isHouse: false,
+    workingHours: {
+      monday: { start: '09:00', end: '17:00', closed: false },
+      tuesday: { start: '09:00', end: '17:00', closed: false },
+      wednesday: { start: '09:00', end: '17:00', closed: false },
+      thursday: { start: '09:00', end: '17:00', closed: false },
+      friday: { start: '09:00', end: '17:00', closed: false },
+      saturday: { start: '10:00', end: '15:00', closed: false },
+      sunday: { start: '10:00', end: '15:00', closed: true }
+    }
   })
 
   useEffect(() => {
@@ -57,19 +67,13 @@ export default function Vendors() {
       email: newVendor.email,
       phone: newVendor.phone,
       bufferMinutes: newVendor.bufferMinutes,
-      isActive: newVendor.isActive
+      isActive: newVendor.isActive,
+      isHouse: newVendor.isHouse,
+      workingHours: newVendor.workingHours
     }
 
     if (!editingVendor) {
-      vendorData.workingHours = {
-        monday: { open: '09:00', close: '17:00', closed: false },
-        tuesday: { open: '09:00', close: '17:00', closed: false },
-        wednesday: { open: '09:00', close: '17:00', closed: false },
-        thursday: { open: '09:00', close: '17:00', closed: false },
-        friday: { open: '09:00', close: '17:00', closed: false },
-        saturday: { open: '10:00', close: '15:00', closed: false },
-        sunday: { open: '10:00', close: '15:00', closed: true }
-      }
+      vendorData.workingHours = newVendor.workingHours
     }
     
     try {
@@ -83,7 +87,24 @@ export default function Vendors() {
         alert(editingVendor ? 'Vendor updated successfully!' : 'Vendor added successfully!')
         setShowAddForm(false)
         setEditingVendor(null)
-        setNewVendor({ name: '', description: '', email: '', phone: '', bufferMinutes: 15, isActive: true })
+        setNewVendor({ 
+          name: '', 
+          description: '', 
+          email: '', 
+          phone: '', 
+          bufferMinutes: 15, 
+          isActive: true, 
+          isHouse: false,
+          workingHours: {
+            monday: { start: '09:00', end: '17:00', closed: false },
+            tuesday: { start: '09:00', end: '17:00', closed: false },
+            wednesday: { start: '09:00', end: '17:00', closed: false },
+            thursday: { start: '09:00', end: '17:00', closed: false },
+            friday: { start: '09:00', end: '17:00', closed: false },
+            saturday: { start: '10:00', end: '15:00', closed: false },
+            sunday: { start: '10:00', end: '15:00', closed: true }
+          }
+        })
         loadVendors()
       } else {
         const data = await response.json()
@@ -103,7 +124,17 @@ export default function Vendors() {
       email: vendor.email,
       phone: vendor.phone || '',
       bufferMinutes: vendor.bufferMinutes || 15,
-      isActive: vendor.isActive !== undefined ? vendor.isActive : true
+      isActive: vendor.isActive !== undefined ? vendor.isActive : true,
+      isHouse: vendor.isHouse || false,
+      workingHours: vendor.workingHours || {
+        monday: { start: '09:00', end: '17:00', closed: false },
+        tuesday: { start: '09:00', end: '17:00', closed: false },
+        wednesday: { start: '09:00', end: '17:00', closed: false },
+        thursday: { start: '09:00', end: '17:00', closed: false },
+        friday: { start: '09:00', end: '17:00', closed: false },
+        saturday: { start: '10:00', end: '15:00', closed: false },
+        sunday: { start: '10:00', end: '15:00', closed: true }
+      }
     })
     setShowAddForm(true)
     setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
@@ -112,7 +143,24 @@ export default function Vendors() {
   const handleCancelEdit = () => {
     setEditingVendor(null)
     setShowAddForm(false)
-    setNewVendor({ name: '', description: '', email: '', phone: '', bufferMinutes: 15, isActive: true })
+    setNewVendor({ 
+      name: '', 
+      description: '', 
+      email: '', 
+      phone: '', 
+      bufferMinutes: 15, 
+      isActive: true, 
+      isHouse: false,
+      workingHours: {
+        monday: { start: '09:00', end: '17:00', closed: false },
+        tuesday: { start: '09:00', end: '17:00', closed: false },
+        wednesday: { start: '09:00', end: '17:00', closed: false },
+        thursday: { start: '09:00', end: '17:00', closed: false },
+        friday: { start: '09:00', end: '17:00', closed: false },
+        saturday: { start: '10:00', end: '15:00', closed: false },
+        sunday: { start: '10:00', end: '15:00', closed: true }
+      }
+    })
   }
 
   const handleToggleActive = async (vendor) => {
@@ -294,6 +342,67 @@ export default function Vendors() {
           </div>
 
           <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'block', marginBottom: '1rem', fontWeight: 'bold' }}>Working Hours</label>
+            {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => (
+              <div key={day} style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.75rem' }}>
+                <div style={{ width: '100px', textTransform: 'capitalize' }}>{day}</div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <input
+                    type="checkbox"
+                    checked={newVendor.workingHours[day].closed}
+                    onChange={(e) => setNewVendor({
+                      ...newVendor,
+                      workingHours: {
+                        ...newVendor.workingHours,
+                        [day]: { ...newVendor.workingHours[day], closed: e.target.checked }
+                      }
+                    })}
+                    style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                  />
+                  <span style={{ fontSize: '0.9rem' }}>Closed</span>
+                </label>
+                {!newVendor.workingHours[day].closed && (
+                  <>
+                    <input
+                      type="time"
+                      value={newVendor.workingHours[day].start}
+                      onChange={(e) => setNewVendor({
+                        ...newVendor,
+                        workingHours: {
+                          ...newVendor.workingHours,
+                          [day]: { ...newVendor.workingHours[day], start: e.target.value }
+                        }
+                      })}
+                      style={{
+                        padding: '0.5rem',
+                        borderRadius: '4px',
+                        border: '1px solid var(--color-border)'
+                      }}
+                    />
+                    <span>to</span>
+                    <input
+                      type="time"
+                      value={newVendor.workingHours[day].end}
+                      onChange={(e) => setNewVendor({
+                        ...newVendor,
+                        workingHours: {
+                          ...newVendor.workingHours,
+                          [day]: { ...newVendor.workingHours[day], end: e.target.value }
+                        }
+                      })}
+                      style={{
+                        padding: '0.5rem',
+                        borderRadius: '4px',
+                        border: '1px solid var(--color-border)'
+                      }}
+                    />
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div style={{ marginBottom: '1rem' }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
               <input
                 type="checkbox"
@@ -303,6 +412,21 @@ export default function Vendors() {
               />
               <span>Active</span>
             </label>
+          </div>
+
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={newVendor.isHouse}
+                onChange={(e) => setNewVendor({ ...newVendor, isHouse: e.target.checked })}
+                style={{ width: '20px', height: '20px', cursor: 'pointer' }}
+              />
+              <span>House Vendor</span>
+            </label>
+            <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.5rem', marginLeft: '1.75rem' }}>
+              Mark this vendor as "The House" for house fee services
+            </p>
           </div>
 
           <button type="submit" className="cta">{editingVendor ? 'Update Vendor' : 'Add Vendor'}</button>
@@ -337,6 +461,7 @@ export default function Vendors() {
               </p>
               <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.5rem' }}>
                 Buffer: {vendor.bufferMinutes || 15} min • Status: {vendor.isActive ? '✓ Active' : '✗ Inactive'}
+                {vendor.isHouse && ' • 🏠 House Vendor'}
               </p>
               <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
                 <button
