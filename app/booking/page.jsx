@@ -56,7 +56,7 @@ function BookingContent() {
           >
             <div style={{
               height: '200px',
-              background: (vendor.vendorId === 'vendor-kera' || vendor.vendorId === 'vendor-winsome') ? 'var(--color-bg)' : 'linear-gradient(135deg, var(--color-primary), var(--color-secondary))',
+              background: (vendor.vendorId === 'vendor-kera-studio' || vendor.vendorId === 'vendor-winsome-woods') ? 'var(--color-bg)' : 'linear-gradient(135deg, var(--color-primary), var(--color-secondary))',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -65,13 +65,13 @@ function BookingContent() {
               fontWeight: 'bold',
               borderRadius: '12px 12px 0 0'
             }}>
-              {vendor.vendorId === 'vendor-kera' ? (
+              {vendor.vendorId === 'vendor-kera-studio' ? (
                 <img 
                   src="https://the-spa-synergy-public.s3.amazonaws.com/vendorPictures/Kera_Logo00.jpg" 
                   alt="The Kera Studio Logo"
                   style={{ maxWidth: '90%', maxHeight: '90%', objectFit: 'contain' }}
                 />
-              ) : vendor.vendorId === 'vendor-winsome' ? (
+              ) : vendor.vendorId === 'vendor-winsome-woods' ? (
                 <img 
                   src="https://the-spa-synergy-public.s3.amazonaws.com/vendorPictures/Winsome_Hero00.jpg" 
                   alt="Winsome Woods"
