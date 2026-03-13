@@ -91,5 +91,13 @@ Deployed via AWS Amplify with automatic CI/CD from Git repository.
 - adjust the booking flow
     - book -> what day/week -> services
 - have intros that allow individual booking, but also allow... not bundling, but being able to select multiple services and then request a week.
-- no vendor creation from the UI, always needs me
-- 
+
+## Future Enhancements
+
+### Square Catalog Integration
+Currently, in-person payments allow vendors to charge custom amounts in their Square POS app. Future enhancement could integrate with Square's catalog system:
+- Add `squareCatalogItemId` field to services
+- Automatically create charges using Square catalog items
+- Sync pricing between The Spa Synergy and Square
+- Better reporting and analytics through Square's inventory system
+- Automatic service tracking and reconciliation
