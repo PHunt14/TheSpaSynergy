@@ -42,28 +42,48 @@ async function processSinglePayment(sourceId, amount, vendorId) {
     return Response.json({ error: 'Vendor not found' }, { status: 404 });
   }
 
+  // Use vendor's Square token if available, otherwise use platform token
+  const accessToken = vendor.squareAccessToken || process.env.SQUARE_ACCESS_TOKEN;
+  const locationId = vendor.squareLocationId || process.env.NEXT_PUBLIC_SQUARE_LOCATION_ID;
+
+  if (!accessToken) {
+    console.error('No Square access token available for vendor:', vendorId);
+    return Response.json({ 
+      error: 'Payment configuration error',
+      details: 'Square payment not configured for this vendor'
+    }, { status: 500 });
+  }
+
   const client = new Client({
-    accessToken: vendor.squareAccessToken || process.env.SQUARE_ACCESS_TOKEN,
+    accessToken,
     environment: process.env.NEXT_PUBLIC_SQUARE_ENVIRONMENT === 'production' 
       ? Environment.Production 
       : Environment.Sandbox
   });
 
-  const { result } = await client.paymentsApi.createPayment({
-    sourceId,
-    idempotencyKey: randomUUID(),
-    amountMoney: {
-      amount: Math.round(amount * 100),
-      currency: 'USD'
-    },
-    locationId: vendor.squareLocationId || process.env.NEXT_PUBLIC_SQUARE_LOCATION_ID
-  });
+  try {
+    const { result } = await client.paymentsApi.createPayment({
+      sourceId,
+      idempotencyKey: randomUUID(),
+      amountMoney: {
+        amount: Math.round(amount * 100),
+        currency: 'USD'
+      },
+      locationId
+    });
 
-  return Response.json({
-    success: true,
-    paymentId: result.payment.id,
-    status: result.payment.status
-  });
+    return Response.json({
+      success: true,
+      paymentId: result.payment.id,
+      status: result.payment.status
+    });
+  } catch (error) {
+    console.error('Square API error:', error);
+    return Response.json({ 
+      error: 'Payment processing failed',
+      details: error.message
+    }, { status: 500 });
+  }
 }
 
 async function processBundlePayment(sourceId, totalAmount, bundlePayments) {

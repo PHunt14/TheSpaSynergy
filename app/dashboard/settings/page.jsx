@@ -17,6 +17,7 @@ export default function Settings() {
   const [squareConnectedAt, setSquareConnectedAt] = useState(null)
   const [connectingSquare, setConnectingSquare] = useState(false)
   const [showSquareForm, setShowSquareForm] = useState(false)
+  const [squareApplicationId, setSquareApplicationId] = useState('')
   const [squareAccessToken, setSquareAccessToken] = useState('')
   const [squareLocationId, setSquareLocationId] = useState('')
   const [message, setMessage] = useState('')
@@ -105,6 +106,7 @@ export default function Settings() {
         setSmsAlertsEnabled(vendorData.smsAlertsEnabled || false)
         setSquareConnected(!!vendorData.squareAccessToken)
         setSquareConnectedAt(vendorData.squareConnectedAt)
+        setSquareApplicationId('')
         setSquareAccessToken('')
         setSquareLocationId('')
         setShowSquareForm(false)
@@ -115,8 +117,8 @@ export default function Settings() {
   }
 
   const handleConnectSquare = async () => {
-    if (!squareAccessToken || !squareLocationId) {
-      setMessage('Please enter both Access Token and Location ID')
+    if (!squareApplicationId || !squareAccessToken || !squareLocationId) {
+      setMessage('Please enter Application ID, Access Token, and Location ID')
       return
     }
 
@@ -127,6 +129,7 @@ export default function Settings() {
       // Update vendor with Square credentials
       const { data, errors } = await client.models.Vendor.update({
         vendorId: selectedVendorId,
+        squareApplicationId: squareApplicationId.trim(),
         squareAccessToken: squareAccessToken.trim(),
         squareLocationId: squareLocationId.trim(),
         squareConnectedAt: new Date().toISOString()
@@ -138,6 +141,7 @@ export default function Settings() {
         setSquareConnected(true)
         setSquareConnectedAt(new Date().toISOString())
         setShowSquareForm(false)
+        setSquareApplicationId('')
         setSquareAccessToken('')
         setSquareLocationId('')
         setMessage('Square account connected successfully!')
@@ -333,6 +337,29 @@ export default function Settings() {
 
                 <div style={{ marginBottom: '1rem' }}>
                   <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
+                    Square Application ID
+                  </label>
+                  <input
+                    type="text"
+                    value={squareApplicationId}
+                    onChange={(e) => setSquareApplicationId(e.target.value)}
+                    placeholder="sandbox-sq0idb-..."
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem',
+                      borderRadius: '8px',
+                      border: '1px solid var(--color-border)',
+                      fontSize: '1rem',
+                      fontFamily: 'monospace'
+                    }}
+                  />
+                  <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.5rem' }}>
+                    From Square Dashboard → Application ID
+                  </p>
+                </div>
+
+                <div style={{ marginBottom: '1rem' }}>
+                  <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
                     Square Access Token
                   </label>
                   <input
@@ -388,6 +415,7 @@ export default function Settings() {
                   <button
                     onClick={() => {
                       setShowSquareForm(false)
+                      setSquareApplicationId('')
                       setSquareAccessToken('')
                       setSquareLocationId('')
                     }}

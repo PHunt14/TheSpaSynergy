@@ -18,6 +18,7 @@ function ConfirmPageContent() {
   const [loading, setLoading] = useState(false)
   const [card, setCard] = useState(null)
   const [serviceDetails, setServiceDetails] = useState(null)
+  const [vendorDetails, setVendorDetails] = useState(null)
   const [paymentMethod, setPaymentMethod] = useState('in-person') // 'card' or 'in-person'
 
   useEffect(() => {
@@ -32,11 +33,18 @@ function ConfirmPageContent() {
           setPaymentMethod('in-person')
         }
       })
+    
+    // Fetch vendor details for Square credentials
+    fetch(`/api/vendors?vendorId=${vendor}`)
+      .then(res => res.json())
+      .then(data => {
+        setVendorDetails(data.vendor)
+      })
   }, [vendor, service])
 
   useEffect(() => {
-    // Only initialize Square if payment method is card
-    if (paymentMethod !== 'card') return
+    // Only initialize Square if payment method is card and vendor details are loaded
+    if (paymentMethod !== 'card' || !vendorDetails) return
 
     let isMounted = true
     
@@ -59,17 +67,20 @@ function ConfirmPageContent() {
     return () => {
       isMounted = false
     }
-  }, [paymentMethod])
+  }, [paymentMethod, vendorDetails])
 
   const initializeSquare = async () => {
     if (!window.Square) return
 
     try {
-      const appId = process.env.NEXT_PUBLIC_SQUARE_APPLICATION_ID
-      const locationId = process.env.NEXT_PUBLIC_SQUARE_LOCATION_ID
+      // Use vendor's Square Application ID if available, otherwise fall back to platform credentials
+      const appId = vendorDetails?.squareApplicationId || process.env.NEXT_PUBLIC_SQUARE_APPLICATION_ID
+      const locationId = vendorDetails?.squareLocationId || process.env.NEXT_PUBLIC_SQUARE_LOCATION_ID
+      
+      console.log('Initializing Square with:', { appId, locationId, hasVendorDetails: !!vendorDetails })
       
       if (!appId || !locationId) {
-        console.error('Missing Square credentials in environment variables')
+        console.error('Missing Square credentials for vendor')
         return
       }
       
@@ -77,6 +88,7 @@ function ConfirmPageContent() {
       const cardInstance = await payments.card()
       await cardInstance.attach('#card-container')
       setCard(cardInstance)
+      console.log('Square card form initialized successfully')
     } catch (error) {
       console.error('Square initialization error:', error)
     }

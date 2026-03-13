@@ -36,7 +36,25 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const includeInactive = searchParams.get('includeInactive');
+    const vendorId = searchParams.get('vendorId');
 
+    // If vendorId is provided, fetch single vendor
+    if (vendorId) {
+      const { data: vendor, errors } = await client.models.Vendor.get({ vendorId });
+      
+      if (errors) {
+        console.error('Error fetching vendor:', errors);
+        return Response.json({ error: 'Failed to fetch vendor' }, { status: 500 });
+      }
+      
+      if (!vendor) {
+        return Response.json({ error: 'Vendor not found' }, { status: 404 });
+      }
+      
+      return Response.json({ vendor });
+    }
+
+    // Otherwise, fetch all vendors
     const filter = includeInactive === 'true' 
       ? {} 
       : { isActive: { eq: true } };

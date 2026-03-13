@@ -10,6 +10,7 @@ const schema = a.schema({
       phone: a.string(),
       smsAlertPhone: a.string(),
       smsAlertsEnabled: a.boolean().default(false),
+      squareApplicationId: a.string(),
       squareAccountId: a.string(),
       squareAccessToken: a.string(),
       squareRefreshToken: a.string(),

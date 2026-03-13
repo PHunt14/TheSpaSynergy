@@ -91,5 +91,3 @@ Deployed via AWS Amplify with automatic CI/CD from Git repository.
 - adjust the booking flow
     - book -> what day/week -> services
 - have intros that allow individual booking, but also allow... not bundling, but being able to select multiple services and then request a week.
-- no vendor creation from the UI, always needs me
-- 
