@@ -224,22 +224,7 @@ export default function Vendors() {
         Manage vendor accounts and information.
       </p>
 
-      <button
-        onClick={() => {
-          if (showAddForm && editingVendor) {
-            handleCancelEdit()
-          } else {
-            setShowAddForm(!showAddForm)
-            if (showAddForm) setEditingVendor(null)
-          }
-        }}
-        className="cta"
-        style={{ marginBottom: '2rem' }}
-      >
-        {showAddForm ? 'Cancel' : '+ Add New Vendor'}
-      </button>
-
-      {showAddForm && (
+      {showAddForm && editingVendor && (
         <form ref={formRef} onSubmit={handleAddVendor} style={{
           background: 'var(--color-accent)',
           padding: '1.5rem',
