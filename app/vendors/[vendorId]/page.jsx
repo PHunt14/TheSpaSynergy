@@ -75,7 +75,7 @@ export default function VendorDetailPage() {
 
       <div style={{
         height: '300px',
-        background: (vendorId === 'vendor-kera' || vendorId === 'vendor-winsome') ? 'var(--color-bg)' : 'linear-gradient(135deg, var(--color-primary), var(--color-secondary))',
+        background: (vendorId === 'vendor-kera-studio' || vendorId === 'vendor-winsome-woods') ? 'var(--color-bg)' : 'linear-gradient(135deg, var(--color-primary), var(--color-secondary))',
         borderRadius: '12px',
         display: 'flex',
         alignItems: 'center',
@@ -86,13 +86,13 @@ export default function VendorDetailPage() {
         marginBottom: '2rem',
         overflow: 'hidden'
       }}>
-        {vendorId === 'vendor-kera' ? (
+        {vendorId === 'vendor-kera-studio' ? (
           <img 
             src="https://the-spa-synergy-public.s3.amazonaws.com/vendorPictures/Kera_Logo00.jpg" 
             alt="The Kera Studio Logo"
             style={{ maxWidth: '90%', maxHeight: '90%', objectFit: 'contain', borderRadius: '12px' }}
           />
-        ) : vendorId === 'vendor-winsome' ? (
+        ) : vendorId === 'vendor-winsome-woods' ? (
           <img 
             src="https://the-spa-synergy-public.s3.amazonaws.com/vendorPictures/Winsome_Hero00.jpg" 
             alt="Winsome Woods"
@@ -114,7 +114,7 @@ export default function VendorDetailPage() {
       )}
 
       {/* Staff & Owner Profiles */}
-      {vendorId === 'vendor-selene' && (
+      {vendorId === 'vendor-selene-glow-studio' && (
         <div style={{ marginBottom: '3rem', textAlign: 'center' }}>
           <h2 style={{ marginBottom: '1.5rem' }}>Meet Our Team</h2>
           <div style={{ marginBottom: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -137,7 +137,7 @@ export default function VendorDetailPage() {
         </div>
       )}
 
-      {vendorId === 'vendor-kera' && (
+      {vendorId === 'vendor-kera-studio' && (
         <div style={{ marginBottom: '3rem', textAlign: 'center' }}>
           <h2 style={{ marginBottom: '1.5rem' }}>Meet Our Team</h2>
           <div style={{ marginBottom: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -177,7 +177,7 @@ export default function VendorDetailPage() {
         </div>
       )}
 
-      {vendorId === 'vendor-winsome' && (
+      {vendorId === 'vendor-winsome-woods' && (
         <div style={{ marginBottom: '3rem', textAlign: 'center' }}>
           <h2 style={{ marginBottom: '1.5rem' }}>Meet Our Team</h2>
           <div style={{ marginBottom: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>

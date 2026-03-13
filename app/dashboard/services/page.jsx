@@ -7,7 +7,7 @@ export default function Services() {
   const [services, setServices] = useState([])
   const [vendors, setVendors] = useState([])
   const [staffMembers, setStaffMembers] = useState([])
-  const [selectedVendor, setSelectedVendor] = useState('vendor-winsome')
+  const [selectedVendor, setSelectedVendor] = useState('vendor-winsome-woods')
   const [loading, setLoading] = useState(true)
   const [showAddForm, setShowAddForm] = useState(false)
   const [editingService, setEditingService] = useState(null)
