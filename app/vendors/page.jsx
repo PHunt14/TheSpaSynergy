@@ -9,7 +9,7 @@ export default function VendorsPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    document.title = 'Our Vendors | The Spa Synergy'
+    document.title = 'Our Practitioners | The Spa Synergy'
     fetch('/api/vendors')
       .then(res => res.json())
       .then(data => {
@@ -23,9 +23,9 @@ export default function VendorsPage() {
 
   return (
     <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
-      <h1>Our Professionals</h1>
+      <h1>Meet Our Practitioners</h1>
       <p style={{ color: 'var(--color-text-light)', marginBottom: '3rem' }}>
-        Discover our talented professionals and their unique services.
+        Discover our talented practitioners and their unique services.
       </p>
 
       <div style={{
