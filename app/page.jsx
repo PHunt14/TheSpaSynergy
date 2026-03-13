@@ -40,15 +40,10 @@ export default function Home() {
           }}>
             <div style={{
               height: '250px',
-              background: 'linear-gradient(135deg, #667eea, #764ba2)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'white',
-              fontSize: '1.2rem',
-              fontWeight: 'bold'
+              backgroundImage: 'url(https://the-spa-synergy-public.s3.us-east-1.amazonaws.com/vendorPictures/spa_lounge-00.JPEG)',
+              backgroundSize: 'cover',
+              backgroundPosition: 'center'
             }}>
-              [Relaxation]
             </div>
             <div style={{ padding: '1.5rem' }}>
               <h3>Relaxation Services</h3>
@@ -62,15 +57,10 @@ export default function Home() {
           }}>
             <div style={{
               height: '250px',
-              background: 'linear-gradient(135deg, #f093fb, #f5576c)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'white',
-              fontSize: '1.2rem',
-              fontWeight: 'bold'
+              backgroundImage: 'url(https://the-spa-synergy-public.s3.us-east-1.amazonaws.com/vendorPictures/hair-00.JPEG)',
+              backgroundSize: 'cover',
+              backgroundPosition: 'center 30%'
             }}>
-              [Beauty]
             </div>
             <div style={{ padding: '1.5rem' }}>
               <h3>Beauty & Hair</h3>
@@ -84,19 +74,14 @@ export default function Home() {
           }}>
             <div style={{
               height: '250px',
-              background: 'linear-gradient(135deg, #4facfe, #00f2fe)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'white',
-              fontSize: '1.2rem',
-              fontWeight: 'bold'
+              backgroundImage: 'url(https://the-spa-synergy-public.s3.us-east-1.amazonaws.com/vendorPictures/grooms_party-00.JPG)',
+              backgroundSize: 'cover',
+              backgroundPosition: 'center'
             }}>
-              [Hair]
             </div>
             <div style={{ padding: '1.5rem' }}>
-              <h3>Wellness</h3>
-              <p style={{ color: 'var(--color-text-light)' }}>Holistic treatments for mind, body, and spirit balance.</p>
+              <h3>Events & Parties</h3>
+              <p style={{ color: 'var(--color-text-light)' }}>Prepare and relax for your special occasions with our group services and event packages.</p>
             </div>
           </div>
         </div>
