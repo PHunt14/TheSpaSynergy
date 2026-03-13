@@ -130,7 +130,7 @@ export default function VendorDetailPage() {
             <div style={{ width: '3px', height: '20px', background: 'var(--color-primary)' }}></div>
             <div style={{ border: '3px solid var(--color-primary)', borderRadius: '12px', padding: '1.5rem', maxWidth: '600px' }}>
               <p style={{ fontSize: '1rem', fontWeight: '600', color: 'var(--color-text)', margin: 0 }}>
-                Jylian Hafer
+                Jylian
               </p>
             </div>
           </div>
@@ -153,7 +153,7 @@ export default function VendorDetailPage() {
             <div style={{ width: '3px', height: '20px', background: 'var(--color-primary)' }}></div>
             <div style={{ border: '3px solid var(--color-primary)', borderRadius: '12px', padding: '1.5rem', maxWidth: '600px' }}>
               <p style={{ fontSize: '1rem', fontWeight: '600', color: 'var(--color-text)', margin: 0 }}>
-                Stacey Green
+                Stacey
               </p>
             </div>
           </div>
@@ -170,7 +170,7 @@ export default function VendorDetailPage() {
             <div style={{ width: '3px', height: '20px', background: 'var(--color-primary)' }}></div>
             <div style={{ border: '3px solid var(--color-primary)', borderRadius: '12px', padding: '1.5rem', maxWidth: '600px' }}>
               <p style={{ fontSize: '1rem', fontWeight: '600', color: 'var(--color-text)', margin: 0 }}>
-                Trinity Swire
+                Trinity
               </p>
             </div>
           </div>
