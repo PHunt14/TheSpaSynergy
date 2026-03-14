@@ -8,8 +8,8 @@ export default function CherryBlossomHeading({ text = "Experience Luxury & Welln
         xmlns="http://www.w3.org/2000/svg"
         style={{ display: 'block' }}
       >
-        {/* Left branch with blossoms */}
-        <path d="M10 90 Q 60 70, 110 80" fill="none" stroke="#4A3428" strokeWidth="4" strokeLinecap="round"/>
+        {/* Left branch - extended inward toward text */}
+        <path d="M10 90 Q 80 65, 180 85" fill="none" stroke="#4A3428" strokeWidth="4" strokeLinecap="round"/>
         
         <g transform="translate(40,75)">
           <circle r="12" fill="#FFB3C6"/>
@@ -20,7 +20,7 @@ export default function CherryBlossomHeading({ text = "Experience Luxury & Welln
           <circle r="3" fill="#FF6B9D"/>
         </g>
         
-        <g transform="translate(70,82)">
+        <g transform="translate(80,72)">
           <circle r="10" fill="#FFB3C6"/>
           <circle cx="0" cy="-7" r="6" fill="#FFC9D9"/>
           <circle cx="6" cy="2" r="6" fill="#FFC9D9"/>
@@ -28,7 +28,7 @@ export default function CherryBlossomHeading({ text = "Experience Luxury & Welln
           <circle r="2.5" fill="#FF6B9D"/>
         </g>
 
-        <g transform="translate(95,78)">
+        <g transform="translate(120,78)">
           <circle r="9" fill="#FFB3C6"/>
           <circle cx="0" cy="-6" r="5" fill="#FFC9D9"/>
           <circle cx="5" cy="2" r="5" fill="#FFC9D9"/>
@@ -36,12 +36,12 @@ export default function CherryBlossomHeading({ text = "Experience Luxury & Welln
           <circle r="2" fill="#FF6B9D"/>
         </g>
 
-        {/* Right branch with blossoms */}
-        <path d="M690 90 Q 640 70, 590 80" fill="none" stroke="#4A3428" strokeWidth="4" strokeLinecap="round"/>
+        {/* Right branch - extended inward toward text */}
+        <path d="M690 90 Q 620 65, 520 85" fill="none" stroke="#4A3428" strokeWidth="4" strokeLinecap="round"/>
         {/* Right shorter branch */}
         <path d="M640 70 Q 655 60, 670 58" fill="none" stroke="#4A3428" strokeWidth="3" strokeLinecap="round"/>
         {/* Right longer branch */}
-        <path d="M620 75 Q 640 55, 665 40 Q 680 30, 690 22" fill="none" stroke="#4A3428" strokeWidth="4" strokeLinecap="round"/>
+        <path d="M600 72 Q 630 50, 665 40 Q 680 30, 690 22" fill="none" stroke="#4A3428" strokeWidth="4" strokeLinecap="round"/>
         
         <g transform="translate(660,75)">
           <circle r="12" fill="#FFB3C6"/>
@@ -52,7 +52,7 @@ export default function CherryBlossomHeading({ text = "Experience Luxury & Welln
           <circle r="3" fill="#FF6B9D"/>
         </g>
         
-        <g transform="translate(630,82)">
+        <g transform="translate(620,72)">
           <circle r="10" fill="#FFB3C6"/>
           <circle cx="0" cy="-7" r="6" fill="#FFC9D9"/>
           <circle cx="6" cy="2" r="6" fill="#FFC9D9"/>
@@ -60,7 +60,7 @@ export default function CherryBlossomHeading({ text = "Experience Luxury & Welln
           <circle r="2.5" fill="#FF6B9D"/>
         </g>
 
-        <g transform="translate(605,78)">
+        <g transform="translate(580,78)">
           <circle r="9" fill="#FFB3C6"/>
           <circle cx="0" cy="-6" r="5" fill="#FFC9D9"/>
           <circle cx="5" cy="2" r="5" fill="#FFC9D9"/>
@@ -100,7 +100,7 @@ export default function CherryBlossomHeading({ text = "Experience Luxury & Welln
         </g>
 
         {/* Longer branch medium blossom */}
-        <g transform="translate(645,52)">
+        <g transform="translate(635,52)">
           <circle r="10" fill="#FFB3C6"/>
           <circle cx="0" cy="-7" r="6" fill="#FFC9D9"/>
           <circle cx="6" cy="2" r="6" fill="#FFC9D9"/>
