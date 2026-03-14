@@ -23,7 +23,7 @@ export default function Home() {
           Your sanctuary for relaxation, beauty, and wellness
         </p>
         <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginTop: '1.5rem', flexWrap: 'wrap' }}>
-          <a href="/booking" className="cta">Book an Appointment</a>
+          <a href="/services" className="cta">Book an Appointment</a>
           <a href="/vendors" className="cta" style={{ background: 'var(--color-warm)' }}>Get to Know Us</a>
         </div>
       </section>
