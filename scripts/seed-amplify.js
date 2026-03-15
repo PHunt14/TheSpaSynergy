@@ -102,15 +102,8 @@ const services = [
   { serviceId: 'svc-kera-wedding',vendorId: 'vendor-kera-studio', category: 'Wedding', name: 'Wedding Trial', description: 'Complimentary bridal hair and makeup trial', duration: 60, price: 0, isActive: true },
   { serviceId: 'svc-kera-sauna-25',vendorId: 'vendor-kera-studio', category: 'Sauna', resourceType: 'sauna', name: 'Sauna - 25 min', description: 'Infrared sauna session for detox and relaxation', duration: 25, price: 10, isActive: true },
   { serviceId: 'svc-kera-sauna-45',vendorId: 'vendor-kera-studio', category: 'Sauna', resourceType: 'sauna', name: 'Sauna - 45 min', description: 'Extended infrared sauna session', duration: 45, price: 18, isActive: true },
-  { serviceId: 'svc-kera-wax-brows',vendorId: 'vendor-kera-studio', category: 'Waxing', name: 'Brows', description: 'Eyebrow shaping and waxing', duration: 15, price: 15, isActive: true },
-  { serviceId: 'svc-kera-wax-lips',vendorId: 'vendor-kera-studio', category: 'Waxing', name: 'Lips', description: 'Upper lip hair removal', duration: 10, price: 10, isActive: true },
-  { serviceId: 'svc-kera-wax-chin',vendorId: 'vendor-kera-studio', category: 'Waxing', name: 'Chin', description: 'Chin hair removal', duration: 10, price: 10, isActive: true },
-  { serviceId: 'svc-kera-wax-face-combo',vendorId: 'vendor-kera-studio', category: 'Waxing', name: 'Brows, Lips & Chin', description: 'Complete facial waxing package', duration: 30, price: 30, isActive: true, requiresConsultation: true },
-  { serviceId: 'svc-kera-wax-underarms',vendorId: 'vendor-kera-studio', category: 'Waxing', name: 'Underarms', description: 'Underarm hair removal', duration: 20, price: 20, isActive: true, requiresConsultation: true },
-  { serviceId: 'svc-kera-wax-arms',vendorId: 'vendor-kera-studio', category: 'Waxing', name: 'Arms', description: 'Full arm hair removal', duration: 30, price: 40, isActive: true, requiresConsultation: true },
-  { serviceId: 'svc-kera-wax-back',vendorId: 'vendor-kera-studio', category: 'Waxing', name: 'Back', description: 'Full back hair removal', duration: 45, price: 55, isActive: true, requiresConsultation: true },
-  { serviceId: 'svc-kera-wax-chest',vendorId: 'vendor-kera-studio', category: 'Waxing', name: 'Chest', description: 'Chest hair removal', duration: 40, price: 45, isActive: true, requiresConsultation: true },
-  { serviceId: 'svc-kera-wax-brazilian',vendorId: 'vendor-kera-studio', category: 'Waxing', name: 'Brazilian', description: 'Complete bikini area hair removal', duration: 45, price: 70, isActive: true, requiresConsultation: true },
+  { serviceId: 'svc-kera-wax-brows',vendorId: 'vendor-kera-studio', category: 'Waxing', name: 'Brow Wax', description: 'Eyebrow shaping and waxing', duration: 15, price: 15, isActive: true },
+  { serviceId: 'svc-kera-wax-lip-chin',vendorId: 'vendor-kera-studio', category: 'Waxing', name: 'Lip/Chin Wax', description: 'Lip and chin hair removal', duration: 15, price: 15, isActive: true },
 
   // Selene Glow Studio (subletting space - pays house fee)
   // Nail Rituals
