@@ -114,7 +114,7 @@ export default function CherryBlossomHeading({ text = "Experience Luxury & Welln
           y="100"
           textAnchor="middle"
           fill="var(--color-primary-dark)"
-          fontSize="42"
+          fontSize="52"
           fontWeight="600"
           fontFamily="var(--font-allura), cursive"
         >

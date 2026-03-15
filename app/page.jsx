@@ -19,7 +19,7 @@ export default function Home() {
     <main className="home">
       <section className="hero">
         <h1>Welcome to The Spa Synergy</h1>
-        <p style={{ fontSize: '1.2rem', color: 'var(--color-text-light)', marginTop: '1rem' }}>
+        <p style={{ color: 'var(--color-text-light)', marginTop: '1rem' }}>
           Your sanctuary for relaxation, beauty, and wellness
         </p>
         <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginTop: '1.5rem', flexWrap: 'wrap' }}>
