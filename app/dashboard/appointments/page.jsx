@@ -68,6 +68,28 @@ export default function Appointments() {
     }
   }, [userVendorId])
 
+  const handleConfirm = async (appointmentId) => {
+    if (!confirm('Confirm this appointment?')) return
+
+    try {
+      const response = await fetch('/api/appointments/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ appointmentId })
+      })
+
+      if (response.ok) {
+        alert('Appointment confirmed! Customer has been notified.')
+        loadAppointments()
+      } else {
+        alert('Failed to confirm appointment')
+      }
+    } catch (error) {
+      console.error('Error confirming appointment:', error)
+      alert('Error confirming appointment')
+    }
+  }
+
   const handleCancel = async (appointmentId) => {
     if (!confirm('Are you sure you want to cancel this appointment?')) return
 
@@ -247,12 +269,28 @@ export default function Appointments() {
                       background: getStatusColor(apt.status),
                       color: 'white'
                     }}>
-                      {apt.status === 'confirmed' ? 'Paid' : apt.status === 'pending' ? 'Unpaid' : 'Cancelled'}
+                      {apt.status === 'confirmed' ? 'Confirmed' : apt.status === 'pending' ? 'Pending' : 'Cancelled'}
                     </span>
                   </td>
                   <td style={{ padding: '1rem' }}>
                     {apt.status !== 'cancelled' && (
-                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        {apt.status === 'pending' && (
+                          <button
+                            onClick={() => handleConfirm(apt.appointmentId)}
+                            style={{
+                              padding: '0.5rem 1rem',
+                              borderRadius: '4px',
+                              border: 'none',
+                              background: '#4CAF50',
+                              color: 'white',
+                              cursor: 'pointer',
+                              fontSize: '0.85rem'
+                            }}
+                          >
+                            Confirm
+                          </button>
+                        )}
                         <button
                           onClick={() => setShowReschedule(apt.appointmentId)}
                           style={{

@@ -257,10 +257,30 @@ export default function VendorDetailPage() {
             </p>
           )}
           {vendor.email && (
-            <p style={{ fontSize: '1.1rem', margin: 0 }}>
+            <p style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>
               <strong>Email:</strong>{' '}
               <a href={`mailto:${vendor.email}`} style={{ color: 'var(--color-primary-dark)', textDecoration: 'none' }}>{vendor.email}</a>
             </p>
+          )}
+          {(vendor.socialFacebook || vendor.socialInstagram || vendor.socialTiktok || vendor.socialWebsite) && (
+            <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', flexWrap: 'wrap' }}>
+              {vendor.socialFacebook && (
+                <a href={vendor.socialFacebook} target="_blank" rel="noopener noreferrer"
+                  style={{ color: 'var(--color-primary-dark)', textDecoration: 'none', fontSize: '1rem' }}>Facebook</a>
+              )}
+              {vendor.socialInstagram && (
+                <a href={vendor.socialInstagram} target="_blank" rel="noopener noreferrer"
+                  style={{ color: 'var(--color-primary-dark)', textDecoration: 'none', fontSize: '1rem' }}>Instagram</a>
+              )}
+              {vendor.socialTiktok && (
+                <a href={vendor.socialTiktok} target="_blank" rel="noopener noreferrer"
+                  style={{ color: 'var(--color-primary-dark)', textDecoration: 'none', fontSize: '1rem' }}>TikTok</a>
+              )}
+              {vendor.socialWebsite && (
+                <a href={vendor.socialWebsite} target="_blank" rel="noopener noreferrer"
+                  style={{ color: 'var(--color-primary-dark)', textDecoration: 'none', fontSize: '1rem' }}>Website</a>
+              )}
+            </div>
           )}
         </div>
       </FadeIn>
