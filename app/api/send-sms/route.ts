@@ -2,9 +2,22 @@ import { generateClient } from 'aws-amplify/data'
 import type { Schema } from '@/amplify/data/resource'
 import { Amplify } from 'aws-amplify'
 import config from '@/amplify_outputs.json'
+import { SNSClient, PublishCommand } from '@aws-sdk/client-sns'
 
 Amplify.configure(config, { ssr: true })
 const client = generateClient<Schema>()
+const snsClient = new SNSClient({ region: process.env.AWS_REGION || 'us-east-1' })
+
+function formatPhone(phone: string): string {
+  return phone.startsWith('+') ? phone : `+1${phone.replace(/\D/g, '')}`
+}
+
+export async function sendSms(phoneNumber: string, message: string) {
+  await snsClient.send(new PublishCommand({
+    PhoneNumber: formatPhone(phoneNumber),
+    Message: message,
+  }))
+}
 
 export async function POST(request: Request) {
   try {
@@ -36,7 +49,6 @@ export async function POST(request: Request) {
       ? JSON.parse(appointment.customer) 
       : appointment.customer
 
-    // Format the SMS message
     const dateTime = appointment.dateTime
     const formattedDateTime = dateTime ? new Date(dateTime).toLocaleString('en-US', {
       month: 'short',
@@ -49,34 +61,9 @@ export async function POST(request: Request) {
 
     const message = `New Booking Alert!\n\nService: ${service?.name || 'N/A'}\nCustomer: ${customer.name}\nPhone: ${customer.phone}\nDate/Time: ${formattedDateTime}\n\nThe Spa Synergy`
 
-    // Call the Lambda function to send SMS
-    try {
-      const lambdaResponse = await fetch(`https://${process.env.NEXT_PUBLIC_AMPLIFY_FUNCTION_URL || 'LAMBDA_NOT_CONFIGURED'}/send-sms`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          phoneNumber: vendor.smsAlertPhone,
-          message
-        })
-      })
-      
-      if (lambdaResponse.ok) {
-        return Response.json({ 
-          success: true, 
-          message: 'SMS sent successfully'
-        })
-      }
-    } catch (lambdaError) {
-      // Lambda failed, fall through to dev mode
-    }
+    await sendSms(vendor.smsAlertPhone, message)
 
-    // For now, just log - actual SMS requires AWS SNS setup in production
-    return Response.json({ 
-      success: true, 
-      message: 'SMS notification logged (dev mode - verify phone in AWS SNS Console)',
-      phone: vendor.smsAlertPhone,
-      smsContent: message
-    })
+    return Response.json({ success: true, message: 'SMS sent successfully' })
   } catch (error) {
     console.error('Error sending SMS:', error)
     return Response.json({ 

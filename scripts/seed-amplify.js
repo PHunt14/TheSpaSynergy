@@ -5,6 +5,9 @@ import config from '../amplify_outputs.json' with { type: 'json' };
 Amplify.configure(config);
 const client = generateClient();
 
+// In dev/local, set DEV_SMS_PHONE in .env.local to route all vendor SMS to your test number
+const devSmsPhone = process.env.DEV_SMS_PHONE || '';
+
 const vendors = [
   {
     vendorId: 'vendor-winsome-woods',
@@ -12,6 +15,8 @@ const vendors = [
     description: 'Natural remedies for stress relief',
     email: 'contact@winsomewoods.com',
     phone: '301-992-3224',
+    smsAlertsEnabled: true,
+    smsAlertPhone: devSmsPhone || '3019923224',
     isHouse: false,
     isActive: true,
     workingHours: {
@@ -31,6 +36,8 @@ const vendors = [
     description: 'Providing our guests a place for reflection and peace',
     email: 'thekerastudio@gmail.com',
     phone: '240-329-6537',
+    smsAlertsEnabled: true,
+    smsAlertPhone: devSmsPhone || '2403296537',
     isHouse: true,
     isActive: true,
     workingHours: {
@@ -50,6 +57,8 @@ const vendors = [
     description: 'Where Radiance meets Ritual',
     email: 'contact@seleneglow.com',
     phone: '301-992-3224',
+    smsAlertsEnabled: true,
+    smsAlertPhone: devSmsPhone || '3019923224',
     isHouse: false,
     isActive: true,
     workingHours: {

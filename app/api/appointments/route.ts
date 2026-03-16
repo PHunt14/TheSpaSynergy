@@ -3,6 +3,13 @@ import { cookies } from 'next/headers';
 import type { Schema } from '../../../amplify/data/resource';
 import config from '../../../amplify_outputs.json' with { type: 'json' };
 import { randomUUID } from 'crypto';
+import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
+
+const snsClient = new SNSClient({ region: process.env.AWS_REGION || 'us-east-1' });
+
+function formatPhone(phone: string): string {
+  return phone.startsWith('+') ? phone : `+1${phone.replace(/\D/g, '')}`;
+}
 
 const client = generateServerClientUsingCookies<Schema>({
   config,
@@ -36,29 +43,33 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Failed to create appointment' }, { status: 500 });
     }
 
-    // Trigger SMS alert (non-blocking)
+    // Get service name for SMS messages
+    let serviceName = 'your service';
     try {
-      await fetch(`${request.headers.get('origin')}/api/send-sms`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ appointmentId, vendorId })
-      });
-    } catch (smsError) {
-      console.error('SMS notification failed:', smsError);
+      const { data: service } = await client.models.Service.get({ serviceId });
+      if (service?.name) serviceName = service.name;
+    } catch (e) { /* use default */ }
+
+    const formattedDateTime = new Date(dateTime).toLocaleString('en-US', {
+      month: 'short', day: 'numeric', year: 'numeric',
+      hour: 'numeric', minute: '2-digit', hour12: true
+    });
+
+    // Send confirmation SMS to customer (non-blocking)
+    if (customer.phone) {
+      const customerMsg = `Booking Confirmed!\n\nService: ${serviceName}\nDate/Time: ${formattedDateTime}\n\nWe look forward to seeing you!\n\nThe Spa Synergy`;
+      snsClient.send(new PublishCommand({
+        PhoneNumber: formatPhone(customer.phone),
+        Message: customerMsg,
+      })).catch(err => console.error('Customer SMS failed:', err));
     }
 
-    // Trigger email via Lambda (has IAM role for SES)
-    fetch('https://YOUR_LAMBDA_URL/send-email', {
+    // Trigger vendor SMS alert (non-blocking)
+    fetch(`${request.headers.get('origin')}/api/send-sms`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        to: customer.email,
-        appointmentId,
-        vendorId,
-        serviceId,
-        dateTime
-      })
-    }).catch(err => console.error('Email failed:', err));
+      body: JSON.stringify({ appointmentId, vendorId })
+    }).catch(err => console.error('Vendor SMS failed:', err));
 
     return Response.json({ 
       success: true, 
