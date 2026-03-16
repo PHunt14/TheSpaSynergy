@@ -51,6 +51,7 @@ export async function POST(request: Request) {
     });
 
     // Send confirmation SMS to customer (non-blocking, only if opted in)
+    console.log('Customer SMS check:', { phone: customer.phone, smsOptIn: customer.smsOptIn })
     if (customer.phone && customer.smsOptIn) {
       const customerMsg = `Booking Submitted!\n\nService: ${serviceName}\nDate/Time: ${formattedDateTime}\n\nWe look forward to seeing you!\n\nThe Spa Synergy\nReply STOP to opt out`;
       sendSms(customer.phone, customerMsg).catch(err => console.error('Customer SMS failed:', err));
