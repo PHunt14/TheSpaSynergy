@@ -49,6 +49,11 @@ export async function PATCH(request: Request) {
     if (body.price !== undefined) updateData.price = body.price
     if (body.discountPercent !== undefined) updateData.discountPercent = body.discountPercent
     if (body.isActive !== undefined) updateData.isActive = body.isActive
+    if (body.status !== undefined) updateData.status = body.status
+    if (body.vendorConfirmations !== undefined) updateData.vendorConfirmations = JSON.stringify(body.vendorConfirmations)
+    if (body.appointmentIds !== undefined) updateData.appointmentIds = body.appointmentIds
+    if (body.customer !== undefined) updateData.customer = JSON.stringify(body.customer)
+    if (body.dateTime !== undefined) updateData.dateTime = body.dateTime
     
     const { data: bundle } = await client.models.Bundle.update(updateData)
     return Response.json({ bundle })

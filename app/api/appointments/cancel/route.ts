@@ -16,13 +16,31 @@ export async function POST(request: Request) {
       return Response.json({ error: 'appointmentId required' }, { status: 400 });
     }
 
-    // Get appointment details before cancelling
     const { data: appointment, errors: getErrors } = await client.models.Appointment.get({ 
       appointmentId 
     });
 
     if (getErrors || !appointment) {
       return Response.json({ error: 'Appointment not found' }, { status: 404 });
+    }
+
+    // If part of a bundle, cancel the entire bundle
+    if (appointment.bundleId) {
+      const { data: bundle } = await client.models.Bundle.get({ bundleId: appointment.bundleId });
+      if (bundle?.appointmentIds) {
+        await Promise.all(
+          bundle.appointmentIds.map((id: string) =>
+            client.models.Appointment.update({ appointmentId: id, status: 'cancelled' as any })
+          )
+        );
+      }
+      if (bundle) {
+        await client.models.Bundle.update({
+          bundleId: appointment.bundleId as any,
+          status: 'cancelled' as any,
+        });
+      }
+      return Response.json({ success: true, bundleCancelled: true });
     }
 
     // Update status to cancelled

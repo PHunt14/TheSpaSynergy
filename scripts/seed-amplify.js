@@ -176,6 +176,7 @@ const bundles = [
     name: 'Reset Package',
     description: '60-minute massage and 60-minute head spa',
     serviceIds: ['svc-winsome-massage-60', 'svc-kera-head-bath'],
+    vendorIds: ['vendor-winsome-woods', 'vendor-kera-studio'],
     price: 180.00,
     discountPercent: 0,
     isActive: true

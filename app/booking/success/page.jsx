@@ -10,6 +10,7 @@ function SuccessContent() {
   const dateTime = params.get('dateTime')
   const serviceName = params.get('service')
   const paymentMethod = params.get('payment')
+  const confirmation = params.get('confirmation')
 
   return (
     <main style={{ textAlign: 'center', maxWidth: '600px', margin: '0 auto', padding: '2rem' }}>
@@ -21,9 +22,11 @@ function SuccessContent() {
         marginBottom: '2rem'
       }}>
         <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>✓</div>
-        <h1 style={{ color: '#155724', marginBottom: '1rem' }}>Booking Confirmed!</h1>
+        <h1 style={{ color: '#155724', marginBottom: '1rem' }}>Booking Submitted!</h1>
         <p style={{ color: '#155724', fontSize: '1.1rem' }}>
-          Your appointment has been successfully booked.
+          {confirmation === 'required'
+            ? 'Your booking has been submitted and is awaiting vendor confirmation. You will be notified once confirmed.'
+            : 'Your appointment has been successfully scheduled.'}
         </p>
       </div>
 
@@ -68,7 +71,7 @@ function SuccessContent() {
       </div>
 
       <p style={{ color: 'var(--color-text-light)', marginBottom: '2rem' }}>
-        A confirmation has been sent to your email. Please save your confirmation ID for your records.
+        A notification has been sent to your phone. Please save your confirmation ID for your records.
       </p>
 
       <Link href="/" className="cta">

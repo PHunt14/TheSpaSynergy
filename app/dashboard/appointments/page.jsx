@@ -68,7 +68,30 @@ export default function Appointments() {
     }
   }, [userVendorId])
 
-  const handleConfirm = async (appointmentId) => {
+  const handleConfirm = async (appointmentId, bundleId) => {
+    if (bundleId) {
+      if (!confirm('Confirm your portion of this bundle?')) return
+      try {
+        const response = await fetch('/api/bundles/confirm', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bundleId, vendorId: userVendorId, action: 'confirm' })
+        })
+        const data = await response.json()
+        if (response.ok) {
+          alert(data.bundleStatus === 'confirmed'
+            ? 'Bundle fully confirmed! Customer has been notified.'
+            : 'Your portion confirmed. Waiting on other vendor(s).')
+          loadAppointments()
+        } else {
+          alert('Failed to confirm: ' + (data.error || ''))
+        }
+      } catch (error) {
+        alert('Error confirming bundle')
+      }
+      return
+    }
+
     if (!confirm('Confirm this appointment?')) return
 
     try {
@@ -90,7 +113,31 @@ export default function Appointments() {
     }
   }
 
-  const handleCancel = async (appointmentId) => {
+  const handleCancel = async (appointmentId, bundleId) => {
+    const msg = bundleId
+      ? 'Cancel this bundle? This will cancel ALL services in the bundle for the customer.'
+      : 'Are you sure you want to cancel this appointment?'
+    if (!confirm(msg)) return
+
+    if (bundleId) {
+      try {
+        const response = await fetch('/api/bundles/confirm', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bundleId, vendorId: userVendorId, action: 'cancel' })
+        })
+        if (response.ok) {
+          alert('Bundle cancelled. Customer has been notified.')
+          loadAppointments()
+        } else {
+          alert('Failed to cancel bundle')
+        }
+      } catch (error) {
+        alert('Error cancelling bundle')
+      }
+      return
+    }
+
     if (!confirm('Are you sure you want to cancel this appointment?')) return
 
     try {
@@ -143,8 +190,19 @@ export default function Appointments() {
     switch (status) {
       case 'confirmed': return '#4CAF50'
       case 'pending': return '#FF9800'
+      case 'pending-confirmation': return '#FF9800'
       case 'cancelled': return '#F44336'
       default: return '#999'
+    }
+  }
+
+  const getStatusLabel = (status) => {
+    switch (status) {
+      case 'confirmed': return 'Confirmed'
+      case 'pending': return 'Pending'
+      case 'pending-confirmation': return 'Awaiting Confirmation'
+      case 'cancelled': return 'Cancelled'
+      default: return status
     }
   }
 
@@ -269,15 +327,20 @@ export default function Appointments() {
                       background: getStatusColor(apt.status),
                       color: 'white'
                     }}>
-                      {apt.status === 'confirmed' ? 'Confirmed' : apt.status === 'pending' ? 'Pending' : 'Cancelled'}
+                      {getStatusLabel(apt.status)}
                     </span>
+                    {apt.bundleId && (
+                      <div style={{ fontSize: '0.75rem', color: 'var(--color-primary)', marginTop: '0.25rem' }}>
+                        📦 Bundle
+                      </div>
+                    )}
                   </td>
                   <td style={{ padding: '1rem' }}>
                     {apt.status !== 'cancelled' && (
                       <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                        {apt.status === 'pending' && (
+                        {(apt.status === 'pending' || apt.status === 'pending-confirmation') && (
                           <button
-                            onClick={() => handleConfirm(apt.appointmentId)}
+                            onClick={() => handleConfirm(apt.appointmentId, apt.bundleId)}
                             style={{
                               padding: '0.5rem 1rem',
                               borderRadius: '4px',
@@ -306,7 +369,7 @@ export default function Appointments() {
                           Reschedule
                         </button>
                         <button
-                          onClick={() => handleCancel(apt.appointmentId)}
+                          onClick={() => handleCancel(apt.appointmentId, apt.bundleId)}
                           style={{
                             padding: '0.5rem 1rem',
                             borderRadius: '4px',

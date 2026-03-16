@@ -19,7 +19,7 @@ const client = generateServerClientUsingCookies<Schema>({
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { vendorId, serviceId, dateTime, customer, status, paymentId } = body;
+    const { vendorId, serviceId, bundleId, dateTime, customer, status, paymentId } = body;
 
     if (!vendorId || !serviceId || !dateTime || !customer) {
       return Response.json({ error: 'Missing required fields' }, { status: 400 });
@@ -31,6 +31,7 @@ export async function POST(request: Request) {
       appointmentId,
       vendorId,
       serviceId,
+      bundleId: bundleId || undefined,
       dateTime,
       customer: JSON.stringify(customer),
       status: status || 'pending',
@@ -57,7 +58,7 @@ export async function POST(request: Request) {
 
     // Send confirmation SMS to customer (non-blocking)
     if (customer.phone) {
-      const customerMsg = `Booking Confirmed!\n\nService: ${serviceName}\nDate/Time: ${formattedDateTime}\n\nWe look forward to seeing you!\n\nThe Spa Synergy`;
+      const customerMsg = `Booking Submitted!\n\nService: ${serviceName}\nDate/Time: ${formattedDateTime}\n\nWe look forward to seeing you!\n\nThe Spa Synergy`;
       snsClient.send(new PublishCommand({
         PhoneNumber: formatPhone(customer.phone),
         Message: customerMsg,
