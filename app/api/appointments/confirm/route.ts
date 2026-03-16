@@ -50,11 +50,11 @@ export async function POST(request: Request) {
       ? JSON.parse(appointment.customer)
       : appointment.customer;
 
-    // SMS to customer
-    if (customer?.phone) {
+    // SMS to customer (only if opted in)
+    if (customer?.phone && customer?.smsOptIn) {
       snsClient.send(new PublishCommand({
         PhoneNumber: formatPhone(customer.phone),
-        Message: `Appointment Confirmed!\n\nService: ${serviceName}\nDate/Time: ${formattedDateTime}\n\nYour appointment has been confirmed by the vendor.\n\nThe Spa Synergy`,
+        Message: `Appointment Confirmed!\n\nService: ${serviceName}\nDate/Time: ${formattedDateTime}\n\nYour appointment has been confirmed by the vendor.\n\nThe Spa Synergy\nReply STOP to opt out`,
       })).catch(err => console.error('Customer confirmation SMS failed:', err));
     }
 

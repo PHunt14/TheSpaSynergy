@@ -54,11 +54,11 @@ export async function POST(request: Request) {
         ) as any,
       });
 
-      // Notify customer
-      if (customer?.phone) {
+      // Notify customer (only if opted in)
+      if (customer?.phone && customer?.smsOptIn) {
         snsClient.send(new PublishCommand({
           PhoneNumber: formatPhone(customer.phone),
-          Message: `Bundle Cancelled\n\nYour ${bundle.name} booking has been cancelled by a vendor.\n\nThe Spa Synergy`,
+          Message: `Bundle Cancelled\n\nYour ${bundle.name} booking has been cancelled by a vendor.\n\nThe Spa Synergy\nReply STOP to opt out`,
         })).catch(err => console.error('SMS failed:', err));
       }
 
@@ -93,8 +93,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // If fully confirmed, notify customer
-    if (allConfirmed && customer?.phone) {
+    // If fully confirmed, notify customer (only if opted in)
+    if (allConfirmed && customer?.phone && customer?.smsOptIn) {
       const formattedDateTime = bundle.dateTime
         ? new Date(bundle.dateTime).toLocaleString('en-US', {
             month: 'short', day: 'numeric', year: 'numeric',
@@ -104,7 +104,7 @@ export async function POST(request: Request) {
 
       snsClient.send(new PublishCommand({
         PhoneNumber: formatPhone(customer.phone),
-        Message: `Bundle Confirmed!\n\n${bundle.name}\nDate/Time: ${formattedDateTime}\n\nAll vendors have confirmed your appointment.\n\nThe Spa Synergy`,
+        Message: `Bundle Confirmed!\n\n${bundle.name}\nDate/Time: ${formattedDateTime}\n\nAll vendors have confirmed your appointment.\n\nThe Spa Synergy\nReply STOP to opt out`,
       })).catch(err => console.error('SMS failed:', err));
     }
 

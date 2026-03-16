@@ -59,7 +59,7 @@ export async function POST(request: Request) {
       hour12: true
     }) : 'Not specified'
 
-    const message = `New Booking Alert!\n\nService: ${service?.name || 'N/A'}\nCustomer: ${customer.name}\nPhone: ${customer.phone}\nDate/Time: ${formattedDateTime}\n\nThe Spa Synergy`
+    const message = `New Booking Alert!\n\nService: ${service?.name || 'N/A'}\nCustomer: ${customer.name}\nPhone: ${customer.phone}\nDate/Time: ${formattedDateTime}\n\nThe Spa Synergy\nReply STOP to opt out`
 
     await sendSms(vendor.smsAlertPhone, message)
 

@@ -17,7 +17,7 @@ function ConfirmPageContent() {
   const isBundle = !!servicesParam
   const serviceIds = servicesParam ? servicesParam.split(',') : service ? [service] : []
 
-  const [formData, setFormData] = useState({ name: '', email: '', phone: '' })
+  const [formData, setFormData] = useState({ name: '', email: '', phone: '', smsOptIn: false })
   const [loading, setLoading] = useState(false)
   const [card, setCard] = useState(null)
   const [allServiceDetails, setAllServiceDetails] = useState([])
@@ -258,6 +258,17 @@ function ConfirmPageContent() {
           <input type="tel" required value={formData.phone}
             onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
             style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />
+        </div>
+
+        <div style={{ marginBottom: '1rem' }}>
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', cursor: 'pointer' }}>
+            <input type="checkbox" checked={formData.smsOptIn}
+              onChange={(e) => setFormData({ ...formData, smsOptIn: e.target.checked })}
+              style={{ marginTop: '0.25rem' }} />
+            <span style={{ fontSize: '0.9rem', color: 'var(--color-text-light)' }}>
+              I agree to receive text message updates about my appointment from The Spa Synergy. Msg & data rates may apply. Reply STOP to opt out.
+            </span>
+          </label>
         </div>
 
         <div style={{ marginTop: '2rem', marginBottom: '1rem' }}>

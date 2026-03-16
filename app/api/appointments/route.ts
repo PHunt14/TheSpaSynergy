@@ -56,9 +56,9 @@ export async function POST(request: Request) {
       hour: 'numeric', minute: '2-digit', hour12: true
     });
 
-    // Send confirmation SMS to customer (non-blocking)
-    if (customer.phone) {
-      const customerMsg = `Booking Submitted!\n\nService: ${serviceName}\nDate/Time: ${formattedDateTime}\n\nWe look forward to seeing you!\n\nThe Spa Synergy`;
+    // Send confirmation SMS to customer (non-blocking, only if opted in)
+    if (customer.phone && customer.smsOptIn) {
+      const customerMsg = `Booking Submitted!\n\nService: ${serviceName}\nDate/Time: ${formattedDateTime}\n\nWe look forward to seeing you!\n\nThe Spa Synergy\nReply STOP to opt out`;
       snsClient.send(new PublishCommand({
         PhoneNumber: formatPhone(customer.phone),
         Message: customerMsg,
