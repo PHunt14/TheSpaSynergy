@@ -41,7 +41,7 @@ export async function POST(request: Request) {
       if (bundle.appointmentIds) {
         await Promise.all(
           bundle.appointmentIds.map(id =>
-            client.models.Appointment.update({ appointmentId: id, status: 'cancelled' as any })
+            client.models.Appointment.update({ appointmentId: id as any, status: 'cancelled' as any })
           )
         );
       }
@@ -87,7 +87,7 @@ export async function POST(request: Request) {
         appointments
           .filter(a => a.data?.vendorId === vendorId)
           .map(a => client.models.Appointment.update({
-            appointmentId: a.data!.appointmentId,
+            appointmentId: a.data!.appointmentId as any,
             status: 'confirmed' as any,
           }))
       );
