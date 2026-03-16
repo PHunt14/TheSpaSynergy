@@ -83,7 +83,8 @@ export default function Settings() {
     try {
       const { data: vendorList } = await client.models.Vendor.list()
       setVendors(vendorList || [])
-      if (vendorList && vendorList.length > 0) setSelectedVendorId(vendorList[0].vendorId)
+      // Only set default if no vendor already selected (e.g. by loadCurrentUser)
+      if (!selectedVendorId && vendorList && vendorList.length > 0) setSelectedVendorId(vendorList[0].vendorId)
       setLoading(false)
     } catch (error) {
       console.error('Error loading vendors:', error)

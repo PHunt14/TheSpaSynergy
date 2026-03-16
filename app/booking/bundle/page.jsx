@@ -63,7 +63,7 @@ function BundleBookingContent() {
       </div>
 
       <Link
-        href={`/booking/bundle-time?services=${bundle.serviceIds.join(',')}`}
+        href={`/booking/bundle-time?bundleId=${bundle.bundleId}&services=${bundle.serviceIds.join(',')}`}
         className="cta"
       >
         Continue to Schedule

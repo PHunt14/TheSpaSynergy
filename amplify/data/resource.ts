@@ -61,6 +61,11 @@ const schema = a.schema({
       price: a.float().required(),
       discountPercent: a.float().default(0),
       isActive: a.boolean().default(true),
+      status: a.string(),
+      vendorConfirmations: a.json(),
+      appointmentIds: a.string().array(),
+      customer: a.json(),
+      dateTime: a.string(),
     })
     .identifier(['bundleId'])
     .authorization((allow) => [allow.publicApiKey()]),

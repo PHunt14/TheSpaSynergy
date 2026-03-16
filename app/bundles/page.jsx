@@ -24,7 +24,7 @@ export default function BundlesPage() {
     <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
       <h1>Service Bundles</h1>
       <p style={{ color: 'var(--color-text-light)', marginBottom: '3rem' }}>
-        Save with our curated service packages or create your own custom bundle.
+        Save with our curated service packages.
       </p>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '2rem' }}>
@@ -55,33 +55,13 @@ export default function BundlesPage() {
             </p>
           </div>
         ))}
-        
-        <div
-          onClick={() => router.push('/booking/custom-bundle')}
-          style={{
-            background: 'var(--color-accent)',
-            borderRadius: '12px',
-            padding: '2rem',
-            border: '2px dashed var(--color-primary)',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            minHeight: '200px',
-            cursor: 'pointer',
-            transition: 'transform 0.2s'
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
-          onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
-        >
-          <h3 style={{ marginBottom: '0.75rem', color: 'var(--color-primary)', fontSize: '1.3rem' }}>
-            Custom Bundle
-          </h3>
-          <p style={{ color: 'var(--color-text-light)', fontSize: '0.95rem', marginBottom: '1.5rem', textAlign: 'center' }}>
-            Create your own personalized spa day package
-          </p>
-        </div>
       </div>
+
+      {bundles.length === 0 && (
+        <p style={{ color: 'var(--color-text-light)', textAlign: 'center', marginTop: '2rem' }}>
+          No bundles available at this time. Check back soon!
+        </p>
+      )}
     </div>
   )
 }

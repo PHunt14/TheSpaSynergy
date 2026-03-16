@@ -8,6 +8,7 @@ import 'react-datepicker/dist/react-datepicker.css'
 
 function BundleTimeContent() {
   const params = useSearchParams()
+  const bundleId = params.get('bundleId')
   const serviceIds = params.get('services')?.split(',') || []
 
   const [selectedDate, setSelectedDate] = useState(new Date())
@@ -107,7 +108,7 @@ function BundleTimeContent() {
 
       {selectedTime && (
         <Link
-          href={`/booking/confirm?services=${serviceIds.join(',')}&date=${selectedDate.toISOString()}&time=${selectedTime}`}
+          href={`/booking/confirm?${bundleId ? `bundleId=${bundleId}&` : ''}services=${serviceIds.join(',')}&date=${selectedDate.toISOString()}&time=${selectedTime}`}
           className="cta"
         >
           Continue
