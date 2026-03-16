@@ -7,32 +7,44 @@ Vendors can receive SMS text alerts when new appointments are booked.
 - ✅ Opt-in/opt-out via Dashboard Settings
 - ✅ Custom phone number per vendor
 - ✅ Automatic alerts on new bookings
-- ✅ Uses AWS SNS (native AWS service)
+- ✅ Pluggable SMS provider (SNS, Twilio, or Console)
 
-## Setup Instructions
+## SMS Provider Configuration
 
-### 1. Deploy Backend Changes
-```bash
-npx ampx sandbox
+Set `SMS_PROVIDER` in `.env.local`:
+
+| Provider | Value | Use Case |
+|----------|-------|----------|
+| AWS SNS | `sns` (default) | Production |
+| Twilio | `twilio` | Dev/testing with real SMS |
+| Console | `console` | Quick local testing |
+
+### Console Mode (Quick Testing)
+```env
+SMS_PROVIDER=console
 ```
+Logs all SMS to terminal instead of sending.
 
-This will:
-- Update the Vendor model with SMS fields
-- Deploy the send-sms Lambda function
-- Configure SNS permissions
-
-### 2. Enable SMS for Testing (Dev)
-```bash
-node scripts/enable-sms-alerts.js
+### Twilio Mode (Real SMS for Dev)
+```env
+SMS_PROVIDER=twilio
+TWILIO_ACCOUNT_SID=your_account_sid
+TWILIO_AUTH_TOKEN=your_auth_token
+TWILIO_PHONE_NUMBER=+1234567890
 ```
+Sign up at twilio.com for free trial ($15 credit).
 
-This sets up the first vendor with phone number: 2403670395
+### SNS Mode (Production)
+```env
+SMS_PROVIDER=sns
+```
+Requires 10DLC or toll-free number registration.
 
-### 3. Configure in Dashboard
-Vendors can manage SMS settings at `/dashboard/settings`:
-- Toggle SMS alerts on/off
-- Enter their phone number (10 digits)
-- Save preferences
+### Test Phone Override
+Force all SMS to your phone (works with any provider):
+```env
+SMS_TEST_PHONE=2401234567
+```
 
 ## How It Works
 
@@ -77,12 +89,16 @@ SEND_SMS_FUNCTION_URL=<your-lambda-function-url>
 
 ## Testing
 
-1. Go to `/dashboard/settings`
-2. Enable SMS alerts
-3. Enter phone: 2403670395
-4. Save settings
-5. Create a test booking
-6. Check phone for SMS!
+1. Set `SMS_PROVIDER=console` in `.env.local`
+2. Run `npm run dev`
+3. Create a test booking
+4. Check terminal for SMS output
+
+For real SMS testing:
+1. Set `SMS_PROVIDER=twilio` with credentials
+2. Optionally set `SMS_TEST_PHONE` to your number
+3. Create a test booking
+4. Check your phone!
 
 ## Troubleshooting
 

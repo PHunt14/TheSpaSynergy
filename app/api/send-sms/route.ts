@@ -2,22 +2,10 @@ import { generateClient } from 'aws-amplify/data'
 import type { Schema } from '@/amplify/data/resource'
 import { Amplify } from 'aws-amplify'
 import config from '@/amplify_outputs.json'
-import { SNSClient, PublishCommand } from '@aws-sdk/client-sns'
+import { sendSms } from '@/lib/sms'
 
 Amplify.configure(config, { ssr: true })
 const client = generateClient<Schema>()
-const snsClient = new SNSClient({ region: process.env.AWS_REGION || 'us-east-1' })
-
-function formatPhone(phone: string): string {
-  return phone.startsWith('+') ? phone : `+1${phone.replace(/\D/g, '')}`
-}
-
-export async function sendSms(phoneNumber: string, message: string) {
-  await snsClient.send(new PublishCommand({
-    PhoneNumber: formatPhone(phoneNumber),
-    Message: message,
-  }))
-}
 
 export async function POST(request: Request) {
   try {
