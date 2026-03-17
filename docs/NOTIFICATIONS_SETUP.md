@@ -86,7 +86,10 @@ SNS requires an **originator** (sending number) for US SMS. Steps:
 3. Set in `.env.local`:
 ```env
 SMS_PROVIDER=sns
+SNS_ORIGINATION_NUMBER=+18005551234
 ```
+
+`SNS_ORIGINATION_NUMBER` is the toll-free or 10DLC number you registered. Without it, SNS will reject US SMS.
 
 **Pricing**: ~$0.00645 per SMS in the US.
 
@@ -220,6 +223,7 @@ Emails will include a banner showing the original recipient.
 | `SMS_PROVIDER` | `sns` | SMS provider: `sns`, `twilio`, or `console` |
 | `EMAIL_PROVIDER` | `ses` | Email provider: `ses` or `console` |
 | `SES_FROM_EMAIL` | `noreply@thespasynergy.com` | Sender email address |
+| `SNS_ORIGINATION_NUMBER` | _(none)_ | Registered toll-free or 10DLC number for SNS |
 | `SMS_TEST_PHONE` | _(none)_ | Override: route all SMS here |
 | `EMAIL_TEST_ADDRESS` | _(none)_ | Override: route all emails here |
 | `TWILIO_ACCOUNT_SID` | _(none)_ | Twilio account SID |
