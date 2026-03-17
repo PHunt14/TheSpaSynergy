@@ -92,7 +92,7 @@ Deployed via AWS Amplify with automatic CI/CD from Git. See `AMPLIFY_SETUP.md`.
 |-----|-------------|
 | `AMPLIFY_SETUP.md` | AWS Amplify deployment and environment setup |
 | `SQUARE_SETUP.md` | Square integration quick-start for vendors and admins |
-| `docs/SQUARE_MULTI_PARTY_PAYMENTS.md` | Technical details: OAuth, payment API, multi-vendor splits |
+| `docs/SQUARE_MULTI_PARTY_PAYMENTS.md` | Technical details: payment API, multi-vendor splits |
 | `docs/HOUSE_FEE_IMPLEMENTATION.md` | House fee business model, payment flow examples, configuration |
 | `docs/NOTIFICATIONS_SETUP.md` | SMS + email setup: providers, testing, production checklist |
 | `docs/CHERRY_BLOSSOM_USAGE.md` | Cherry blossom decorative component usage guide |
