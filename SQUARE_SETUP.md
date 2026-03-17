@@ -1,110 +1,43 @@
 # Square Integration Setup
 
-## Overview
+## For Vendors: Connecting Your Square Account
 
-Vendors manually enter their Square credentials (Access Token + Location ID) in Dashboard → Settings to receive split payments from bundle bookings.
-
-## For Vendors: How to Connect
-
-### 1. Get Your Square Credentials
-
-**Sandbox (Testing):**
-1. Go to https://developer.squareup.com
-2. Select your application
-3. **Sandbox tab** → Copy **Sandbox Access Token**
-4. **Sandbox Test Accounts** → Open → **Locations** → Copy **Location ID**
-
-**Production (Live):**
-1. Go to https://developer.squareup.com
-2. Select your application
-3. **Production tab** → Copy **Production Access Token**
-4. Your Square account → **Locations** → Copy **Location ID**
-
-### 2. Connect in Dashboard
-
-1. Login to Dashboard → Settings
-2. Select your vendor
-3. Click **"Connect Square Account"**
-4. Paste **Access Token** and **Location ID**
-5. Click **"Save & Connect"**
-
-Done! You'll now receive split payments automatically.
-
----
-
-## Payment Flow
-
-### Example: Bundle Booking
-
-**Customer books:**
-- Massage (Winsome) - $65
-- Facial (Kera) - $65
-- Total: $130
-
-**Payment splits:**
-- Kera (house fee from Winsome): $20
-- Kera (facial service): $65
-- Winsome (net after house fee): $45
-
-**Result:**
-- Kera receives: $85 in their Square account
-- Winsome receives: $45 in their Square account
-
----
-
-## House Fees
-
-**The Kera Studio** is the house and receives fees from vendors who sublet space:
-- Winsome Woods: Pays house fee
-- Selene Glow Studio: Pays house fee
-- The Kera Studio: No house fee (owns space)
-
-House fees are configured per service and automatically deducted during payment processing.
-
----
+1. Log in to the Vendor Dashboard → Settings
+2. Click **"Connect Square Account"**
+3. Authorize The Spa Synergy to access your Square account (OAuth)
+4. Done — you'll now receive split payments automatically
 
 ## For Platform Admin
 
 ### Environment Variables
 
-```bash
-# Platform Square credentials (Kera's account)
-SQUARE_ACCESS_TOKEN=YOUR_PLATFORM_ACCESS_TOKEN
-NEXT_PUBLIC_SQUARE_LOCATION_ID=YOUR_PLATFORM_LOCATION_ID
+Add to `.env.local`:
+```env
+SQUARE_APPLICATION_ID=sandbox-sq0idb-YOUR_ID
+SQUARE_APPLICATION_SECRET=sandbox-sq0csb-YOUR_SECRET
+SQUARE_ACCESS_TOKEN=EAAA...  # Platform (Kera's) access token
+NEXT_PUBLIC_SQUARE_APPLICATION_ID=sandbox-sq0idb-YOUR_ID
+NEXT_PUBLIC_SQUARE_LOCATION_ID=YOUR_LOCATION_ID
 NEXT_PUBLIC_SQUARE_ENVIRONMENT=sandbox  # or production
 ```
 
-### Database Schema
+### Square Developer Setup
 
-**Vendor fields:**
-- `squareAccessToken` - Vendor's Square access token
-- `squareLocationId` - Vendor's Square location ID
-- `squareConnectedAt` - Connection timestamp
-- `isHouse` - True for Kera (the house)
+1. Create an app at https://developer.squareup.com
+2. Set OAuth Redirect URL: `http://localhost:3000/api/square/oauth` (dev) or your production URL
+3. Note your Application ID and Application Secret
 
-**Service fields:**
-- `houseFeeEnabled` - Enable house fee for this service
-- `houseFeeAmount` - Dollar amount for house fee
-- `houseFeePercent` - Percentage (future use)
+### Going to Production
 
----
+1. Set `NEXT_PUBLIC_SQUARE_ENVIRONMENT=production`
+2. Update all credentials to production values
+3. Update OAuth redirect URL in Square dashboard
 
 ## Testing
 
-1. Create two Square developer accounts
-2. Each vendor enters their own credentials
-3. Book a bundle with services from multiple vendors
-4. Verify payment splits in each Square dashboard
+**Test Card**: `4111 1111 1111 1111`, CVV: `111`, Exp: any future date, Zip: `12345`
 
-**Test Card:**
-- Card: `4111 1111 1111 1111`
-- CVV: `111`
-- Exp: `12/25`
-- Zip: `12345`
+## Further Reading
 
----
-
-## Documentation
-
-- **House Fees:** `/docs/HOUSE_FEE_IMPLEMENTATION.md`
-- **Payment API:** `/docs/SQUARE_MULTI_PARTY_PAYMENTS.md`
+- **Payment splitting & OAuth technical details**: `docs/SQUARE_MULTI_PARTY_PAYMENTS.md`
+- **House fee configuration & examples**: `docs/HOUSE_FEE_IMPLEMENTATION.md`

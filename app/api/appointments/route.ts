@@ -3,13 +3,8 @@ import { cookies } from 'next/headers';
 import type { Schema } from '../../../amplify/data/resource';
 import config from '../../../amplify_outputs.json' with { type: 'json' };
 import { randomUUID } from 'crypto';
-import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
-
-const snsClient = new SNSClient({ region: process.env.AWS_REGION || 'us-east-1' });
-
-function formatPhone(phone: string): string {
-  return phone.startsWith('+') ? phone : `+1${phone.replace(/\D/g, '')}`;
-}
+import { sendSms } from '@/lib/sms';
+import { sendCustomerBookingEmail, sendVendorBookingEmail } from '@/lib/email';
 
 const client = generateServerClientUsingCookies<Schema>({
   config,
@@ -44,33 +39,52 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Failed to create appointment' }, { status: 500 });
     }
 
-    // Get service name for SMS messages
+    // Fetch service + vendor details for notifications
     let serviceName = 'your service';
+    let serviceDuration = 0;
+    let servicePrice = 0;
+    let vendorName = '';
+    let vendorEmail = '';
     try {
-      const { data: service } = await client.models.Service.get({ serviceId });
-      if (service?.name) serviceName = service.name;
-    } catch (e) { /* use default */ }
+      const [serviceRes, vendorRes] = await Promise.all([
+        client.models.Service.get({ serviceId }),
+        client.models.Vendor.get({ vendorId }),
+      ]);
+      if (serviceRes.data?.name) serviceName = serviceRes.data.name;
+      serviceDuration = serviceRes.data?.duration || 0;
+      servicePrice = serviceRes.data?.price || 0;
+      vendorName = vendorRes.data?.name || '';
+      vendorEmail = vendorRes.data?.email || '';
+    } catch (e) { /* use defaults */ }
 
     const formattedDateTime = new Date(dateTime).toLocaleString('en-US', {
       month: 'short', day: 'numeric', year: 'numeric',
       hour: 'numeric', minute: '2-digit', hour12: true
     });
 
-    // Send confirmation SMS to customer (non-blocking, only if opted in)
+    // --- Customer notifications (non-blocking) ---
     if (customer.phone && customer.smsOptIn) {
       const customerMsg = `Booking Submitted!\n\nService: ${serviceName}\nDate/Time: ${formattedDateTime}\n\nWe look forward to seeing you!\n\nThe Spa Synergy\nReply STOP to opt out`;
-      snsClient.send(new PublishCommand({
-        PhoneNumber: formatPhone(customer.phone),
-        Message: customerMsg,
-      })).catch(err => console.error('Customer SMS failed:', err));
+      sendSms(customer.phone, customerMsg).catch(err => console.error('Customer SMS failed:', err));
+    }
+    if (customer.email) {
+      sendCustomerBookingEmail({
+        to: customer.email, serviceName, vendorName, dateTime, duration: serviceDuration, price: servicePrice,
+      }).catch(err => console.error('Customer email failed:', err));
     }
 
-    // Trigger vendor SMS alert (non-blocking)
+    // --- Vendor notifications (non-blocking) ---
     fetch(`${request.headers.get('origin')}/api/send-sms`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ appointmentId, vendorId })
     }).catch(err => console.error('Vendor SMS failed:', err));
+    if (vendorEmail) {
+      sendVendorBookingEmail({
+        to: vendorEmail, customerName: customer.name, customerPhone: customer.phone || '',
+        customerEmail: customer.email || '', serviceName, dateTime,
+      }).catch(err => console.error('Vendor email failed:', err));
+    }
 
     return Response.json({ 
       success: true, 
