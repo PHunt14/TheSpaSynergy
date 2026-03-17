@@ -4,7 +4,7 @@ body {
   background: var(--color-bg);
   color: var(--color-text);
   font-family: var(--font-allura), cursive;
-  font-size: 1.5rem;
+  font-size: 1.125rem;
 }
 
 a {
@@ -26,7 +26,8 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 p {
-  font-size: 1.5rem;
+  font-size: 1.25rem;
+  line-height: 1.7;
 }
 
 .hero {

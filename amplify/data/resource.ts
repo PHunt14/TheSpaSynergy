@@ -21,6 +21,7 @@ const schema = a.schema({
       isHouse: a.boolean().default(false),
       isActive: a.boolean().default(true),
       workingHours: a.json(),
+      saunaHours: a.json(),
       bufferMinutes: a.integer().default(15),
       socialFacebook: a.string(),
       socialInstagram: a.string(),

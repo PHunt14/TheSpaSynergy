@@ -47,7 +47,7 @@ export default function BundlesPage() {
             <h3 style={{ marginBottom: '0.75rem', color: 'var(--color-primary)', fontSize: '1.3rem' }}>
               {bundle.name}
             </h3>
-            <p style={{ color: 'var(--color-text-light)', fontSize: '0.95rem', marginBottom: '1rem' }}>
+            <p style={{ color: 'var(--color-text-light)', fontSize: '1.1rem', marginBottom: '1rem' }}>
               {bundle.description}
             </p>
             <p style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1.5rem' }}>
