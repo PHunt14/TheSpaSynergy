@@ -8,39 +8,21 @@ Luxury spa and wellness booking platform serving Fort Ritchie, MD and surroundin
 - **Backend**: AWS Amplify Gen 2
 - **Database**: DynamoDB
 - **Authentication**: AWS Cognito
+- **Payments**: Square (multi-party splits)
+- **Notifications**: AWS SNS (SMS), AWS SES (email), Twilio (dev SMS)
 - **Hosting**: AWS Amplify
 - **Node**: v22.16.0
-
-## Features
-
-### Public Site
-- Homepage with service categories
-- Vendor directory with detailed profiles
-- Multi-step booking flow (vendor → service → time → confirmation)
-- Contact page with vendor information and map
-- SEO optimized with metadata and structured data
-
-### Vendor Dashboard
-- Cognito authentication with 1-hour inactivity timeout
-- Role-based access (owner, admin, vendor)
-- Owner role: exclusive access to Square payment integration
-- Admin role: can access Square payment integration and manage all vendors
-- Appointments management
-- Services management (add, edit, toggle active/inactive)
-- Staff management with inline editing
-- Settings page
-
-## Service Areas
-
-**Maryland**: Fort Ritchie, Hagerstown, Thurmont, Smithsburg, Sabillasville, Leitersburg, Frederick
-
-**Pennsylvania**: Waynesboro, Blue Ridge Summit, Gettysburg, Chambersburg
 
 ## Local Development
 
 ```bash
 npm install
 npm run dev
+```
+
+For sandbox backend:
+```bash
+npx ampx sandbox
 ```
 
 ## Database Seeding
@@ -51,80 +33,89 @@ node scripts/seed-amplify.js
 
 ## Deployment
 
-Deployed via AWS Amplify with automatic CI/CD from Git repository.
+Deployed via AWS Amplify with automatic CI/CD from Git. See `AMPLIFY_SETUP.md`.
 
+## Service Areas
 
-## Recent Updates
+**Maryland**: Fort Ritchie, Hagerstown, Thurmont, Smithsburg, Sabillasville, Leitersburg, Frederick
 
-### Square Multi-Party Payment Integration
-- ✅ Vendors can connect Square accounts via OAuth in Dashboard → Settings
-- ✅ Bundle payments automatically split to each vendor's Square account
-- ✅ Secure authentication - no credential sharing required
-- ✅ Direct deposits to vendor Square accounts
-- See `SQUARE_SETUP.md` for setup instructions
-- See `docs/SQUARE_MULTI_PARTY_PAYMENTS.md` for technical details
+**Pennsylvania**: Waynesboro, Blue Ridge Summit, Gettysburg, Chambersburg
 
+---
 
+## Acceptance Criteria
 
-## Issues
+### Booking Flow
 
-- should send an email to the person that signed up for an appointment
-- text not coming through to vendor phone
-- Relaxation, Beauty, and Wellness blocks should go to those specific services
-- Recurring services (sauna as first service)
-- for "Rebook" suggest rebooking dates after checkout? Skip to 4+ weeks into the future on a calendar?
-- typically keep it on "week of" but checks "today" appointments at least daily.
-- Typically keep the day up all day to be able to see upcoming appointments 
-- remove old vendors
-- some services offered by all or individuals
-- some services hosted by "the house" and then a separate vendor performs the action so we need a "house" and "vendor" fees for services
-- update Kera services
-- auto rent payment?
-- adjust the booking flow
-    - book -> what day/week -> services
-- have intros that allow individual booking, but also allow... not bundling, but being able to select multiple services and then request a week.
+- Customers can browse vendors, view services, and book appointments through a multi-step flow
+- Customers can select multiple services and book them together
+- When a vendor's Square account is connected, customers can pay online at checkout
+- Customers who don't pay online will pay in-person at the appointment
+- On booking, both the customer and vendor receive:
+  - An **email** notification with appointment details
+  - An **SMS** notification (customer must opt in; vendor must enable in settings)
+- Vendors can mark services as **"requires confirmation"** — the customer selects a preferred date/time, but the appointment stays pending until the vendor confirms. Both parties are notified on scheduling and again on confirmation
+- **House fees**: The house vendor (building owner) can take a configurable fee from services performed by vendors who sublet space. This is automatically handled during payment splitting
+
+### Vendor Dashboard
+
+- Accessible only with Cognito credentials (1-hour inactivity timeout)
+- **Role-based access**:
+  - **Owner**: full access including Square payment integration
+  - **Admin**: can manage all vendors and access Square integration
+  - **Vendor**: can only see their own data
+- A staff member for one vendor cannot see appointments or payment info for another vendor
+- Vendors can:
+  - View appointments and filter by day/week
+  - View payment totals by week, month, or year
+  - Add, edit, and deactivate services
+  - Assign which staff members can perform each service (based on staff logged in for that vendor, excluding admins)
+  - Cancel, reschedule, and confirm appointments
+  - Add and manage staff members
+  - Connect their Square account (Settings)
+  - Enable/disable SMS alerts and set their alert phone number (Settings)
+  - Add social media links (Facebook, Instagram, TikTok, website)
+  - Update contact information
+
+### Public Vendor Pages
+
+- Each vendor has a profile page with description and staff member introductions (with photos)
+- Contact information is displayed on vendor pages and the contact page
+- Vendor pages link to that vendor's available services
+- A services page lists all services across vendors; customers can multi-select to book several at once
+
+---
+
+## Documentation
+
+| Doc | Description |
+|-----|-------------|
+| `AMPLIFY_SETUP.md` | AWS Amplify deployment and environment setup |
+| `SQUARE_SETUP.md` | Square integration quick-start for vendors and admins |
+| `docs/SQUARE_MULTI_PARTY_PAYMENTS.md` | Technical details: OAuth, payment API, multi-vendor splits |
+| `docs/HOUSE_FEE_IMPLEMENTATION.md` | House fee business model, payment flow examples, configuration |
+| `docs/NOTIFICATIONS_SETUP.md` | SMS + email setup: providers, testing, production checklist |
+| `docs/CHERRY_BLOSSOM_USAGE.md` | Cherry blossom decorative component usage guide |
+
+---
+
+## Known Issues
+
+- [ ] Relaxation, Beauty, and Wellness category blocks should link to filtered service lists
+- [ ] Recurring services not yet supported (e.g., sauna as a recurring first service)
+- [ ] "Rebook" should suggest dates 4+ weeks out after checkout
+- [ ] Dashboard defaults to "week of" view but should also surface "today" prominently
+- [ ] Need to remove inactive/old vendors from public pages
+- [ ] Some services are offered by multiple vendors — need shared service support
+- [ ] Update Kera's service list
 
 ## Future Enhancements
 
-### Square Catalog Integration
-Currently, in-person payments allow vendors to charge custom amounts in their Square POS app. Future enhancement could integrate with Square's catalog system:
-- Add `squareCatalogItemId` field to services
-- Automatically create charges using Square catalog items
-- Sync pricing between The Spa Synergy and Square
-- Better reporting and analytics through Square's inventory system
-- Automatic service tracking and reconciliation
-### Other
-- a vendor should be able to export or text them selves a link to the appointments for the day to their phone in the format of their choosing
-
-
-
-
-
-# Current Acceptance Criteria for The Spa Synergy
-
-## Booking flow
-- Vendors can collect payment from the website when their square accounts are connected
-- Vendors will get a text message when an appointment is scheduled
-- Customers will get a text message when an appointment is scheduled
-- vendors can set services as "requires confirmation" and the customer can select the desired date/time and this then gives the vendor an opportunity to confirm the date/time for the appointment.  The customer and vendor should get a text message what an appointment is both scheduled and then in this case when it is confirmed.
-- some services are charged a "house fee" in that the "house" (a specific vendor that owns the building) takes a portion of the total for providing the area for the service
-
-## Vendor dashboard
-- There is a vendor dashboard that can only be accessed with credentials
-- Vendors can see appointments and paid amounts on the vendor dashboard
-- Vendors can see total paid amounts for a time period; week, month, year on the vendor dashboard
-- Vendors can add, change, and remove services on the vendor dashboard
-- Vendors can connect their square accounts on the vendor dashboard
-- Vendors can add other staff members on the vendor dashboard
-- Vendors can add links to their social media pages on the vendor dashboard
-- Vendors can update and add contact information on the Vendor dashboard
-- a staff member for one vendor cannot see the appointments or payment information for another vendor
-- a vendor can cancel, reschedule, and confirm appointments from the vendor dashboard
-- a vendor should be able to set whether all of only a selection of employees can complete a service (how do we define the list of employees, I think from the employees able to login for a specific vendor, not including admins)
-
-## Vendor Information
-- Vendors have a page with a brief description and introduction of staff members with pictures
-- contact information is displayed on the vendor pages and the contact page
-- from the vendor pages you should also be able to access their services
-- there is a page where a customer can select from a list of all services, they can multi-select form here to schedule multiple services
-
+- [ ] **Booking flow redesign**: book → pick day/week → select services (instead of vendor-first)
+- [ ] **Multi-service week requests**: select multiple services and request availability for a given week
+- [ ] **Square Catalog sync**: link services to Square catalog items for automatic pricing/reporting
+- [ ] **Appointment export**: vendors can text themselves a link to the day's appointments
+- [ ] **Appointment reminders**: SMS/email reminders before appointments
+- [ ] **Cancellation notifications**: SMS/email on cancellation
+- [ ] **Calendar sync**: Google/Apple calendar integration
+- [ ] **Auto rent payment**: automated rent collection from subletting vendors
