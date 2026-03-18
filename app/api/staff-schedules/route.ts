@@ -37,15 +37,17 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Staff name and vendor required' }, { status: 400 });
     }
 
+    const id = `staff-${vendorId}-${staffName.toLowerCase().replace(/\s+/g, '-')}-${randomUUID().slice(0, 4)}`;
+
     const { data, errors } = await client.models.StaffSchedule.create({
-      visibleId: `staff-${vendorId}-${staffName.toLowerCase().replace(/\s+/g, '-')}-${randomUUID().slice(0, 4)}`,
+      visibleId: id,
       staffName,
       staffEmail: staffEmail || '',
       vendorId,
       schedule: JSON.stringify(schedule || {}),
       autoAssignRules: autoAssignRules ? JSON.stringify(autoAssignRules) : null,
       isActive: true,
-    });
+    } as any);
 
     if (errors) return Response.json({ error: 'Failed to create' }, { status: 500 });
     return Response.json({ success: true, schedule: data });
@@ -70,7 +72,7 @@ export async function PATCH(request: Request) {
     if (autoAssignRules !== undefined) updateData.autoAssignRules = autoAssignRules ? JSON.stringify(autoAssignRules) : null;
     if (isActive !== undefined) updateData.isActive = isActive;
 
-    const { data, errors } = await client.models.StaffSchedule.update(updateData);
+    const { data, errors } = await client.models.StaffSchedule.update(updateData as any);
     if (errors) return Response.json({ error: 'Failed to update' }, { status: 500 });
     return Response.json({ success: true, schedule: data });
   } catch (error) {
@@ -87,7 +89,7 @@ export async function DELETE(request: Request) {
       return Response.json({ error: 'visibleId required' }, { status: 400 });
     }
 
-    const { errors } = await client.models.StaffSchedule.delete({ visibleId });
+    const { errors } = await client.models.StaffSchedule.delete({ visibleId } as any);
     if (errors) return Response.json({ error: 'Failed to delete' }, { status: 500 });
     return Response.json({ success: true });
   } catch (error) {
