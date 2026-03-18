@@ -3,9 +3,10 @@ import './styles/variables.css'
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'
 import CherryBlossom from './components/CherryBlossom'
-import { Allura } from 'next/font/google'
+import { Allura, Sacramento } from 'next/font/google'
 
 const allura = Allura({ subsets: ['latin'], weight: '400', variable: '--font-allura' })
+const sacramento = Sacramento({ subsets: ['latin'], weight: '400', variable: '--font-sacramento' })
 
 export const metadata = {
   title: 'Spa Synergy',
@@ -14,7 +15,7 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" className={allura.variable}>
+    <html lang="en" className={`${allura.variable} ${sacramento.variable}`}>
       <body className="layout-body">
         <Navbar />
         <div className="layout-content">
