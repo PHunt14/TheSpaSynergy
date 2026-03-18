@@ -1,12 +1,12 @@
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses'
 
-const EMAIL_PROVIDER = process.env.EMAIL_PROVIDER || 'ses' // 'ses' | 'console'
-const FROM_EMAIL = process.env.SES_FROM_EMAIL || 'noreply@thespasynergy.com'
-
 async function sendViaSes(to: string, subject: string, htmlBody: string) {
-  const sesClient = new SESClient({ region: process.env.AWS_REGION || 'us-east-1' })
+  const fromEmail = process.env.SES_FROM_EMAIL || 'noreply@thespasynergy.com'
+  const region = process.env.AWS_REGION || 'us-east-1'
+  console.log(`📧 SES: sending from ${fromEmail} to ${to} (region: ${region})`)
+  const sesClient = new SESClient({ region })
   await sesClient.send(new SendEmailCommand({
-    Source: FROM_EMAIL,
+    Source: fromEmail,
     Destination: { ToAddresses: [to] },
     Message: {
       Subject: { Data: subject },
@@ -16,8 +16,9 @@ async function sendViaSes(to: string, subject: string, htmlBody: string) {
 }
 
 function sendViaConsole(to: string, subject: string, htmlBody: string) {
+  const fromEmail = process.env.SES_FROM_EMAIL || 'noreply@thespasynergy.com'
   console.log('\n📧 EMAIL (CONSOLE MODE)')
-  console.log(`From: ${FROM_EMAIL}`)
+  console.log(`From: ${fromEmail}`)
   console.log(`To: ${to}`)
   console.log(`Subject: ${subject}`)
   console.log(`Body: ${htmlBody.replace(/<[^>]*>/g, '')}\n`)
@@ -31,7 +32,10 @@ export async function sendEmail(to: string, subject: string, htmlBody: string) {
     htmlBody = `<p style="background:#fff3cd;padding:8px;border-radius:4px;"><strong>[TEST — Original recipient: ${to}]</strong></p>${htmlBody}`
   }
 
-  switch (EMAIL_PROVIDER) {
+  const provider = process.env.EMAIL_PROVIDER || 'ses'
+  console.log(`📧 Email provider: ${provider}`)
+
+  switch (provider) {
     case 'console':
       sendViaConsole(targetEmail, subject, htmlBody)
       break
