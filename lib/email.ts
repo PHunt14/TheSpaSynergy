@@ -89,19 +89,22 @@ export async function sendCustomerBookingEmail(params: {
   dateTime: string
   duration: number
   price: number
+  withName?: string
 }) {
-  const { to, serviceName, vendorName, dateTime, duration, price } = params
-  const subject = 'Booking Confirmation - The Spa Synergy'
+  const { to, serviceName, vendorName, dateTime, duration, price, withName } = params
+  const subject = 'Booking Submitted - The Spa Synergy'
+  const withLine = withName ? `<p><strong>With:</strong> ${withName}</p>` : ''
   const html = emailWrapper(`
-    <h2 style="color: #8B4789;">Booking Confirmed</h2>
+    <h2 style="color: #8B4789;">Booking Submitted!</h2>
     <p>Thank you for booking with The Spa Synergy!</p>
     <div style="background: #f9f9f9; padding: 20px; border-radius: 8px; margin: 20px 0;">
-      <p><strong>Vendor:</strong> ${vendorName}</p>
       <p><strong>Service:</strong> ${serviceName}</p>
-      <p><strong>Date & Time:</strong> ${formatDateTime(dateTime)}</p>
+      ${withLine}
+      <p><strong>Date &amp; Time:</strong> ${formatDateTime(dateTime)}</p>
       <p><strong>Duration:</strong> ${duration} minutes</p>
       <p><strong>Price:</strong> $${price}</p>
     </div>
+    <p>You will receive a confirmation once your appointment is confirmed by the vendor.</p>
     <p>If you need to cancel or reschedule, please contact us at least 24 hours in advance.</p>
     <p>We look forward to seeing you!</p>`)
 
@@ -117,16 +120,18 @@ export async function sendVendorBookingEmail(params: {
   dateTime: string
 }) {
   const { to, customerName, customerPhone, customerEmail, serviceName, dateTime } = params
-  const subject = 'New Booking Alert - The Spa Synergy'
+  const subject = 'New Booking - The Spa Synergy'
   const html = emailWrapper(`
     <h2 style="color: #8B4789;">New Booking!</h2>
+    <p>A new appointment has been submitted and needs your attention.</p>
     <div style="background: #f9f9f9; padding: 20px; border-radius: 8px; margin: 20px 0;">
       <p><strong>Service:</strong> ${serviceName}</p>
-      <p><strong>Date & Time:</strong> ${formatDateTime(dateTime)}</p>
+      <p><strong>Date &amp; Time:</strong> ${formatDateTime(dateTime)}</p>
       <p><strong>Customer:</strong> ${customerName}</p>
       <p><strong>Phone:</strong> ${customerPhone}</p>
       <p><strong>Email:</strong> ${customerEmail}</p>
-    </div>`)
+    </div>
+    <p>Please log in to the dashboard to confirm or manage this appointment.</p>`)
 
   await sendEmail(to, subject, html)
 }

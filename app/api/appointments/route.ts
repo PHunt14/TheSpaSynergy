@@ -40,12 +40,13 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Failed to create appointment' }, { status: 500 });
     }
 
-    // Fetch service + vendor details for notifications
+    // Fetch service + vendor + staff details for notifications
     let serviceName = 'your service';
     let serviceDuration = 0;
     let servicePrice = 0;
     let vendorName = '';
     let vendorEmail = '';
+    let staffName = '';
     try {
       const [serviceRes, vendorRes] = await Promise.all([
         client.models.Service.get({ serviceId }),
@@ -56,6 +57,12 @@ export async function POST(request: Request) {
       servicePrice = serviceRes.data?.price || 0;
       vendorName = vendorRes.data?.name || '';
       vendorEmail = vendorRes.data?.email || '';
+      
+      // Get staff name if staffId provided
+      if (staffId) {
+        const staffRes = await client.models.StaffSchedule.get({ visibleId: staffId });
+        staffName = staffRes.data?.staffName || '';
+      }
     } catch (e) { /* use defaults */ }
 
     const formattedDateTime = new Date(dateTime).toLocaleString('en-US', {
@@ -65,14 +72,18 @@ export async function POST(request: Request) {
 
     // --- Send notifications (must await before returning on Amplify/Lambda) ---
     const notifications: Promise<void>[] = [];
+    
+    // Build "with" line: use staff first name if available, otherwise vendor first name
+    const withName = staffName?.split(' ')[0] || vendorName?.split(' ')[0] || '';
 
     if (customer.phone && customer.smsOptIn) {
-      const customerMsg = `Booking Submitted!\n\nService: ${serviceName}\nDate/Time: ${formattedDateTime}\n\nWe look forward to seeing you!\n\nThe Spa Synergy\nReply STOP to opt out`;
+      const withLine = withName ? `With: ${withName}\n` : '';
+      const customerMsg = `Booking Submitted!\n\nService: ${serviceName}\n${withLine}Date/Time: ${formattedDateTime}\n\nWe look forward to seeing you!\n\nThe Spa Synergy\nReply STOP to opt out`;
       notifications.push(sendSms(customer.phone, customerMsg).catch(err => console.error('Customer SMS failed:', err)) as Promise<void>);
     }
     if (customer.email) {
       notifications.push(sendCustomerBookingEmail({
-        to: customer.email, serviceName, vendorName, dateTime, duration: serviceDuration, price: servicePrice,
+        to: customer.email, serviceName, vendorName, dateTime, duration: serviceDuration, price: servicePrice, withName,
       }).catch(err => console.error('Customer email failed:', err)));
     }
 
