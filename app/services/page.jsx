@@ -90,7 +90,7 @@ export default function ServicesPage() {
       <p style={{ color: 'var(--color-text-light)', textAlign: 'center', marginBottom: '0.5rem' }}>
         Browse all of our services and book your next appointment.
       </p>
-      <p style={{ color: 'var(--color-text-light)', textAlign: 'center', marginBottom: '3rem', fontSize: '0.9rem' }}>
+      <p style={{ color: 'var(--color-text-light)', textAlign: 'center', marginBottom: '3rem', fontSize: '1.1rem' }}>
         Select one or more services, then continue to book.
       </p>
 
@@ -139,11 +139,11 @@ export default function ServicesPage() {
                             <span style={{ fontSize: '1.2rem', opacity: 0.7 }}>{isSelected ? '✓' : '+'}</span>
                           </div>
                           {service.description && (
-                            <div style={{ fontSize: '0.85rem', opacity: 0.9, margin: '0.25rem 0' }}>
+                            <div style={{ fontSize: '1rem', opacity: 0.9, margin: '0.25rem 0' }}>
                               {service.description}
                             </div>
                           )}
-                          <div style={{ fontSize: '0.9rem', opacity: 0.8 }}>
+                          <div style={{ fontSize: '1.05rem', opacity: 0.8 }}>
                             {service.duration} min • ${service.price}
                           </div>
                         </div>

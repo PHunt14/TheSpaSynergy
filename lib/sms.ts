@@ -11,6 +11,15 @@ async function sendViaSns(phoneNumber: string, message: string) {
   await snsClient.send(new PublishCommand({
     PhoneNumber: formatPhone(phoneNumber),
     Message: message,
+    // Required for US SMS — your registered toll-free or 10DLC number
+    ...(process.env.SNS_ORIGINATION_NUMBER && {
+      MessageAttributes: {
+        'AWS.SNS.SMS.OriginationNumber': {
+          DataType: 'String',
+          StringValue: process.env.SNS_ORIGINATION_NUMBER,
+        },
+      },
+    }),
   }))
 }
 

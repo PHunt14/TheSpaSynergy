@@ -2,28 +2,18 @@
 
 ## Overview
 
-Automatic payment splitting for bundle bookings across multiple vendors using Square's OAuth and Payment APIs.
+Automatic payment splitting for bundle bookings across multiple vendors using Square's Payment API with `additionalRecipients`.
 
 ## How It Works
 
-1. **Vendor connects** Square account via OAuth (Dashboard → Settings)
+1. **Vendor connects** by entering their Square credentials in Dashboard → Settings (Application ID, Access Token, Location ID)
 2. **Customer books** a bundle with services from multiple vendors
 3. **Customer pays once** — single payment transaction
-4. **Square splits funds** — automatically distributes to each vendor's Square account
+4. **Square splits funds** — house vendor is the primary recipient, other vendors receive their portions via `additionalRecipients`
 
-## API Endpoints
+## Payment API
 
-### OAuth
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/square/connect` | POST | Generates OAuth authorization URL |
-| `/api/square/oauth` | GET | OAuth callback — exchanges code for access token |
-| `/api/square/disconnect` | POST | Revokes token and clears vendor credentials |
-
-### Payment
-
-#### `POST /api/payment`
+### `POST /api/payment`
 
 **Single vendor:**
 ```json
@@ -49,34 +39,38 @@ Automatic payment splitting for bundle bookings across multiple vendors using Sq
 
 House fees are automatically calculated and consolidated. See `docs/HOUSE_FEE_IMPLEMENTATION.md` for details.
 
+## Payment Flow
+
+### Single Vendor
+1. Look up vendor's `squareAccessToken` and `squareLocationId`
+2. Fall back to platform credentials (`SQUARE_ACCESS_TOKEN`, `NEXT_PUBLIC_SQUARE_LOCATION_ID`) if vendor isn't connected
+3. Create payment via Square Payments API
+
+### Bundle (Multi-Vendor)
+1. Identify house vendor (`isHouse: true`)
+2. Consolidate payments by vendor (combine house fees + service amounts)
+3. Validate all non-house vendors have `squareAccessToken` set
+4. Create payment with house vendor as primary, others as `additionalRecipients`
+
 ## Vendor Model Fields
 
 | Field | Description |
 |-------|-------------|
-| `squareAccessToken` | OAuth access token |
-| `squareRefreshToken` | OAuth refresh token |
-| `squareLocationId` | Vendor's Square location ID |
-| `squareMerchantId` | Vendor's Square merchant ID |
-| `squareTokenExpiresAt` | Token expiration timestamp |
+| `squareApplicationId` | Vendor's Square Application ID |
+| `squareAccessToken` | Vendor's Square Access Token |
+| `squareLocationId` | Vendor's Square Location ID |
 | `squareConnectedAt` | Connection timestamp |
-
-## Security
-
-- OAuth scopes limited to: `MERCHANT_PROFILE_READ`, `PAYMENTS_WRITE`, `PAYMENTS_READ`
-- Vendors can disconnect anytime, revoking access
-- Token refresh should be implemented before expiration
 
 ## Troubleshooting
 
 | Issue | Fix |
 |-------|-----|
-| "Vendor not connected to Square" | Vendor needs to connect in Dashboard → Settings |
-| "No locations found for merchant" | Vendor needs to create a location in Square dashboard |
-| OAuth callback fails | Verify `NEXT_PUBLIC_APP_URL` matches redirect URL in Square |
+| "Vendor not connected to Square" | Vendor needs to enter credentials in Dashboard → Settings |
+| "Payment configuration error" | No access token — check vendor or platform credentials |
+| "House vendor not configured" | Ensure one vendor has `isHouse: true` in the database |
 
 ## Future Enhancements
 
-- [ ] Automatic token refresh
+- [ ] OAuth flow instead of manual credential entry
 - [ ] Platform commission deduction
-- [ ] Payout scheduling
-- [ ] Dispute handling workflow
+- [ ] Square Catalog integration for automatic pricing

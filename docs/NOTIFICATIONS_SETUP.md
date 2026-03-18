@@ -86,7 +86,10 @@ SNS requires an **originator** (sending number) for US SMS. Steps:
 3. Set in `.env.local`:
 ```env
 SMS_PROVIDER=sns
+SNS_ORIGINATION_NUMBER=+18005551234
 ```
+
+`SNS_ORIGINATION_NUMBER` is the toll-free or 10DLC number you registered. Without it, SNS will reject US SMS.
 
 **Pricing**: ~$0.00645 per SMS in the US.
 
@@ -215,13 +218,16 @@ Emails will include a banner showing the original recipient.
 
 ## Environment Variables Reference
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `SMS_PROVIDER` | `sns` | SMS provider: `sns`, `twilio`, or `console` |
-| `EMAIL_PROVIDER` | `ses` | Email provider: `ses` or `console` |
-| `SES_FROM_EMAIL` | `noreply@thespasynergy.com` | Sender email address |
-| `SMS_TEST_PHONE` | _(none)_ | Override: route all SMS here |
-| `EMAIL_TEST_ADDRESS` | _(none)_ | Override: route all emails here |
-| `TWILIO_ACCOUNT_SID` | _(none)_ | Twilio account SID |
-| `TWILIO_AUTH_TOKEN` | _(none)_ | Twilio auth token |
-| `TWILIO_PHONE_NUMBER` | _(none)_ | Twilio sender number |
+Set these in `.env.local` for local development and in **Amplify Console → App Settings → Environment variables** for deployed environments.
+
+| Variable | Default | Description | Production? |
+|----------|---------|-------------|-------------|
+| `SMS_PROVIDER` | `sns` | SMS provider: `sns`, `twilio`, or `console` | `sns` |
+| `SNS_ORIGINATION_NUMBER` | _(none)_ | Registered toll-free or 10DLC number for SNS | ✅ Required |
+| `EMAIL_PROVIDER` | `ses` | Email provider: `ses` or `console` | `ses` |
+| `SES_FROM_EMAIL` | `noreply@thespasynergy.com` | Sender email address | ✅ Required |
+| `SMS_TEST_PHONE` | _(none)_ | Override: route all SMS here | ❌ Do not set |
+| `EMAIL_TEST_ADDRESS` | _(none)_ | Override: route all emails here | ❌ Do not set |
+| `TWILIO_ACCOUNT_SID` | _(none)_ | Twilio account SID | ❌ Dev only |
+| `TWILIO_AUTH_TOKEN` | _(none)_ | Twilio auth token | ❌ Dev only |
+| `TWILIO_PHONE_NUMBER` | _(none)_ | Twilio sender number | ❌ Dev only |

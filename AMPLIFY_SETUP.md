@@ -75,9 +75,27 @@ Your Amplify service role needs CloudFormation and DynamoDB permissions:
 6. Name it: `AmplifyCloudFormationDeploy`
 
 ### 6. Configure Environment Variables
-In Amplify Console → Environment variables, add:
-- `AWS_REGION`: `us-east-1`
-- Any other env vars from `.env.local.example`
+
+In Amplify Console → App Settings → Environment variables, add all variables from `.env.local.example`.
+
+**Required for production:**
+
+| Variable | Value | Notes |
+|----------|-------|-------|
+| `AWS_REGION` | `us-east-1` | |
+| `SES_FROM_EMAIL` | `noreply@thespasynergy.com` | Must be verified in SES |
+| `SMS_PROVIDER` | `sns` | |
+| `SNS_ORIGINATION_NUMBER` | `+1XXXXXXXXXX` | Your registered toll-free or 10DLC number |
+| `EMAIL_PROVIDER` | `ses` | |
+| `SQUARE_ACCESS_TOKEN` | `EAAA...` | Platform (Kera's) production token |
+| `NEXT_PUBLIC_SQUARE_APPLICATION_ID` | `sq0idp-...` | Production Square app ID |
+| `NEXT_PUBLIC_SQUARE_LOCATION_ID` | Your location ID | |
+| `NEXT_PUBLIC_SQUARE_ENVIRONMENT` | `production` | |
+| `NEXT_PUBLIC_APP_URL` | `https://yourdomain.com` | Used for OAuth callbacks |
+
+**Do NOT set in production:** `SMS_TEST_PHONE`, `EMAIL_TEST_ADDRESS`, `TWILIO_*` vars, `SMS_PROVIDER=console`/`twilio`
+
+See `docs/NOTIFICATIONS_SETUP.md` for notification variable details and `SQUARE_SETUP.md` for Square variable details.
 
 ### 7. Deploy Dev Environment
 ```bash
