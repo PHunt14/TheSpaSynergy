@@ -63,29 +63,33 @@ export async function POST(request: Request) {
       hour: 'numeric', minute: '2-digit', hour12: true
     });
 
-    // --- Customer notifications (non-blocking) ---
+    // --- Send notifications (must await before returning on Amplify/Lambda) ---
+    const notifications: Promise<void>[] = [];
+
     if (customer.phone && customer.smsOptIn) {
       const customerMsg = `Booking Submitted!\n\nService: ${serviceName}\nDate/Time: ${formattedDateTime}\n\nWe look forward to seeing you!\n\nThe Spa Synergy\nReply STOP to opt out`;
-      sendSms(customer.phone, customerMsg).catch(err => console.error('Customer SMS failed:', err));
+      notifications.push(sendSms(customer.phone, customerMsg).catch(err => console.error('Customer SMS failed:', err)) as Promise<void>);
     }
     if (customer.email) {
-      sendCustomerBookingEmail({
+      notifications.push(sendCustomerBookingEmail({
         to: customer.email, serviceName, vendorName, dateTime, duration: serviceDuration, price: servicePrice,
-      }).catch(err => console.error('Customer email failed:', err));
+      }).catch(err => console.error('Customer email failed:', err)));
     }
 
-    // --- Vendor notifications (non-blocking) ---
-    fetch(`${request.headers.get('origin')}/api/send-sms`, {
+    notifications.push(fetch(`${request.headers.get('origin')}/api/send-sms`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ appointmentId, vendorId })
-    }).catch(err => console.error('Vendor SMS failed:', err));
+    }).then(() => {}).catch(err => console.error('Vendor SMS failed:', err)));
+
     if (vendorEmail) {
-      sendVendorBookingEmail({
+      notifications.push(sendVendorBookingEmail({
         to: vendorEmail, customerName: customer.name, customerPhone: customer.phone || '',
         customerEmail: customer.email || '', serviceName, dateTime,
-      }).catch(err => console.error('Vendor email failed:', err));
+      }).catch(err => console.error('Vendor email failed:', err)));
     }
+
+    await Promise.all(notifications);
 
     return Response.json({ 
       success: true, 
