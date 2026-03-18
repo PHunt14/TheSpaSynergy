@@ -189,6 +189,7 @@ function ConfirmPageContent() {
           payment: bundleId ? 'in-person' : paymentMethod
         })
         if (bundleId) successUrl.set('confirmation', 'required')
+        if (staffName) successUrl.set('staffName', staffName)
         window.location.href = `/booking/success?${successUrl}`
       } else {
         alert('Appointment creation failed')

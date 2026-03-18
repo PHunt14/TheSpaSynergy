@@ -58,10 +58,30 @@ export async function POST(request: Request) {
       vendorName = vendorRes.data?.name || '';
       vendorEmail = vendorRes.data?.email || '';
       
-      // Get staff name if staffId provided
+      // Resolve the staff member performing the service
       if (staffId) {
         const staffRes = await client.models.StaffSchedule.get({ visibleId: staffId });
         staffName = staffRes.data?.staffName || '';
+      }
+      if (!staffName) {
+        // No staffId provided — find who's assigned for this vendor
+        const { data: staffList } = await client.models.StaffSchedule.listStaffScheduleByVendorId({ vendorId });
+        const activeStaff = (staffList || []).filter(s => s.isActive);
+        if (activeStaff.length === 1) {
+          staffName = activeStaff[0].staffName || '';
+        } else if (activeStaff.length > 1) {
+          // Check auto-assign rules for the booking day
+          const bookingDate = new Date(dateTime);
+          const dayOfWeek = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'][bookingDate.getDay()];
+          for (const staff of activeStaff) {
+            if (!staff.autoAssignRules) continue;
+            const rules = JSON.parse(staff.autoAssignRules as string);
+            if (rules.some((r: any) => r.action === 'auto-assign' && r.days?.includes(dayOfWeek))) {
+              staffName = staff.staffName || '';
+              break;
+            }
+          }
+        }
       }
     } catch (e) { /* use defaults */ }
 
@@ -73,8 +93,8 @@ export async function POST(request: Request) {
     // --- Send notifications (must await before returning on Amplify/Lambda) ---
     const notifications: Promise<void>[] = [];
     
-    // Build "with" line: use staff first name if available, otherwise vendor first name
-    const withName = staffName?.split(' ')[0] || vendorName?.split(' ')[0] || '';
+    // Build "With" line: staff first name performing the service
+    const withName = staffName ? staffName.split(' ')[0] : '';
 
     if (customer.phone && customer.smsOptIn) {
       const withLine = withName ? `With: ${withName}\n` : '';
@@ -93,11 +113,13 @@ export async function POST(request: Request) {
       body: JSON.stringify({ appointmentId, vendorId })
     }).then(() => {}).catch(err => console.error('Vendor SMS failed:', err)));
 
-    if (vendorEmail) {
+    if (vendorEmail || process.env.EMAIL_TEST_ADDRESS) {
       notifications.push(sendVendorBookingEmail({
-        to: vendorEmail, customerName: customer.name, customerPhone: customer.phone || '',
+        to: vendorEmail || 'vendor@placeholder.com', customerName: customer.name, customerPhone: customer.phone || '',
         customerEmail: customer.email || '', serviceName, dateTime,
       }).catch(err => console.error('Vendor email failed:', err)));
+    } else {
+      console.log('Vendor email skipped: no vendorEmail set and no EMAIL_TEST_ADDRESS');
     }
 
     await Promise.all(notifications);

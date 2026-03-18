@@ -72,11 +72,21 @@ export async function GET(request: Request) {
           console.error('Error formatting date:', e);
         }
 
+        // Look up staff name if staffId is set
+        let staffName = null;
+        if (appointment.staffId) {
+          try {
+            const { data: staff } = await client.models.StaffSchedule.get({ visibleId: appointment.staffId });
+            staffName = staff?.staffName || null;
+          } catch (e) { /* ignore */ }
+        }
+
         return {
           ...appointment,
           dateTime: formattedDateTime,
           customer,
-          service
+          service,
+          staffName
         };
       })
     );

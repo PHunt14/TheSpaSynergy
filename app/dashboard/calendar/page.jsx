@@ -242,6 +242,11 @@ export default function Calendar() {
                     <div style={{ color: 'var(--color-text)', marginBottom: '0.25rem' }}>
                       {apt.service?.name} ({apt.service?.duration} min)
                     </div>
+                    {apt.staffName && (
+                      <div style={{ color: 'var(--color-text)', fontSize: '0.9rem', marginBottom: '0.25rem' }}>
+                        With: {apt.staffName.split(' ')[0]}
+                      </div>
+                    )}
                     <div style={{ color: 'var(--color-text-light)', fontSize: '0.9rem' }}>
                       {apt.customer?.name} • {apt.customer?.phone}
                     </div>
@@ -323,6 +328,11 @@ export default function Calendar() {
                           <div style={{ color: 'var(--color-text)', marginBottom: '0.25rem' }}>
                             {apt.service?.name}
                           </div>
+                          {apt.staffName && (
+                            <div style={{ color: 'var(--color-text)', fontSize: '0.8rem', marginBottom: '0.25rem' }}>
+                              With: {apt.staffName.split(' ')[0]}
+                            </div>
+                          )}
                           <div style={{ color: 'var(--color-text-light)', fontSize: '0.8rem' }}>
                             {apt.customer?.name}
                           </div>
