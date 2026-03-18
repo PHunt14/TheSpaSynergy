@@ -87,6 +87,7 @@ const schema = a.schema({
       appointmentId: a.id().required(),
       vendorId: a.string().required(),
       serviceId: a.string().required(),
+      staffId: a.string(),
       bundleId: a.string(),
       dateTime: a.string().required(),
       customer: a.json().required(),
@@ -99,6 +100,20 @@ const schema = a.schema({
     .secondaryIndexes((index) => [
       index('vendorId').sortKeys(['dateTime'])
     ])
+    .authorization((allow) => [allow.publicApiKey()]),
+
+  StaffSchedule: a
+    .model({
+      visibleId: a.id().required(),
+      staffEmail: a.string().required(),
+      staffName: a.string(),
+      vendorId: a.string().required(),
+      schedule: a.json(),
+      autoAssignRules: a.json(),
+      isActive: a.boolean().default(true),
+    })
+    .identifier(['visibleId'])
+    .secondaryIndexes((index) => [index('vendorId')])
     .authorization((allow) => [allow.publicApiKey()]),
 });
 

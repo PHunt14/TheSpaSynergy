@@ -40,11 +40,12 @@
 **Priority**: Medium — requires data model changes for full staff-level scheduling
 **Request**: Staff-level hours (not just vendor-level).
 
-**Seed data updated**:
-- **Kera Studio**: Mon 6:30a–5p, Tue/Thu 6:30a–6p, Fri 6:30a–5p, Sat 10a–2p (covers Trinity Mon/Fri + Stacey Tue/Thu + sauna hours)
-- **Kera Studio saunaHours**: Mon–Fri 6:30a–6p, Sat 10a–2p (separate field on Vendor model)
-- **Selene Glow Studio**: Tue 10a–5p, Fri 12p–6p (Jylian's hours; 2nd Saturday TBD)
-- **Winsome Woods**: Mon–Fri 10:30a–4p (Makaila's hours; days TBD with customer)
+**Implementation**:
+- New `StaffSchedule` DynamoDB model: `visibleId`, `staffEmail`, `staffName`, `vendorId`, `schedule` (JSON), `autoAssignRules` (JSON), `isActive`
+- Added `staffId` field to `Appointment` model for tracking which staff member is assigned
+- Seed data includes schedules for Stacey, Trinity, Jylian, and Makaila
+- Availability API rewritten to check staff schedules first, fall back to vendor hours
+- Supports recurrence patterns: `every-other` (Stacey's Saturday), `2nd-of-month` (Jylian's Saturday)
 
 ### Sauna Schedule (Kera Studio — separate from staff)
 - **Mon–Fri**: 6:30 AM – 6:00 PM
@@ -102,19 +103,42 @@
 
 ---
 
-## 6. 📋 Auto-Routing: Kera → Trinity on Mon/Fri
+## 6. ✅ Auto-Routing: Kera → Trinity on Mon/Fri
 **Priority**: Medium
 **Request**: Kera appointments on Monday and Friday should automatically go to Trinity. Stacey is available for call-in appointments as well.
 
-**Implementation Notes**:
-- Need staff assignment logic in the booking flow
-- When a Kera service is booked on Mon/Fri → assign to Trinity
-- Stacey remains available but only via phone/call-in (not online booking on those days)
-- Requires staff-level scheduling (see item #3)
+**Implementation**:
+- Trinity's `StaffSchedule` has `autoAssignRules: [{ days: ['monday', 'friday'], action: 'auto-assign', vendorId: 'vendor-kera-studio' }]`
+- Availability API checks auto-assign rules first when resolving staff for a given day
+- `staffId` is returned in the availability response and threaded through the booking flow to the appointment
+- Confirm page shows "With: Trinity" when auto-assigned
+- Stacey remains available for call-in appointments (not auto-assigned on Mon/Fri)
 
 ---
 
-## 7. 🔮 Customer Cancel/Reschedule from SMS
+## 7. 📋 Booking Add-Ons
+**Priority**: Medium
+**Request**: Support optional add-ons that customers can attach to a booking. Different services may have different add-ons available.
+
+**Known add-ons so far**:
+- Snack board ($55 for 4–5 people, $75 for 6–8 people) — requested for "Make Your Own Spa Day" but could apply to any group booking
+
+**Implementation Notes**:
+- New `AddOn` model: `addOnId`, `name`, `description`, `variants` (array of `{ label, price }`), `vendorId`, `isActive`
+- Variants handle tiered pricing (e.g., snack board small vs. large) without needing separate records
+- Link add-ons to services via `availableAddOnIds` on the Service model, or to bundles via `availableAddOnIds` on Bundle
+- Booking flow: after service selection, show eligible add-ons as optional checkboxes
+- Appointment model: add `addOns` JSON field to store selected add-ons and their prices at time of booking
+- Payment: add-on totals get included in the checkout amount
+
+**Open questions**:
+- Are add-ons vendor-specific, service-specific, or both? (e.g., can any vendor offer a snack board, or only Kera?)
+- Can a customer select multiple add-ons per booking?
+- Do add-ons with variants need quantity support? (e.g., 2 snack boards)
+
+---
+
+## 8. 🔮 Customer Cancel/Reschedule from SMS
 **Priority**: Long-term
 **Request**: Customers should be able to cancel or reschedule from the text message they receive.
 
@@ -134,3 +158,6 @@
 - [ ] Stacey's "every other" Saturday — do we have the specific dates, or should we build a toggle in the dashboard?
 - [ ] Should walk-in sauna sessions show on the booking page, or is online booking only for appointments?
 - [ ] Snack board add-on — is this only for the spa day bundle, or available for any booking?
+- [ ] Add-ons — are these vendor-specific, service-specific, or both?
+- [ ] Can customers select multiple add-ons per booking?
+- [ ] Do add-on variants need quantity support (e.g., 2 snack boards)?

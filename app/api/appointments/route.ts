@@ -14,7 +14,7 @@ const client = generateServerClientUsingCookies<Schema>({
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { vendorId, serviceId, bundleId, dateTime, customer, status, paymentId } = body;
+    const { vendorId, serviceId, bundleId, dateTime, customer, status, paymentId, staffId } = body;
 
     if (!vendorId || !serviceId || !dateTime || !customer) {
       return Response.json({ error: 'Missing required fields' }, { status: 400 });
@@ -26,6 +26,7 @@ export async function POST(request: Request) {
       appointmentId,
       vendorId,
       serviceId,
+      staffId: staffId || undefined,
       bundleId: bundleId || undefined,
       dateTime,
       customer: JSON.stringify(customer),

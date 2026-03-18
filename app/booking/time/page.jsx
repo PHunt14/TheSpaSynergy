@@ -17,6 +17,7 @@ function TimePageContent() {
   const [loading, setLoading] = useState(false)
   const [serviceInfo, setServiceInfo] = useState(null)
   const [vendorInfo, setVendorInfo] = useState(null)
+  const [assignedStaff, setAssignedStaff] = useState(null)
 
   useEffect(() => {
     if (!service || !vendor) return
@@ -50,6 +51,7 @@ function TimePageContent() {
       .then(res => res.json())
       .then(data => {
         setAvailableSlots(data.availableSlots || [])
+        setAssignedStaff(data.assignedStaff || null)
         setLoading(false)
       })
       .catch(err => {
@@ -151,7 +153,7 @@ function TimePageContent() {
 
       {selectedTime && (
         <Link
-          href={`/booking/confirm?vendor=${vendor}&service=${service}&date=${selectedDate.toISOString()}&time=${selectedTime}`}
+          href={`/booking/confirm?vendor=${vendor}&service=${service}&date=${selectedDate.toISOString()}&time=${selectedTime}${assignedStaff ? `&staffId=${assignedStaff.id}&staffName=${encodeURIComponent(assignedStaff.name)}` : ''}`}
           className="cta"
         >
           Continue

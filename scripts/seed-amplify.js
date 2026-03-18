@@ -25,7 +25,7 @@ const vendors = [
       wednesday: { start: '10:30', end: '16:00' },
       thursday: { start: '10:30', end: '16:00' },
       friday: { start: '10:30', end: '16:00' },
-      saturday: { start: null, end: null },
+      saturday: { start: '10:30', end: '16:00' },
       sunday: { start: null, end: null }
     },
     bufferMinutes: 15
@@ -179,6 +179,83 @@ const services = [
   { serviceId: 'svc-selene-glass-skin-ritual',vendorId: 'vendor-selene-glow-studio', category: 'Signature Rituals', name: 'Glass Skin Ritual Package', description: 'Korean glass skin facial and Japanese head spa', duration: 135, price: 195, houseFeeEnabled: true, houseFeeAmount: 55, requiresConsultation: true, isActive: true },
 ];
 
+const staffSchedules = [
+  // Kera Studio — Stacey (owner)
+  {
+    visibleId: 'staff-kera-stacey',
+    staffEmail: 'thekerastudio@gmail.com',
+    staffName: 'Stacey',
+    vendorId: 'vendor-kera-studio',
+    schedule: {
+      monday: { start: null, end: null },
+      tuesday: { start: '11:00', end: '18:00' },
+      wednesday: { start: null, end: null },
+      thursday: { start: '11:00', end: '18:00' },
+      friday: { start: null, end: null },
+      saturday: { start: '10:00', end: '14:00', recurrence: 'every-other' },
+      sunday: { start: null, end: null }
+    },
+    autoAssignRules: null,
+    isActive: true
+  },
+  // Kera Studio — Trinity
+  {
+    visibleId: 'staff-kera-trinity',
+    staffEmail: '',
+    staffName: 'Trinity',
+    vendorId: 'vendor-kera-studio',
+    schedule: {
+      monday: { start: '12:00', end: '17:00' },
+      tuesday: { start: null, end: null },
+      wednesday: { start: null, end: null },
+      thursday: { start: null, end: null },
+      friday: { start: '12:00', end: '17:00' },
+      saturday: { start: null, end: null },
+      sunday: { start: null, end: null }
+    },
+    autoAssignRules: [
+      { days: ['monday', 'friday'], action: 'auto-assign', vendorId: 'vendor-kera-studio' }
+    ],
+    isActive: true
+  },
+  // Selene Glow Studio — Jylian
+  {
+    visibleId: 'staff-selene-jylian',
+    staffEmail: '',
+    staffName: 'Jylian',
+    vendorId: 'vendor-selene-glow-studio',
+    schedule: {
+      monday: { start: null, end: null },
+      tuesday: { start: '10:00', end: '17:00' },
+      wednesday: { start: null, end: null },
+      thursday: { start: null, end: null },
+      friday: { start: '12:00', end: '18:00' },
+      saturday: { start: null, end: null, recurrence: '2nd-of-month', recurrenceStart: '10:00', recurrenceEnd: '14:00' },
+      sunday: { start: null, end: null }
+    },
+    autoAssignRules: null,
+    isActive: true
+  },
+  // Winsome Woods — Makaila
+  {
+    visibleId: 'staff-winsome-makaila',
+    staffEmail: '',
+    staffName: 'Makaila',
+    vendorId: 'vendor-winsome-woods',
+    schedule: {
+      monday: { start: '10:30', end: '16:00' },
+      tuesday: { start: '10:30', end: '16:00' },
+      wednesday: { start: '10:30', end: '16:00' },
+      thursday: { start: '10:30', end: '16:00' },
+      friday: { start: '10:30', end: '16:00' },
+      saturday: { start: '10:30', end: '16:00' },
+      sunday: { start: null, end: null }
+    },
+    autoAssignRules: null,
+    isActive: true
+  }
+];
+
 const bundles = [
   {
     bundleId: 'bundle-reset-package',
@@ -263,6 +340,28 @@ async function seedData() {
     } catch (error) {
       const { data: created } = await client.models.Bundle.create(bundle);
       console.log(`✓ Created bundle: ${bundle.name}`);
+    }
+  }
+
+  console.log('\nSeeding staff schedules...');
+  
+  for (const staff of staffSchedules) {
+    const staffData = {
+      ...staff,
+      schedule: JSON.stringify(staff.schedule),
+      autoAssignRules: staff.autoAssignRules ? JSON.stringify(staff.autoAssignRules) : null
+    };
+    try {
+      const { data, errors } = await client.models.StaffSchedule.update(staffData);
+      if (errors) {
+        const { data: created } = await client.models.StaffSchedule.create(staffData);
+        console.log(`✓ Created staff schedule: ${staff.staffName}`);
+      } else {
+        console.log(`✓ Updated staff schedule: ${staff.staffName}`);
+      }
+    } catch (error) {
+      const { data: created } = await client.models.StaffSchedule.create(staffData);
+      console.log(`✓ Created staff schedule: ${staff.staffName}`);
     }
   }
 

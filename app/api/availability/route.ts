@@ -19,69 +19,164 @@ export async function GET(request: Request) {
   }
 
   try {
-    // Get vendor details
-    const { data: vendor, errors: vendorErrors } = await client.models.Vendor.get({ vendorId });
+    const [vendorRes, serviceRes] = await Promise.all([
+      client.models.Vendor.get({ vendorId }),
+      client.models.Service.get({ serviceId }),
+    ]);
 
-    if (vendorErrors || !vendor) {
+    if (vendorRes.errors || !vendorRes.data) {
       return Response.json({ error: 'Vendor not found' }, { status: 404 });
     }
-
-    // Get service details
-    const { data: service, errors: serviceErrors } = await client.models.Service.get({ serviceId });
-
-    if (serviceErrors || !service) {
+    if (serviceRes.errors || !serviceRes.data) {
       return Response.json({ error: 'Service not found' }, { status: 404 });
     }
 
-    // Parse working hours
-    const workingHours = JSON.parse(vendor.workingHours as string);
-    const requestedDate = new Date(date);
+    const vendor = vendorRes.data;
+    const service = serviceRes.data;
+    const isSauna = (service.resourceType || 'staff') === 'sauna';
+
+    const requestedDate = new Date(date + 'T00:00:00');
     const dayOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][requestedDate.getDay()];
-    
-    const dayHours = workingHours[dayOfWeek];
+
+    // Determine working hours for this day
+    const dayHours = await getDayHours(vendor, service, dayOfWeek, requestedDate);
     if (!dayHours || !dayHours.start || !dayHours.end) {
-      return Response.json({ availableSlots: [] }); // Closed on this day
+      return Response.json({ availableSlots: [] });
     }
 
-    // Get existing appointments for this vendor on this date
-    // For the same resource type (staff vs sauna)
-    const serviceResourceType = service.resourceType || 'staff';
-    
-    // Get all appointments for this vendor on this date
+    // Resolve staff assignment
+    let assignedStaff = null;
+    if (!isSauna) {
+      assignedStaff = await resolveStaff(vendorId, dayOfWeek, requestedDate);
+    }
+
+    // Get existing appointments for conflict checking
     const { data: allAppointments } = await client.models.Appointment.list({
-      filter: { 
+      filter: {
         vendorId: { eq: vendorId },
         dateTime: { beginsWith: date }
       }
     });
 
-    // Filter appointments by resource type
-    const appointments = [];
+    // Filter by resource type — sauna appointments don't block staff and vice versa
+    const relevantAppointments = [];
     for (const apt of allAppointments || []) {
+      if (apt.status === 'cancelled') continue;
       const { data: aptService } = await client.models.Service.get({ serviceId: apt.serviceId });
-      const aptResourceType = aptService?.resourceType || 'staff';
-      if (aptResourceType === serviceResourceType) {
-        appointments.push(apt);
+      const aptIsSauna = (aptService?.resourceType || 'staff') === 'sauna';
+      if (isSauna && aptIsSauna) {
+        relevantAppointments.push(apt);
+      } else if (!isSauna && !aptIsSauna) {
+        // For staff services, only block if same staff member (or no staff tracking yet)
+        if (!assignedStaff || !apt.staffId || apt.staffId === assignedStaff.visibleId) {
+          relevantAppointments.push(apt);
+        }
       }
     }
 
-    const bookedSlots = appointments;
-
-    // Generate available time slots
     const slots = generateTimeSlots(
       dayHours.start,
       dayHours.end,
       service.duration,
       vendor.bufferMinutes || 15,
-      bookedSlots,
+      relevantAppointments,
       date
     );
 
-    return Response.json({ availableSlots: slots });
+    return Response.json({
+      availableSlots: slots,
+      ...(assignedStaff ? { assignedStaff: { id: assignedStaff.visibleId, name: assignedStaff.staffName } } : {})
+    });
   } catch (error) {
     console.error('Error fetching availability:', error);
     return Response.json({ error: 'Failed to fetch availability' }, { status: 500 });
   }
+}
+
+async function getDayHours(vendor: any, service: any, dayOfWeek: string, requestedDate: Date) {
+  const isSauna = (service.resourceType || 'staff') === 'sauna';
+
+  // Sauna uses its own hours if available
+  if (isSauna && vendor.saunaHours) {
+    const saunaHours = JSON.parse(vendor.saunaHours as string);
+    return saunaHours[dayOfWeek] || null;
+  }
+
+  // Non-sauna: try staff schedules first
+  if (!isSauna) {
+    const staff = await resolveStaff(vendor.vendorId, dayOfWeek, requestedDate);
+    if (staff) {
+      const schedule = JSON.parse(staff.schedule as string);
+      const daySchedule = schedule[dayOfWeek];
+      if (daySchedule?.recurrence) {
+        return getRecurrenceHours(daySchedule, requestedDate);
+      }
+      return daySchedule || null;
+    }
+  }
+
+  // Fallback to vendor-level hours
+  const workingHours = JSON.parse(vendor.workingHours as string);
+  return workingHours[dayOfWeek] || null;
+}
+
+async function resolveStaff(vendorId: string, dayOfWeek: string, requestedDate: Date) {
+  const { data: staffList } = await client.models.StaffSchedule.listStaffScheduleByVendorId({
+    vendorId
+  });
+
+  if (!staffList || staffList.length === 0) return null;
+
+  // Check for auto-assign rules first
+  for (const staff of staffList) {
+    if (!staff.isActive || !staff.autoAssignRules) continue;
+    const rules = JSON.parse(staff.autoAssignRules as string);
+    for (const rule of rules) {
+      if (rule.action === 'auto-assign' && rule.days?.includes(dayOfWeek)) {
+        return staff;
+      }
+    }
+  }
+
+  // Find any staff member available on this day
+  for (const staff of staffList) {
+    if (!staff.isActive || !staff.schedule) continue;
+    const schedule = JSON.parse(staff.schedule as string);
+    const daySchedule = schedule[dayOfWeek];
+    if (!daySchedule) continue;
+
+    // Handle recurrence patterns
+    if (daySchedule.recurrence) {
+      const hours = getRecurrenceHours(daySchedule, requestedDate);
+      if (hours?.start) return staff;
+    } else if (daySchedule.start) {
+      return staff;
+    }
+  }
+
+  return null;
+}
+
+function getRecurrenceHours(daySchedule: any, requestedDate: Date) {
+  if (daySchedule.recurrence === 'every-other') {
+    // Simple even/odd week check — can be refined with a known anchor date
+    const weekNum = Math.floor(requestedDate.getTime() / (7 * 24 * 60 * 60 * 1000));
+    if (weekNum % 2 === 0) {
+      return { start: daySchedule.start, end: daySchedule.end };
+    }
+    return null;
+  }
+
+  if (daySchedule.recurrence === '2nd-of-month') {
+    // Check if this is the 2nd occurrence of this weekday in the month
+    const dayOfMonth = requestedDate.getDate();
+    if (dayOfMonth >= 8 && dayOfMonth <= 14) {
+      return { start: daySchedule.recurrenceStart, end: daySchedule.recurrenceEnd };
+    }
+    return null;
+  }
+
+  return daySchedule.start ? { start: daySchedule.start, end: daySchedule.end } : null;
 }
 
 function generateTimeSlots(startTime: string, endTime: string, serviceDuration: number, bufferMinutes: number, bookedSlots: any[], date: string) {
@@ -92,7 +187,6 @@ function generateTimeSlots(startTime: string, endTime: string, serviceDuration: 
   let currentMinutes = startHour * 60 + startMin;
   const endMinutes = endHour * 60 + endMin;
 
-  // Get current time to filter out past slots
   const now = new Date();
   const today = now.toISOString().split('T')[0];
   const isToday = date === today;
@@ -102,34 +196,28 @@ function generateTimeSlots(startTime: string, endTime: string, serviceDuration: 
     const hour = Math.floor(currentMinutes / 60);
     const min = currentMinutes % 60;
     const timeString = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
-    const displayTime = formatTime(hour, min);
 
-    // Skip past times if booking for today
     if (isToday && currentMinutes <= currentTimeMinutes) {
       currentMinutes += 30;
       continue;
     }
 
-    // Check if this slot conflicts with existing appointments
     const isBooked = bookedSlots.some(appointment => {
-      // Parse ISO datetime (YYYY-MM-DDTHH:MM:SS)
-      const appointmentDateTime = appointment.dateTime
-      const appointmentTime = appointmentDateTime.includes('T') 
-        ? appointmentDateTime.split('T')[1].substring(0, 5) // Extract HH:MM from ISO
-        : appointmentDateTime.split(' ')[1] // Fallback for old format
-      
-      // Get service duration for this appointment
+      const appointmentDateTime = appointment.dateTime;
+      const appointmentTime = appointmentDateTime.includes('T')
+        ? appointmentDateTime.split('T')[1].substring(0, 5)
+        : appointmentDateTime.split(' ')[1];
       return timeOverlaps(timeString, appointmentTime, serviceDuration, bufferMinutes);
     });
 
     if (!isBooked) {
       slots.push({
         time: timeString,
-        display: displayTime
+        display: formatTime(hour, min)
       });
     }
 
-    currentMinutes += 30; // 30-minute intervals
+    currentMinutes += 30;
   }
 
   return slots;
@@ -142,26 +230,9 @@ function timeOverlaps(newTime: string, bookedTime: string, newServiceDuration: n
 
   const [bookedHour, bookedMin] = bookedTime.split(':').map(Number);
   const bookedStart = bookedHour * 60 + bookedMin;
-  // Assume booked appointment has similar duration + buffer
   const bookedEnd = bookedStart + newServiceDuration + bufferMinutes;
 
   return (newStart < bookedEnd && newEnd > bookedStart);
-}
-
-function parseTimeToMinutes(timeStr: string) {
-  const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)?/i);
-  if (!match) return 0;
-
-  let hour = parseInt(match[1]);
-  const min = parseInt(match[2]);
-  const period = match[3];
-
-  if (period) {
-    if (period.toUpperCase() === 'PM' && hour !== 12) hour += 12;
-    if (period.toUpperCase() === 'AM' && hour === 12) hour = 0;
-  }
-
-  return hour * 60 + min;
 }
 
 function formatTime(hour: number, min: number) {

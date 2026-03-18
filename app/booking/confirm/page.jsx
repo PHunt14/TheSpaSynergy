@@ -14,6 +14,8 @@ function ConfirmPageContent() {
   const time = params.get('time')
 
   const bundleId = params.get('bundleId')
+  const staffId = params.get('staffId')
+  const staffName = params.get('staffName')
   const isBundle = !!servicesParam
   const serviceIds = servicesParam ? servicesParam.split(',') : service ? [service] : []
 
@@ -146,6 +148,7 @@ function ConfirmPageContent() {
             body: JSON.stringify({
               vendorId: svc.vendorId,
               serviceId: svc.serviceId,
+              staffId: staffId || undefined,
               bundleId: bundleId || undefined,
               dateTime: dateTimeISO,
               customer: formData,
@@ -236,6 +239,7 @@ function ConfirmPageContent() {
         )}
         <p style={{ marginTop: '0.75rem' }}><strong>Date:</strong> {date ? new Date(date).toLocaleDateString() : 'N/A'}</p>
         <p><strong>Time:</strong> {time}</p>
+        {staffName && <p><strong>With:</strong> {decodeURIComponent(staffName)}</p>}
       </div>
 
       <form onSubmit={handleSubmit} style={{ marginTop: '2rem' }}>
