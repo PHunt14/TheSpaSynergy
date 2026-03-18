@@ -1,9 +1,28 @@
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses'
+import config from '@/amplify_outputs.json'
+
+const LAMBDA_URL = (config as any).custom?.sendEmailFunctionUrl as string | undefined
 
 async function sendViaSes(to: string, subject: string, htmlBody: string) {
   const fromEmail = process.env.SES_FROM_EMAIL || 'noreply@thespasynergy.com'
+
+  if (LAMBDA_URL) {
+    console.log(`📧 SES (via Lambda): sending to ${to}`)
+    const res = await fetch(LAMBDA_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to, subject, htmlBody, fromEmail }),
+    })
+    if (!res.ok) {
+      const body = await res.text()
+      throw new Error(`Lambda email failed (${res.status}): ${body}`)
+    }
+    return
+  }
+
+  // Fallback: direct SES (works locally with AWS credentials)
   const region = process.env.AWS_REGION || 'us-east-1'
-  console.log(`📧 SES: sending from ${fromEmail} to ${to} (region: ${region})`)
+  console.log(`📧 SES (direct): sending from ${fromEmail} to ${to} (region: ${region})`)
   const sesClient = new SESClient({ region })
   await sesClient.send(new SendEmailCommand({
     Source: fromEmail,

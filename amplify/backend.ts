@@ -29,9 +29,15 @@ backend.sendEmail.resources.lambda.addToRolePolicy(
   })
 );
 
-// Add public function URL for email sending
-backend.sendEmail.resources.lambda.addFunctionUrl({
+// Add public function URL for email sending and output it to amplify_outputs.json
+const emailFnUrl = backend.sendEmail.resources.lambda.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE,
+});
+
+backend.addOutput({
+  custom: {
+    sendEmailFunctionUrl: emailFnUrl.url,
+  },
 });
 
 // Grant Cognito admin permissions to authenticated users
@@ -61,5 +67,3 @@ backend.auth.resources.unauthenticatedUserIamRole.addToPrincipalPolicy(
     resources: [backend.auth.resources.userPool.userPoolArn],
   })
 );
-
-
