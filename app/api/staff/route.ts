@@ -1,4 +1,5 @@
 import { CognitoIdentityProviderClient, AdminCreateUserCommand, ListUsersCommand, AdminDeleteUserCommand, AdminUpdateUserAttributesCommand, AdminGetUserCommand } from '@aws-sdk/client-cognito-identity-provider';
+import { sendEmail } from '@/lib/email';
 import config from '@/amplify_outputs.json';
 import { cookies } from 'next/headers';
 import { fetchAuthSession } from 'aws-amplify/auth/server';
@@ -106,14 +107,39 @@ export async function POST(request: Request) {
       });
     }
 
+    // Generate a temporary password
+    const tempPassword = `Tmp${Math.random().toString(36).slice(2, 8)}!${Math.floor(Math.random() * 90 + 10)}`;
+
     const command = new AdminCreateUserCommand({
       UserPoolId: userPoolId,
       Username: email,
       UserAttributes: userAttributes,
-      DesiredDeliveryMediums: ['EMAIL']
+      TemporaryPassword: tempPassword,
+      MessageAction: 'SUPPRESS',
     });
 
     await client.send(command);
+
+    // Send branded invite email via SES
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://thespasynergy.com';
+    const nameGreeting = firstName ? ` ${firstName}` : '';
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #8B4789;">Welcome to The Spa Synergy!</h2>
+        <p>Hi${nameGreeting},</p>
+        <p>You've been invited to the vendor dashboard. Here are your login credentials:</p>
+        <div style="background: #f9f9f9; padding: 20px; border-radius: 8px; margin: 20px 0;">
+          <p><strong>Email:</strong> ${email}</p>
+          <p><strong>Temporary Password:</strong> ${tempPassword}</p>
+        </div>
+        <p>You'll be asked to set a new password on your first login.</p>
+        <p><a href="${appUrl}/dashboard" style="display: inline-block; background: #8B4789; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: bold;">Log In to Dashboard</a></p>
+        <p style="color: #666; font-size: 12px; margin-top: 30px;">
+          The Spa Synergy<br>Fort Ritchie, MD
+        </p>
+      </div>`;
+
+    await sendEmail(email, 'Your Spa Synergy Dashboard Invitation', html);
 
     return Response.json({ 
       success: true,

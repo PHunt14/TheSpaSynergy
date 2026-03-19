@@ -97,8 +97,8 @@ export async function POST(request: Request) {
     const withName = staffName ? staffName.split(' ')[0] : '';
 
     if (customer.phone && customer.smsOptIn) {
-      const withLine = withName ? `With: ${withName}\n` : '';
-      const customerMsg = `Booking Submitted!\n\nService: ${serviceName}\n${withLine}Date/Time: ${formattedDateTime}\n\nWe look forward to seeing you!\n\nThe Spa Synergy\nReply STOP to opt out`;
+      const withLine = withName ? `\nWith: ${withName}` : '';
+      const customerMsg = `Your appointment with ${vendorName} has been booked!\n\nService: ${serviceName}${withLine}\nDate/Time: ${formattedDateTime}\n\nThe Spa Synergy\nReply STOP to opt out`;
       notifications.push(sendSms(customer.phone, customerMsg).catch(err => console.error('Customer SMS failed:', err)) as Promise<void>);
     }
     if (customer.email) {
