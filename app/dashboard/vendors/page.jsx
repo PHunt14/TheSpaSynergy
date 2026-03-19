@@ -30,22 +30,18 @@ export default function Vendors() {
   })
 
   useEffect(() => {
-    loadCurrentUser()
-    loadVendors()
+    initVendors()
   }, [])
 
-  const loadCurrentUser = async () => {
+  const initVendors = async () => {
     try {
       const session = await fetchAuthSession()
       const role = session.tokens?.idToken?.payload['custom:role'] || 'vendor'
       setCurrentUserRole(role)
-    } catch (error) {
-      console.error('Error loading current user:', error)
-    }
-  }
-
-  const loadVendors = async () => {
-    try {
+      if (role === 'vendor') {
+        setLoading(false)
+        return
+      }
       const response = await fetch('/api/vendors?includeInactive=true')
       const data = await response.json()
       setVendors(data.vendors || [])

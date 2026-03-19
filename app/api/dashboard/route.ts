@@ -2,11 +2,37 @@ import { generateServerClientUsingCookies } from '@aws-amplify/adapter-nextjs/da
 import { cookies } from 'next/headers';
 import type { Schema } from '../../../amplify/data/resource';
 import config from '../../../amplify_outputs.json' with { type: 'json' };
+import { fetchAuthSession } from 'aws-amplify/auth/server';
+import { Amplify } from 'aws-amplify';
+import { createServerRunner } from '@aws-amplify/adapter-nextjs';
+
+Amplify.configure(config, { ssr: true });
+
+const { runWithAmplifyServerContext } = createServerRunner({ config });
 
 const client = generateServerClientUsingCookies<Schema>({
   config,
   cookies,
 });
+
+const getCurrentUser = async () => {
+  try {
+    return await runWithAmplifyServerContext({
+      nextServerContext: { cookies },
+      operation: async (contextSpec) => {
+        const session = await fetchAuthSession(contextSpec);
+        const idToken = session.tokens?.idToken;
+        if (!idToken) return null;
+        return {
+          role: idToken.payload['custom:role'] as string || 'vendor',
+          vendorId: idToken.payload['custom:vendorId'] as string
+        };
+      }
+    });
+  } catch {
+    return null;
+  }
+};
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -14,6 +40,16 @@ export async function GET(request: Request) {
 
   if (!vendorId) {
     return Response.json({ error: 'vendorId required' }, { status: 400 });
+  }
+
+  const currentUser = await getCurrentUser();
+  if (!currentUser) {
+    return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // Vendor/owner can only access their own vendor's appointments
+  if ((currentUser.role === 'vendor' || currentUser.role === 'owner') && vendorId !== currentUser.vendorId) {
+    return Response.json({ error: 'Unauthorized: Cannot access other vendor appointments' }, { status: 403 });
   }
 
   try {

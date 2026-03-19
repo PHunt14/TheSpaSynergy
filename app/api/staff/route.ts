@@ -53,6 +53,11 @@ const getCurrentUserFromSession = async () => {
 
 export async function POST(request: Request) {
   try {
+    const currentUser = await getCurrentUserFromSession();
+    if (!currentUser) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { email, firstName, lastName, vendorId, role } = await request.json();
 
     if (!email || !role) {
@@ -61,6 +66,16 @@ export async function POST(request: Request) {
 
     if (role === 'vendor' && !vendorId) {
       return Response.json({ error: 'VendorId required for vendor role' }, { status: 400 });
+    }
+
+    // Vendor/owner can only invite staff to their own vendor, and cannot create admins
+    if (currentUser.role === 'vendor' || currentUser.role === 'owner') {
+      if (role === 'admin') {
+        return Response.json({ error: 'Unauthorized: Cannot create admin users' }, { status: 403 });
+      }
+      if (vendorId && vendorId !== currentUser.vendorId) {
+        return Response.json({ error: 'Unauthorized: Can only invite staff to your own vendor' }, { status: 403 });
+      }
     }
 
     const userPoolId = getUserPoolId();
@@ -161,6 +176,11 @@ export async function GET(request: Request) {
       return Response.json({ error: 'User pool not configured' }, { status: 500 });
     }
 
+    const currentUser = await getCurrentUserFromSession();
+    if (!currentUser) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const client = await getClientWithCredentials();
 
     const command = new ListUsersCommand({
@@ -169,7 +189,7 @@ export async function GET(request: Request) {
 
     const response = await client.send(command);
 
-    const users = response.Users?.map(user => ({
+    let users = response.Users?.map(user => ({
       username: user.Username,
       email: user.Attributes?.find(attr => attr.Name === 'email')?.Value,
       firstName: user.Attributes?.find(attr => attr.Name === 'given_name')?.Value,
@@ -179,6 +199,11 @@ export async function GET(request: Request) {
       status: user.UserStatus,
       created: user.UserCreateDate
     })) || [];
+
+    // Vendor/owner can only see users assigned to their own vendor
+    if (currentUser.role === 'vendor' || currentUser.role === 'owner') {
+      users = users.filter(u => u.vendorId === currentUser.vendorId);
+    }
 
     return Response.json({ users });
   } catch (error: any) {

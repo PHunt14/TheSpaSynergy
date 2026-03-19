@@ -37,8 +37,7 @@ export default function Settings() {
   const [socialWebsite, setSocialWebsite] = useState('')
 
   useEffect(() => {
-    loadCurrentUser()
-    loadVendors()
+    initSettings()
 
     const params = new URLSearchParams(window.location.search)
     if (params.get('success') === 'square_connected') {
@@ -62,35 +61,32 @@ export default function Settings() {
     }
   }, [])
 
-  useEffect(() => {
-    if (selectedVendorId) loadVendorSettings(selectedVendorId)
-  }, [selectedVendorId])
-
-  const loadCurrentUser = async () => {
+  const initSettings = async () => {
     try {
       const session = await fetchAuthSession()
       const vendorId = session.tokens?.idToken?.payload['custom:vendorId']
       const role = session.tokens?.idToken?.payload['custom:role'] || 'vendor'
       setCurrentUserRole(role)
       setCurrentUserVendorId(vendorId)
-      if ((role === 'vendor' || role === 'owner') && vendorId) setSelectedVendorId(vendorId)
+
+      const { data: vendorList } = await client.models.Vendor.list()
+      setVendors(vendorList || [])
+
+      if (role === 'admin') {
+        setSelectedVendorId(vendorId || vendorList?.[0]?.vendorId || '')
+      } else if (vendorId) {
+        setSelectedVendorId(vendorId)
+      }
+      setLoading(false)
     } catch (error) {
-      console.error('Error loading current user:', error)
+      console.error('Error initializing settings:', error)
+      setLoading(false)
     }
   }
 
-  const loadVendors = async () => {
-    try {
-      const { data: vendorList } = await client.models.Vendor.list()
-      setVendors(vendorList || [])
-      // Only set default if no vendor already selected (e.g. by loadCurrentUser)
-      if (!selectedVendorId && vendorList && vendorList.length > 0) setSelectedVendorId(vendorList[0].vendorId)
-      setLoading(false)
-    } catch (error) {
-      console.error('Error loading vendors:', error)
-      setLoading(false)
-    }
-  }
+  useEffect(() => {
+    if (selectedVendorId) loadVendorSettings(selectedVendorId)
+  }, [selectedVendorId])
 
   const loadVendorSettings = async (vendorId) => {
     try {

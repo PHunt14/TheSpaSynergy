@@ -84,9 +84,9 @@ export async function POST(request: Request) {
     }
 
     const currentUser = await getCurrentUserFromSession();
-    // Only enforce vendor restriction for staff
-    if (currentUser?.role === 'staff' && vendorId !== currentUser.vendorId) {
-      return Response.json({ error: 'Unauthorized: Staff can only create services for their own vendor' }, { status: 403 });
+    // Vendor/owner can only create services for their own vendor
+    if ((currentUser?.role === 'vendor' || currentUser?.role === 'owner') && vendorId !== currentUser.vendorId) {
+      return Response.json({ error: 'Unauthorized: Can only create services for your own vendor' }, { status: 403 });
     }
 
     const { data, errors } = await client.models.Service.create({
@@ -125,11 +125,10 @@ export async function DELETE(request: Request) {
     }
 
     const currentUser = await getCurrentUserFromSession();
-    // Only enforce vendor restriction for staff
-    if (currentUser?.role === 'staff') {
+    if (currentUser?.role === 'vendor' || currentUser?.role === 'owner') {
       const { data: service } = await client.models.Service.get({ serviceId });
       if (service && service.vendorId !== currentUser.vendorId) {
-        return Response.json({ error: 'Unauthorized: Staff can only delete services from their own vendor' }, { status: 403 });
+        return Response.json({ error: 'Unauthorized: Can only delete services from your own vendor' }, { status: 403 });
       }
     }
 
@@ -159,10 +158,10 @@ export async function PATCH(request: Request) {
     // Check staff restrictions
     try {
       const currentUser = await getCurrentUserFromSession();
-      if (currentUser?.role === 'staff') {
+      if (currentUser?.role === 'vendor' || currentUser?.role === 'owner') {
         const { data: service } = await client.models.Service.get({ serviceId });
         if (service && service.vendorId !== currentUser.vendorId) {
-          return Response.json({ error: 'Unauthorized: Staff can only update services from their own vendor' }, { status: 403 });
+          return Response.json({ error: 'Unauthorized: Can only update services from your own vendor' }, { status: 403 });
         }
       }
     } catch (authError) {

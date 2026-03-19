@@ -34,48 +34,42 @@ export default function Staff() {
   const [savingSchedule, setSavingSchedule] = useState(false)
 
   useEffect(() => {
-    loadCurrentUser()
-    loadUsers()
-    loadVendors()
+    initStaff()
   }, [])
 
-  useEffect(() => {
-    if (vendors.length > 0) loadSchedules()
-  }, [vendors, currentUserVendorId])
-
-  const loadCurrentUser = async () => {
+  const initStaff = async () => {
     try {
-      const session = await fetchAuthSession()
+      const [session, vendorRes, staffRes] = await Promise.all([
+        fetchAuthSession(),
+        fetch('/api/vendors').then(r => r.json()),
+        fetch('/api/staff').then(r => r.json())
+      ])
       const vendorId = session.tokens?.idToken?.payload['custom:vendorId']
       const role = session.tokens?.idToken?.payload['custom:role'] || 'vendor'
       const email = session.tokens?.idToken?.payload['email']
       setCurrentUserRole(role)
       setCurrentUserVendorId(vendorId)
       setCurrentUserEmail(email)
-      if (role === 'vendor' && vendorId) setSelectedVendor(vendorId)
+
+      const list = vendorRes.vendors || []
+      setVendors(list)
+      setUsers(staffRes.users || [])
+      setLoadingUsers(false)
+
+      if (role === 'vendor' && vendorId) {
+        setSelectedVendor(vendorId)
+      } else if (!selectedVendor && list.length > 0) {
+        setSelectedVendor(vendorId || list[0].vendorId)
+      }
     } catch (error) {
-      console.error('Error loading current user:', error)
+      console.error('Error initializing staff:', error)
+      setLoadingUsers(false)
     }
   }
 
-  const loadVendors = async () => {
-    try {
-      const res = await fetch('/api/vendors')
-      const data = await res.json()
-      const list = data.vendors || []
-      setVendors(list)
-      if (list.length > 0 && !selectedVendor) setSelectedVendor(list[0].vendorId)
-    } catch (error) { console.error('Error loading vendors:', error) }
-  }
-
-  const loadUsers = async () => {
-    try {
-      const res = await fetch('/api/staff')
-      const data = await res.json()
-      setUsers(data.users || [])
-    } catch (error) { console.error('Error loading users:', error) }
-    finally { setLoadingUsers(false) }
-  }
+  useEffect(() => {
+    if (vendors.length > 0) loadSchedules()
+  }, [vendors, currentUserVendorId])
 
   const loadSchedules = async () => {
     try {

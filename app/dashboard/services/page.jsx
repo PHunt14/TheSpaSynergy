@@ -7,7 +7,7 @@ export default function Services() {
   const [services, setServices] = useState([])
   const [vendors, setVendors] = useState([])
   const [staffMembers, setStaffMembers] = useState([])
-  const [selectedVendor, setSelectedVendor] = useState('vendor-winsome-woods')
+  const [selectedVendor, setSelectedVendor] = useState('')
   const [loading, setLoading] = useState(true)
   const [showAddForm, setShowAddForm] = useState(false)
   const [editingService, setEditingService] = useState(null)
@@ -27,33 +27,30 @@ export default function Services() {
   })
 
   useEffect(() => {
-    loadCurrentUser()
-    fetch('/api/vendors')
-      .then(res => res.json())
-      .then(data => {
-        setVendors(data.vendors || [])
-      })
-    
-    // Load staff members
-    fetch('/api/staff')
-      .then(res => res.json())
-      .then(data => {
-        setStaffMembers(data.users || [])
-      })
+    initServices()
   }, [])
 
-  const loadCurrentUser = async () => {
+  const initServices = async () => {
     try {
-      const session = await fetchAuthSession()
+      const [session, vendorRes, staffRes] = await Promise.all([
+        fetchAuthSession(),
+        fetch('/api/vendors').then(r => r.json()),
+        fetch('/api/staff').then(r => r.json())
+      ])
       const vendorId = session.tokens?.idToken?.payload['custom:vendorId']
       const role = session.tokens?.idToken?.payload['custom:role'] || 'vendor'
       setCurrentUserRole(role)
       setCurrentUserVendorId(vendorId)
+      setVendors(vendorRes.vendors || [])
+      setStaffMembers(staffRes.users || [])
+
       if ((role === 'vendor' || role === 'owner') && vendorId) {
         setSelectedVendor(vendorId)
+      } else if (role === 'admin') {
+        setSelectedVendor(vendorId || vendorRes.vendors?.[0]?.vendorId || '')
       }
     } catch (error) {
-      console.error('Error loading current user:', error)
+      console.error('Error initializing services:', error)
     }
   }
 

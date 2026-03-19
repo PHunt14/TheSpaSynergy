@@ -77,6 +77,11 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const currentUser = await getCurrentUserFromSession();
+    if (!currentUser || (currentUser.role !== 'admin')) {
+      return Response.json({ error: 'Unauthorized: Only admins can create vendors' }, { status: 403 });
+    }
+
     const body = await request.json();
     const { vendorId, name, email, description, phone, bufferMinutes, isActive, workingHours } = body;
 
@@ -117,9 +122,9 @@ export async function PATCH(request: Request) {
     }
 
     const currentUser = await getCurrentUserFromSession();
-    // Only enforce vendor restriction for staff
-    if (currentUser?.role === 'staff' && vendorId !== currentUser.vendorId) {
-      return Response.json({ error: 'Unauthorized: Staff can only update their own vendor' }, { status: 403 });
+    // Vendor/owner can only update their own vendor
+    if ((currentUser?.role === 'vendor' || currentUser?.role === 'owner') && vendorId !== currentUser.vendorId) {
+      return Response.json({ error: 'Unauthorized: Can only update your own vendor' }, { status: 403 });
     }
 
     const { data, errors } = await client.models.Vendor.update(body as any);
@@ -138,6 +143,11 @@ export async function PATCH(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
+    const currentUser = await getCurrentUserFromSession();
+    if (!currentUser || (currentUser.role !== 'admin')) {
+      return Response.json({ error: 'Unauthorized: Only admins can delete vendors' }, { status: 403 });
+    }
+
     const { searchParams } = new URL(request.url);
     const vendorId = searchParams.get('vendorId');
 
