@@ -193,7 +193,7 @@ p {
   font-size: 1.9rem;
   font-weight: 700;
   color: var(--color-primary-dark);
-  font-family: var(--font-sacramento), cursive;
+  font-family: var(--font-allura), cursive;
 }
 
 .nav-links a {
