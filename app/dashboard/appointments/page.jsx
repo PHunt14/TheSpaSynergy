@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { fetchAuthSession } from 'aws-amplify/auth'
+import DatePicker from 'react-datepicker'
+import 'react-datepicker/dist/react-datepicker.css'
 
 export default function Appointments() {
   const [appointments, setAppointments] = useState([])
@@ -10,13 +12,38 @@ export default function Appointments() {
   const [userRole, setUserRole] = useState(null)
   const [vendors, setVendors] = useState([])
   const [showReschedule, setShowReschedule] = useState(null)
-  const [newDateTime, setNewDateTime] = useState('')
+  const [rescheduleDate, setRescheduleDate] = useState(new Date())
+  const [rescheduleTime, setRescheduleTime] = useState(null)
+  const [rescheduleSlots, setRescheduleSlots] = useState([])
+  const [rescheduleSlotsLoading, setRescheduleSlotsLoading] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(20)
 
   useEffect(() => {
     loadUserVendor()
   }, [])
+
+  // Load available time slots when reschedule date changes
+  useEffect(() => {
+    if (!showReschedule) return
+    const apt = appointments.find(a => a.appointmentId === showReschedule)
+    if (!apt) return
+
+    setRescheduleTime(null)
+    setRescheduleSlotsLoading(true)
+    const dateStr = rescheduleDate.toISOString().split('T')[0]
+
+    fetch(`/api/availability?vendorId=${apt.vendorId}&serviceId=${apt.serviceId}&date=${dateStr}`)
+      .then(res => res.json())
+      .then(data => {
+        setRescheduleSlots(data.availableSlots || [])
+        setRescheduleSlotsLoading(false)
+      })
+      .catch(() => {
+        setRescheduleSlots([])
+        setRescheduleSlotsLoading(false)
+      })
+  }, [showReschedule, rescheduleDate])
 
   const loadUserVendor = async () => {
     try {
@@ -160,10 +187,14 @@ export default function Appointments() {
   }
 
   const handleReschedule = async (appointmentId) => {
-    if (!newDateTime) {
-      alert('Please enter a new date and time')
+    if (!rescheduleTime) {
+      alert('Please select a time')
       return
     }
+
+    const dateStr = rescheduleDate.toISOString().split('T')[0]
+    const [hours, minutes] = rescheduleTime.split(':')
+    const newDateTime = `${dateStr}T${hours}:${minutes}:00`
 
     try {
       const response = await fetch('/api/appointments/reschedule', {
@@ -175,7 +206,7 @@ export default function Appointments() {
       if (response.ok) {
         alert('Appointment rescheduled successfully!')
         setShowReschedule(null)
-        setNewDateTime('')
+        setRescheduleTime(null)
         loadAppointments()
       } else {
         alert('Failed to reschedule appointment')
@@ -444,39 +475,71 @@ export default function Appointments() {
             background: 'white',
             padding: '2rem',
             borderRadius: '8px',
-            maxWidth: '400px',
-            width: '90%'
+            maxWidth: '480px',
+            width: '90%',
+            maxHeight: '90vh',
+            overflowY: 'auto'
           }}>
             <h3>Reschedule Appointment</h3>
             <p style={{ marginBottom: '1rem', color: 'var(--color-text-light)' }}>
-              Enter new date and time (e.g., "12/25/2024 2:00 PM")
+              Select a new date and available time.
             </p>
-            <input
-              type="text"
-              value={newDateTime}
-              onChange={(e) => setNewDateTime(e.target.value)}
-              placeholder="MM/DD/YYYY HH:MM AM/PM"
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                borderRadius: '8px',
-                border: '1px solid var(--color-border)',
-                fontSize: '1rem',
-                marginBottom: '1rem'
-              }}
-            />
+
+            <div className="spa-datepicker" style={{ marginBottom: '1.5rem' }}>
+              <DatePicker
+                selected={rescheduleDate}
+                onChange={(date) => setRescheduleDate(date)}
+                minDate={new Date()}
+                inline
+              />
+            </div>
+
+            <h4 style={{ marginBottom: '0.75rem' }}>Available Times</h4>
+            {rescheduleSlotsLoading && <p>Loading times...</p>}
+            {!rescheduleSlotsLoading && rescheduleSlots.length === 0 && (
+              <p style={{ color: 'var(--color-text-light)' }}>No available times for this date.</p>
+            )}
+            {!rescheduleSlotsLoading && rescheduleSlots.length > 0 && (
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: '0.5rem',
+                marginBottom: '1.5rem'
+              }}>
+                {rescheduleSlots.map(slot => (
+                  <div
+                    key={slot.time}
+                    onClick={() => setRescheduleTime(slot.time)}
+                    style={{
+                      padding: '0.75rem',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      background: rescheduleTime === slot.time ? 'var(--color-primary)' : 'var(--color-accent)',
+                      color: rescheduleTime === slot.time ? 'white' : 'var(--color-text)',
+                      textAlign: 'center',
+                      fontWeight: '500',
+                      transition: '0.2s ease'
+                    }}
+                  >
+                    {slot.display}
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div style={{ display: 'flex', gap: '1rem' }}>
               <button
                 onClick={() => handleReschedule(showReschedule)}
+                disabled={!rescheduleTime}
                 className="cta"
-                style={{ flex: 1 }}
+                style={{ flex: 1, opacity: rescheduleTime ? 1 : 0.5 }}
               >
                 Confirm
               </button>
               <button
                 onClick={() => {
                   setShowReschedule(null)
-                  setNewDateTime('')
+                  setRescheduleTime(null)
                 }}
                 style={{
                   flex: 1,
