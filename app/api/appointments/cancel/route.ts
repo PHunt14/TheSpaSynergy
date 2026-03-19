@@ -42,8 +42,9 @@ async function sendCancellationNotifications(appointment: any, serviceName: stri
 
   // Customer SMS
   if (customer?.phone && customer?.smsOptIn) {
+    const smsWithLine = withName ? `\nWith: ${withName}` : '';
     notifications.push(
-      sendSms(customer.phone, `Appointment Cancelled\n\nService: ${serviceName}\n${withLine}Date/Time: ${formattedDateTime}\n\nYour appointment has been cancelled.\n\nThe Spa Synergy\nReply STOP to opt out`)
+      sendSms(customer.phone, `Your appointment with ${vendorName} has been cancelled.\n\nService: ${serviceName}${smsWithLine}\nDate/Time: ${formattedDateTime}\n\nThe Spa Synergy\nReply STOP to opt out`)
         .catch(err => console.error('Customer cancel SMS failed:', err)) as Promise<void>
     );
   }

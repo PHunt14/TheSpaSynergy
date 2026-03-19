@@ -87,8 +87,9 @@ export async function POST(request: Request) {
 
     // Customer SMS
     if (customer?.phone && customer?.smsOptIn) {
+      const smsWithLine = withName ? `\nWith: ${withName}` : '';
       notifications.push(
-        sendSms(customer.phone, `Appointment Confirmed!\n\nService: ${serviceName}\n${withLine}Date/Time: ${formattedDateTime}\n\nYour appointment has been confirmed.\n\nThe Spa Synergy\nReply STOP to opt out`)
+        sendSms(customer.phone, `Your appointment with ${vendorName} has been confirmed!\n\nService: ${serviceName}${smsWithLine}\nDate/Time: ${formattedDateTime}\n\nThe Spa Synergy\nReply STOP to opt out`)
           .catch(err => console.error('Customer confirmation SMS failed:', err)) as Promise<void>
       );
     }
@@ -118,7 +119,7 @@ export async function POST(request: Request) {
       const { data: vendor } = await client.models.Vendor.get({ vendorId: appointment.vendorId });
       if (vendor?.smsAlertsEnabled && vendor?.smsAlertPhone) {
         notifications.push(
-          sendSms(vendor.smsAlertPhone, `Appointment Confirmed\n\nService: ${serviceName}\nCustomer: ${customer?.name}\nDate/Time: ${formattedDateTime}\n\nThe Spa Synergy`)
+          sendSms(vendor.smsAlertPhone, `Appointment with ${customer?.name} has been confirmed.\n\nService: ${serviceName}\nDate/Time: ${formattedDateTime}\n\nThe Spa Synergy`)
             .catch(err => console.error('Vendor confirmation SMS failed:', err)) as Promise<void>
         );
       }

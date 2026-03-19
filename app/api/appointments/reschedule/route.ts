@@ -86,8 +86,9 @@ export async function POST(request: Request) {
 
     // Customer SMS
     if (customer?.phone && customer?.smsOptIn) {
+      const smsWithLine = withName ? `\nWith: ${withName}` : '';
       notifications.push(
-        sendSms(customer.phone, `Appointment Rescheduled\n\nService: ${serviceName}\n${withLine}New Date/Time: ${formattedNewDateTime}\n\nYour appointment has been rescheduled.\n\nThe Spa Synergy\nReply STOP to opt out`)
+        sendSms(customer.phone, `Your appointment with ${vendorName} has been rescheduled.\n\nService: ${serviceName}${smsWithLine}\nNew Date/Time: ${formattedNewDateTime}\n\nThe Spa Synergy\nReply STOP to opt out`)
           .catch(err => console.error('Customer reschedule SMS failed:', err)) as Promise<void>
       );
     }
