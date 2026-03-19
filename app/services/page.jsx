@@ -116,7 +116,14 @@ export default function ServicesPage() {
                   border: '1px solid var(--color-border)',
                   padding: '1.5rem',
                 }}>
-                  <h3 style={{ color: 'var(--color-primary)', marginBottom: '1rem', marginTop: 0 }}>{category}</h3>
+                  <h3 style={{
+                    color: 'var(--color-primary-dark)',
+                    marginBottom: '1rem',
+                    marginTop: 0,
+                    textAlign: 'center',
+                    borderBottom: '2px solid var(--color-primary)',
+                    paddingBottom: '0.5rem',
+                  }}>{category}</h3>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                     {catServices.map(service => {
                       const isSelected = selectedServices.find(s => s.serviceId === service.serviceId)
