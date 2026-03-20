@@ -88,7 +88,7 @@ function ConfirmPageContent() {
   const initializeSquare = async () => {
     if (!window.Square) return
     try {
-      const appId = vendorDetails?.squareApplicationId || process.env.NEXT_PUBLIC_SQUARE_APPLICATION_ID
+      const appId = process.env.NEXT_PUBLIC_SQUARE_APPLICATION_ID
       const locationId = vendorDetails?.squareLocationId || process.env.NEXT_PUBLIC_SQUARE_LOCATION_ID
       if (!appId || !locationId) return
       const payments = await window.Square.payments(appId, locationId)

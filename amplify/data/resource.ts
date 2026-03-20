@@ -16,6 +16,7 @@ const schema = a.schema({
       squareRefreshToken: a.string(),
       squareLocationId: a.string(),
       squareMerchantId: a.string(),
+      squareOAuthStatus: a.string().default('disconnected'),
       squareTokenExpiresAt: a.string(),
       squareConnectedAt: a.string(),
       isHouse: a.boolean().default(false),
@@ -97,6 +98,8 @@ const schema = a.schema({
       status: a.string().default('pending'),
       paymentId: a.string(),
       paymentAmount: a.float(),
+      paymentStatus: a.string(),
+      paymentRaw: a.json(),
       createdAt: a.datetime(),
     })
     .identifier(['appointmentId'])

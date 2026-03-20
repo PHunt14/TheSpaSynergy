@@ -8,7 +8,7 @@ Amplify.configure(config, { ssr: true });
 
 export async function POST(request) {
   try {
-    const { sourceId, amount, vendorId, bundlePayments } = await request.json();
+    const { sourceId, amount, vendorId, bundlePayments, appointmentId } = await request.json();
 
     if (!sourceId || !amount) {
       return Response.json({ error: 'Missing payment details' }, { status: 400 });
@@ -40,6 +40,13 @@ async function processSinglePayment(sourceId, amount, vendorId) {
 
   if (!vendor) {
     return Response.json({ error: 'Vendor not found' }, { status: 404 });
+  }
+
+  if (vendor.squareOAuthStatus === 'error') {
+    return Response.json({
+      error: 'Payment unavailable',
+      details: 'Vendor Square account needs to be reconnected'
+    }, { status: 400 });
   }
 
   // Use vendor's Square token if available, otherwise use platform token

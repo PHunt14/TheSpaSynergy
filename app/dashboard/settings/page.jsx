@@ -16,10 +16,7 @@ export default function Settings() {
   const [squareConnected, setSquareConnected] = useState(false)
   const [squareConnectedAt, setSquareConnectedAt] = useState(null)
   const [connectingSquare, setConnectingSquare] = useState(false)
-  const [showSquareForm, setShowSquareForm] = useState(false)
-  const [squareApplicationId, setSquareApplicationId] = useState('')
-  const [squareAccessToken, setSquareAccessToken] = useState('')
-  const [squareLocationId, setSquareLocationId] = useState('')
+  const [squareOAuthStatus, setSquareOAuthStatus] = useState('disconnected')
   const [message, setMessage] = useState('')
   const [currentUserRole, setCurrentUserRole] = useState(null)
   const [currentUserVendorId, setCurrentUserVendorId] = useState(null)
@@ -96,10 +93,7 @@ export default function Settings() {
         setSmsAlertsEnabled(v.smsAlertsEnabled || false)
         setSquareConnected(!!v.squareAccessToken)
         setSquareConnectedAt(v.squareConnectedAt)
-        setSquareApplicationId('')
-        setSquareAccessToken('')
-        setSquareLocationId('')
-        setShowSquareForm(false)
+        setSquareOAuthStatus(v.squareOAuthStatus || (v.squareAccessToken ? 'connected' : 'disconnected'))
         setVendorName(v.name || '')
         setVendorEmail(v.email || '')
         setVendorPhone(v.phone || '')
@@ -114,53 +108,33 @@ export default function Settings() {
     }
   }
 
-  const handleConnectSquare = async () => {
-    if (!squareApplicationId || !squareAccessToken || !squareLocationId) {
-      setMessage('Please enter Application ID, Access Token, and Location ID')
-      return
-    }
-    setConnectingSquare(true)
-    setMessage('')
-    try {
-      const { errors } = await client.models.Vendor.update({
-        vendorId: selectedVendorId,
-        squareApplicationId: squareApplicationId.trim(),
-        squareAccessToken: squareAccessToken.trim(),
-        squareLocationId: squareLocationId.trim(),
-        squareConnectedAt: new Date().toISOString()
-      })
-      if (errors) {
-        setMessage('Error connecting Square: ' + errors[0]?.message)
-      } else {
-        setSquareConnected(true)
-        setSquareConnectedAt(new Date().toISOString())
-        setShowSquareForm(false)
-        setSquareApplicationId(''); setSquareAccessToken(''); setSquareLocationId('')
-        setMessage('Square account connected successfully!')
-        setTimeout(() => setMessage(''), 3000)
-      }
-    } catch (error) {
-      setMessage('Error connecting to Square: ' + error.message)
-    } finally {
-      setConnectingSquare(false)
-    }
+  const handleConnectSquare = () => {
+    window.location.href = `/api/square/connect?vendorId=${selectedVendorId}`
   }
 
   const handleDisconnectSquare = async () => {
-    if (!confirm('Disconnect your Square account?')) return
+    if (!confirm('Disconnect your Square account? Customers will not be able to pay online until you reconnect.')) return
+    setConnectingSquare(true)
     try {
-      const { errors } = await client.models.Vendor.update({
-        vendorId: selectedVendorId,
-        squareAccessToken: null, squareLocationId: null, squareConnectedAt: null
+      const res = await fetch('/api/square/disconnect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vendorId: selectedVendorId })
       })
-      if (errors) { setMessage('Error disconnecting Square: ' + errors[0]?.message) }
-      else {
-        setSquareConnected(false); setSquareConnectedAt(null)
+      if (!res.ok) {
+        const data = await res.json()
+        setMessage('Error disconnecting Square: ' + (data.error || 'Unknown error'))
+      } else {
+        setSquareConnected(false)
+        setSquareConnectedAt(null)
+        setSquareOAuthStatus('disconnected')
         setMessage('Square account disconnected successfully')
         setTimeout(() => setMessage(''), 3000)
       }
     } catch (error) {
       setMessage('Error disconnecting Square account')
+    } finally {
+      setConnectingSquare(false)
     }
   }
 
@@ -321,58 +295,41 @@ export default function Settings() {
 
           {squareConnected ? (
             <div>
-              <div style={{ padding: '1rem', background: '#d4edda', border: '1px solid #c3e6cb', borderRadius: '8px', marginBottom: '1rem' }}>
-                <div style={{ fontWeight: '500', color: '#155724', marginBottom: '0.5rem' }}>✓ Square Account Connected</div>
-                {squareConnectedAt && (
-                  <div style={{ fontSize: '0.85rem', color: '#155724' }}>
-                    Connected on {new Date(squareConnectedAt).toLocaleDateString()}
+              <div style={{ padding: '1rem', background: squareOAuthStatus === 'error' ? '#f8d7da' : '#d4edda', border: `1px solid ${squareOAuthStatus === 'error' ? '#f5c6cb' : '#c3e6cb'}`, borderRadius: '8px', marginBottom: '1rem' }}>
+                {squareOAuthStatus === 'error' ? (
+                  <div>
+                    <div style={{ fontWeight: '500', color: '#721c24', marginBottom: '0.5rem' }}>⚠ Square Connection Error</div>
+                    <p style={{ fontSize: '0.85rem', color: '#721c24', margin: 0 }}>Your Square connection needs to be refreshed. Please reconnect.</p>
+                  </div>
+                ) : (
+                  <div>
+                    <div style={{ fontWeight: '500', color: '#155724', marginBottom: '0.5rem' }}>✓ Square Account Connected</div>
+                    {squareConnectedAt && (
+                      <div style={{ fontSize: '0.85rem', color: '#155724' }}>
+                        Connected on {new Date(squareConnectedAt).toLocaleDateString()}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
-              <button onClick={handleDisconnectSquare} style={{
-                padding: '0.75rem 1.5rem', background: '#dc3545', color: 'white', border: 'none',
-                borderRadius: '8px', cursor: 'pointer', fontSize: '1rem', fontWeight: '500'
-              }}>
-                Disconnect Square
-              </button>
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                {squareOAuthStatus === 'error' && (
+                  <button onClick={handleConnectSquare} className="cta">Reconnect Square</button>
+                )}
+                <button onClick={handleDisconnectSquare} disabled={connectingSquare} style={{
+                  padding: '0.75rem 1.5rem', background: '#dc3545', color: 'white', border: 'none',
+                  borderRadius: '8px', cursor: 'pointer', fontSize: '1rem', fontWeight: '500'
+                }}>
+                  {connectingSquare ? 'Disconnecting...' : 'Disconnect Square'}
+                </button>
+              </div>
             </div>
           ) : (
             <div>
-              {!showSquareForm ? (
-                <div>
-                  <p style={{ fontSize: '0.9rem', color: 'var(--color-text-light)', marginBottom: '1rem' }}>
-                    Connect your Square account to receive payments directly.
-                  </p>
-                  <button onClick={() => setShowSquareForm(true)} className="cta">Connect Square Account</button>
-                </div>
-              ) : (
-                <div>
-                  <div style={{ marginBottom: '1rem' }}>
-                    <label style={labelStyle}>Square Application ID</label>
-                    <input type="text" value={squareApplicationId} onChange={(e) => setSquareApplicationId(e.target.value)}
-                      placeholder="sandbox-sq0idb-..." style={{ ...inputStyle, fontFamily: 'monospace' }} />
-                  </div>
-                  <div style={{ marginBottom: '1rem' }}>
-                    <label style={labelStyle}>Square Access Token</label>
-                    <input type="text" value={squareAccessToken} onChange={(e) => setSquareAccessToken(e.target.value)}
-                      placeholder="EAAAl..." style={{ ...inputStyle, fontFamily: 'monospace' }} />
-                  </div>
-                  <div style={{ marginBottom: '1.5rem' }}>
-                    <label style={labelStyle}>Square Location ID</label>
-                    <input type="text" value={squareLocationId} onChange={(e) => setSquareLocationId(e.target.value)}
-                      placeholder="L..." style={{ ...inputStyle, fontFamily: 'monospace' }} />
-                  </div>
-                  <div style={{ display: 'flex', gap: '1rem' }}>
-                    <button onClick={handleConnectSquare} disabled={connectingSquare} className="cta">
-                      {connectingSquare ? 'Connecting...' : 'Save & Connect'}
-                    </button>
-                    <button onClick={() => { setShowSquareForm(false); setSquareApplicationId(''); setSquareAccessToken(''); setSquareLocationId('') }}
-                      style={{ padding: '0.75rem 1.5rem', background: '#6c757d', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '1rem' }}>
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
+              <p style={{ fontSize: '0.9rem', color: 'var(--color-text-light)', marginBottom: '1rem' }}>
+                Connect your Square account to receive payments directly. You'll be redirected to Square to authorize access.
+              </p>
+              <button onClick={handleConnectSquare} className="cta">Connect with Square</button>
             </div>
           )}
         </div>

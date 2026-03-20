@@ -71,6 +71,5 @@ House fees are automatically calculated and consolidated. See `docs/HOUSE_FEE_IM
 
 ## Future Enhancements
 
-- [ ] OAuth flow instead of manual credential entry
 - [ ] Platform commission deduction
 - [ ] Square Catalog integration for automatic pricing
