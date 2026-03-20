@@ -16,6 +16,8 @@ function ConfirmPageContent() {
   const bundleId = params.get('bundleId')
   const staffId = params.get('staffId')
   const staffName = params.get('staffName')
+  const peopleParam = params.get('people')
+  const people = peopleParam ? parseInt(peopleParam) : null
   const isBundle = !!servicesParam
   const serviceIds = servicesParam ? servicesParam.split(',') : service ? [service] : []
 
@@ -28,7 +30,7 @@ function ConfirmPageContent() {
 
   // For single service, use the first service detail
   const serviceDetails = allServiceDetails.length === 1 ? allServiceDetails[0] : null
-  const totalPrice = allServiceDetails.reduce((sum, s) => sum + (s?.price || 0), 0)
+  const totalPrice = allServiceDetails.reduce((sum, s) => sum + (s?.price || 0), 0) * (people || 1)
   const totalDuration = allServiceDetails.reduce((sum, s) => sum + (s?.duration || 0), 0)
 
   useEffect(() => {
@@ -153,7 +155,8 @@ function ConfirmPageContent() {
               dateTime: dateTimeISO,
               customer: formData,
               status,
-              paymentId
+              paymentId,
+              ...(people ? { people } : {})
             })
           }).then(r => r.json())
         )
@@ -190,6 +193,7 @@ function ConfirmPageContent() {
         })
         if (bundleId || hasConsultation) successUrl.set('confirmation', 'required')
         if (staffName) successUrl.set('staffName', staffName)
+        if (people) successUrl.set('people', people)
         window.location.href = `/booking/success?${successUrl}`
       } else {
         alert('Appointment creation failed')
@@ -242,6 +246,7 @@ function ConfirmPageContent() {
         <p style={{ marginTop: '0.75rem' }}><strong>Date:</strong> {date ? new Date(date).toLocaleDateString() : 'N/A'}</p>
         <p><strong>Time:</strong> {time}</p>
         {staffName && <p><strong>With:</strong> {decodeURIComponent(staffName)}</p>}
+        {people && <p><strong>Group Size:</strong> {people} people</p>}
       </div>
 
       <form onSubmit={handleSubmit} style={{ marginTop: '2rem' }}>

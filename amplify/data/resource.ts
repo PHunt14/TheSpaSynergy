@@ -68,6 +68,8 @@ const schema = a.schema({
       appointmentIds: a.string().array(),
       customer: a.json(),
       dateTime: a.string(),
+      minPeople: a.integer(),
+      maxPeople: a.integer(),
     })
     .identifier(['bundleId'])
     .authorization((allow) => [allow.publicApiKey()]),

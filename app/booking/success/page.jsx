@@ -12,6 +12,7 @@ function SuccessContent() {
   const paymentMethod = params.get('payment')
   const confirmation = params.get('confirmation')
   const staffName = params.get('staffName')
+  const people = params.get('people')
 
   return (
     <main style={{ textAlign: 'center', maxWidth: '600px', margin: '0 auto', padding: '2rem' }}>
@@ -58,6 +59,9 @@ function SuccessContent() {
         )}
         {staffName && (
           <p><strong>With:</strong> {decodeURIComponent(staffName)}</p>
+        )}
+        {people && (
+          <p><strong>Group Size:</strong> {people} people</p>
         )}
         {dateTime && (
           <p><strong>Date & Time:</strong> {new Date(dateTime).toLocaleString('en-US', {
