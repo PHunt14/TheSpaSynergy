@@ -10,6 +10,7 @@ function BundleTimeContent() {
   const params = useSearchParams()
   const bundleId = params.get('bundleId')
   const serviceIds = params.get('services')?.split(',') || []
+  const people = params.get('people')
 
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [selectedTime, setSelectedTime] = useState(null)
@@ -108,7 +109,7 @@ function BundleTimeContent() {
 
       {selectedTime && (
         <Link
-          href={`/booking/confirm?${bundleId ? `bundleId=${bundleId}&` : ''}services=${serviceIds.join(',')}&date=${selectedDate.toISOString()}&time=${selectedTime}`}
+          href={`/booking/confirm?${bundleId ? `bundleId=${bundleId}&` : ''}services=${serviceIds.join(',')}&date=${selectedDate.toISOString()}&time=${selectedTime}${people ? `&people=${people}` : ''}`}
           className="cta"
         >
           Continue
