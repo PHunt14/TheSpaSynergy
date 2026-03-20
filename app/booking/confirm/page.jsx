@@ -40,7 +40,7 @@ function ConfirmPageContent() {
       .then(data => {
         const selected = (data.services || []).filter(s => serviceIds.includes(s.serviceId))
         setAllServiceDetails(selected)
-        if (selected.some(s => s.requiresConsultation)) setPaymentMethod('in-person')
+        if (selected.some(s => s.cardPaymentDisabled)) setPaymentMethod('in-person')
       })
 
     // Fetch vendor details (use vendor param or derive from first service)
@@ -137,7 +137,7 @@ function ConfirmPageContent() {
       }
 
       const dateTimeISO = buildDateTimeISO()
-      const status = bundleId ? 'pending-confirmation' : (paymentMethod === 'card' ? 'confirmed' : 'pending')
+      const status = (bundleId || hasConsultation) ? 'pending-confirmation' : (paymentMethod === 'card' ? 'confirmed' : 'pending')
 
       // Create one appointment per service
       const results = await Promise.all(
@@ -186,9 +186,9 @@ function ConfirmPageContent() {
           id: firstSuccess.appointmentId,
           dateTime: dateTimeISO,
           service: allServiceDetails.map(s => s.name).join(', '),
-          payment: bundleId ? 'in-person' : paymentMethod
+          payment: paymentMethod
         })
-        if (bundleId) successUrl.set('confirmation', 'required')
+        if (bundleId || hasConsultation) successUrl.set('confirmation', 'required')
         if (staffName) successUrl.set('staffName', staffName)
         window.location.href = `/booking/success?${successUrl}`
       } else {
@@ -203,6 +203,7 @@ function ConfirmPageContent() {
   }
 
   const hasConsultation = allServiceDetails.some(s => s.requiresConsultation)
+  const cardDisabled = allServiceDetails.some(s => s.cardPaymentDisabled)
   const requiresConfirmation = !!bundleId || hasConsultation
 
   return (
@@ -278,9 +279,9 @@ function ConfirmPageContent() {
 
         <div style={{ marginTop: '2rem', marginBottom: '1rem' }}>
           <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600' }}>Payment Method *</label>
-          {requiresConfirmation ? (
+          {(bundleId || cardDisabled) ? (
             <div style={{ padding: '1rem', borderRadius: '8px', border: '2px solid var(--color-primary)', background: 'var(--color-accent)', textAlign: 'center' }}>
-              Pay In-Person {bundleId ? '(Required for bundles)' : '(Required for consultation services)'}
+              Pay In-Person {bundleId ? '(Required for bundles)' : '(Card payment not available for this service)'}
             </div>
           ) : (
             <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>

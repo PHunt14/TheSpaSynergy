@@ -46,6 +46,7 @@ const schema = a.schema({
       houseFeePercent: a.float().default(0),
       isActive: a.boolean().default(true),
       requiresConsultation: a.boolean().default(false),
+      cardPaymentDisabled: a.boolean().default(false),
       allowedStaff: a.string().array(),
     })
     .identifier(['serviceId'])

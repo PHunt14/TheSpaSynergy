@@ -116,6 +116,5 @@ Deployed via AWS Amplify with automatic CI/CD from Git. See `AMPLIFY_SETUP.md`.
 - [ ] **Square Catalog sync**: link services to Square catalog items for automatic pricing/reporting
 - [ ] **Appointment export**: vendors can text themselves a link to the day's appointments
 - [ ] **Appointment reminders**: SMS/email reminders before appointments
-- [ ] **Cancellation notifications**: SMS/email on cancellation
 - [ ] **Calendar sync**: Google/Apple calendar integration
 - [ ] **Auto rent payment**: automated rent collection from subletting vendors
