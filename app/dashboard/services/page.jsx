@@ -21,6 +21,7 @@ export default function Services() {
     duration: 30,
     price: 0,
     requiresConsultation: false,
+    cardPaymentDisabled: false,
     resourceType: 'staff',
     staffRestriction: 'all',
     allowedStaff: []
@@ -85,6 +86,7 @@ export default function Services() {
       duration: newService.duration,
       price: newService.price,
       requiresConsultation: newService.requiresConsultation,
+      cardPaymentDisabled: newService.cardPaymentDisabled,
       resourceType: newService.resourceType,
       allowedStaff: newService.staffRestriction === 'all' ? null : newService.allowedStaff,
       isActive: editingService ? editingService.isActive : true
@@ -101,7 +103,7 @@ export default function Services() {
         alert(editingService ? 'Service updated successfully!' : 'Service added successfully!')
         setShowAddForm(false)
         setEditingService(null)
-        setNewService({ name: '', category: '', description: '', duration: 30, price: 0, requiresConsultation: false, resourceType: 'staff', staffRestriction: 'all', allowedStaff: [] })
+        setNewService({ name: '', category: '', description: '', duration: 30, price: 0, requiresConsultation: false, cardPaymentDisabled: false, resourceType: 'staff', staffRestriction: 'all', allowedStaff: [] })
         const data = await fetch(`/api/services?vendorId=${selectedVendor}&includeInactive=true`).then(r => r.json())
         setServices(data.services || [])
       } else {
@@ -145,6 +147,7 @@ export default function Services() {
       duration: service.duration,
       price: service.price,
       requiresConsultation: service.requiresConsultation || false,
+      cardPaymentDisabled: service.cardPaymentDisabled || false,
       resourceType: service.resourceType || 'staff',
       staffRestriction: (service.allowedStaff && service.allowedStaff.length > 0) ? 'specific' : 'all',
       allowedStaff: service.allowedStaff || []
@@ -156,7 +159,7 @@ export default function Services() {
   const handleCancelEdit = () => {
     setEditingService(null)
     setShowAddForm(false)
-    setNewService({ name: '', category: '', description: '', duration: 30, price: 0, requiresConsultation: false, resourceType: 'staff', staffRestriction: 'all', allowedStaff: [] })
+    setNewService({ name: '', category: '', description: '', duration: 30, price: 0, requiresConsultation: false, cardPaymentDisabled: false, resourceType: 'staff', staffRestriction: 'all', allowedStaff: [] })
   }
 
   const handleDelete = async (service) => {
@@ -342,6 +345,18 @@ export default function Services() {
           </div>
 
           <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={newService.cardPaymentDisabled}
+                onChange={(e) => setNewService({ ...newService, cardPaymentDisabled: e.target.checked })}
+                style={{ width: '20px', height: '20px', cursor: 'pointer' }}
+              />
+              <span>Disable Card Payment (customers must pay in-person)</span>
+            </label>
+          </div>
+
+          <div style={{ marginBottom: '1rem' }}>
             <label style={{ display: 'block', marginBottom: '0.5rem' }}>Resource Type</label>
             <select
               value={newService.resourceType}
@@ -455,6 +470,7 @@ export default function Services() {
                 <p style={{ color: 'var(--color-text-light)', fontSize: '0.9rem' }}>
                   {service.category && `${service.category} • `}{service.duration} min • ${service.price}
                   {service.requiresConsultation && ' • ⚠️ Requires Consultation'}
+                  {service.cardPaymentDisabled && ' • 💳 Card Payment Disabled'}
                 </p>
               </div>
               <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>

@@ -29,6 +29,8 @@ export async function POST(request: Request) {
       price: body.price,
       discountPercent: body.discountPercent ?? 0,
       isActive: body.isActive ?? true,
+      ...(body.minPeople !== undefined && { minPeople: body.minPeople }),
+      ...(body.maxPeople !== undefined && { maxPeople: body.maxPeople }),
     })
     return Response.json({ bundle })
   } catch (error) {
@@ -49,6 +51,8 @@ export async function PATCH(request: Request) {
     if (body.price !== undefined) updateData.price = body.price
     if (body.discountPercent !== undefined) updateData.discountPercent = body.discountPercent
     if (body.isActive !== undefined) updateData.isActive = body.isActive
+    if (body.minPeople !== undefined) updateData.minPeople = body.minPeople
+    if (body.maxPeople !== undefined) updateData.maxPeople = body.maxPeople
     if (body.status !== undefined) updateData.status = body.status
     if (body.vendorConfirmations !== undefined) updateData.vendorConfirmations = JSON.stringify(body.vendorConfirmations)
     if (body.appointmentIds !== undefined) updateData.appointmentIds = body.appointmentIds

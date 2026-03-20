@@ -46,6 +46,7 @@ const schema = a.schema({
       houseFeePercent: a.float().default(0),
       isActive: a.boolean().default(true),
       requiresConsultation: a.boolean().default(false),
+      cardPaymentDisabled: a.boolean().default(false),
       allowedStaff: a.string().array(),
     })
     .identifier(['serviceId'])
@@ -67,6 +68,8 @@ const schema = a.schema({
       appointmentIds: a.string().array(),
       customer: a.json(),
       dateTime: a.string(),
+      minPeople: a.integer(),
+      maxPeople: a.integer(),
     })
     .identifier(['bundleId'])
     .authorization((allow) => [allow.publicApiKey()]),

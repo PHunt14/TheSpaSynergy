@@ -16,6 +16,8 @@ function ConfirmPageContent() {
   const bundleId = params.get('bundleId')
   const staffId = params.get('staffId')
   const staffName = params.get('staffName')
+  const peopleParam = params.get('people')
+  const people = peopleParam ? parseInt(peopleParam) : null
   const isBundle = !!servicesParam
   const serviceIds = servicesParam ? servicesParam.split(',') : service ? [service] : []
 
@@ -28,7 +30,7 @@ function ConfirmPageContent() {
 
   // For single service, use the first service detail
   const serviceDetails = allServiceDetails.length === 1 ? allServiceDetails[0] : null
-  const totalPrice = allServiceDetails.reduce((sum, s) => sum + (s?.price || 0), 0)
+  const totalPrice = allServiceDetails.reduce((sum, s) => sum + (s?.price || 0), 0) * (people || 1)
   const totalDuration = allServiceDetails.reduce((sum, s) => sum + (s?.duration || 0), 0)
 
   useEffect(() => {
@@ -40,7 +42,7 @@ function ConfirmPageContent() {
       .then(data => {
         const selected = (data.services || []).filter(s => serviceIds.includes(s.serviceId))
         setAllServiceDetails(selected)
-        if (selected.some(s => s.requiresConsultation)) setPaymentMethod('in-person')
+        if (selected.some(s => s.cardPaymentDisabled)) setPaymentMethod('in-person')
       })
 
     // Fetch vendor details (use vendor param or derive from first service)
@@ -137,7 +139,7 @@ function ConfirmPageContent() {
       }
 
       const dateTimeISO = buildDateTimeISO()
-      const status = bundleId ? 'pending-confirmation' : (paymentMethod === 'card' ? 'confirmed' : 'pending')
+      const status = (bundleId || hasConsultation) ? 'pending-confirmation' : (paymentMethod === 'card' ? 'confirmed' : 'pending')
 
       // Create one appointment per service
       const results = await Promise.all(
@@ -153,7 +155,8 @@ function ConfirmPageContent() {
               dateTime: dateTimeISO,
               customer: formData,
               status,
-              paymentId
+              paymentId,
+              ...(people ? { people } : {})
             })
           }).then(r => r.json())
         )
@@ -186,10 +189,11 @@ function ConfirmPageContent() {
           id: firstSuccess.appointmentId,
           dateTime: dateTimeISO,
           service: allServiceDetails.map(s => s.name).join(', '),
-          payment: bundleId ? 'in-person' : paymentMethod
+          payment: paymentMethod
         })
-        if (bundleId) successUrl.set('confirmation', 'required')
+        if (bundleId || hasConsultation) successUrl.set('confirmation', 'required')
         if (staffName) successUrl.set('staffName', staffName)
+        if (people) successUrl.set('people', people)
         window.location.href = `/booking/success?${successUrl}`
       } else {
         alert('Appointment creation failed')
@@ -203,6 +207,7 @@ function ConfirmPageContent() {
   }
 
   const hasConsultation = allServiceDetails.some(s => s.requiresConsultation)
+  const cardDisabled = allServiceDetails.some(s => s.cardPaymentDisabled)
   const requiresConfirmation = !!bundleId || hasConsultation
 
   return (
@@ -241,6 +246,7 @@ function ConfirmPageContent() {
         <p style={{ marginTop: '0.75rem' }}><strong>Date:</strong> {date ? new Date(date).toLocaleDateString() : 'N/A'}</p>
         <p><strong>Time:</strong> {time}</p>
         {staffName && <p><strong>With:</strong> {decodeURIComponent(staffName)}</p>}
+        {people && <p><strong>Group Size:</strong> {people} people</p>}
       </div>
 
       <form onSubmit={handleSubmit} style={{ marginTop: '2rem' }}>
@@ -278,9 +284,9 @@ function ConfirmPageContent() {
 
         <div style={{ marginTop: '2rem', marginBottom: '1rem' }}>
           <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600' }}>Payment Method *</label>
-          {requiresConfirmation ? (
+          {(bundleId || cardDisabled) ? (
             <div style={{ padding: '1rem', borderRadius: '8px', border: '2px solid var(--color-primary)', background: 'var(--color-accent)', textAlign: 'center' }}>
-              Pay In-Person {bundleId ? '(Required for bundles)' : '(Required for consultation services)'}
+              Pay In-Person {bundleId ? '(Required for bundles)' : '(Card payment not available for this service)'}
             </div>
           ) : (
             <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>

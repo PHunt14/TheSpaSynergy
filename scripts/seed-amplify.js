@@ -282,7 +282,9 @@ const bundles = [
     vendorIds: ['vendor-winsome-woods', 'vendor-kera-studio'],
     price: 0,
     discountPercent: 0,
-    isActive: true
+    isActive: true,
+    minPeople: 4,
+    maxPeople: 10
   }
 ];
 
