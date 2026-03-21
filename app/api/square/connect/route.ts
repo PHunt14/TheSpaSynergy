@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 
 export async function GET(request: NextRequest) {
@@ -12,10 +12,9 @@ export async function GET(request: NextRequest) {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
 
     if (!appId) {
-      return Response.redirect(`${baseUrl}/dashboard/settings?error=missing_credentials`)
+      return NextResponse.redirect(new URL('/dashboard/settings?error=missing_credentials', baseUrl))
     }
 
-    // State param encodes vendorId + CSRF nonce
     const nonce = randomUUID()
     const state = Buffer.from(JSON.stringify({ vendorId, nonce })).toString('base64url')
 
@@ -24,21 +23,17 @@ export async function GET(request: NextRequest) {
       ? 'https://connect.squareup.com'
       : 'https://connect.squareupsandbox.com'
 
-    const redirectUri = `${baseUrl}/api/square/callback`
-    const scopes = [
-      'MERCHANT_PROFILE_READ',
-      'PAYMENTS_WRITE',
-      'PAYMENTS_READ',
-      'ORDERS_WRITE',
-      'ORDERS_READ',
-    ].join('+')
+    const oauthUrl = new URL('/oauth2/authorize', squareBase)
+    oauthUrl.searchParams.set('client_id', appId)
+    oauthUrl.searchParams.set('scope', 'MERCHANT_PROFILE_READ PAYMENTS_WRITE PAYMENTS_READ ORDERS_WRITE ORDERS_READ')
+    oauthUrl.searchParams.set('session', 'false')
+    oauthUrl.searchParams.set('state', state)
+    oauthUrl.searchParams.set('redirect_uri', `${baseUrl}/api/square/callback`)
 
-    const oauthUrl = `${squareBase}/oauth2/authorize?client_id=${appId}&scope=${scopes}&session=false&state=${state}&redirect_uri=${encodeURIComponent(redirectUri)}`
-
-    return Response.redirect(oauthUrl)
+    return NextResponse.redirect(oauthUrl)
   } catch (error) {
     console.error('Square connect error:', error)
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-    return Response.redirect(`${baseUrl}/dashboard/settings?error=oauth_failed`)
+    return NextResponse.redirect(new URL('/dashboard/settings?error=oauth_failed', baseUrl))
   }
 }
