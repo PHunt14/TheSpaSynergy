@@ -1,43 +1,11 @@
 import { NextRequest } from 'next/server'
-import { generateClient } from 'aws-amplify/data'
-import type { Schema } from '@/amplify/data/resource'
-import { Amplify } from 'aws-amplify'
-import config from '@/amplify_outputs.json'
-import { cookies } from 'next/headers'
-import { fetchAuthSession } from 'aws-amplify/auth/server'
-import { createServerRunner } from '@aws-amplify/adapter-nextjs'
 import { randomUUID } from 'crypto'
-
-Amplify.configure(config, { ssr: true })
-const { runWithAmplifyServerContext } = createServerRunner({ config })
-const client = generateClient<Schema>()
 
 export async function GET(request: NextRequest) {
   try {
     const vendorId = request.nextUrl.searchParams.get('vendorId')
     if (!vendorId) {
       return Response.json({ error: 'vendorId required' }, { status: 400 })
-    }
-
-    // Validate caller is admin/owner for this vendor
-    const currentUser = await runWithAmplifyServerContext({
-      nextServerContext: { cookies },
-      operation: async (contextSpec) => {
-        const session = await fetchAuthSession(contextSpec)
-        const idToken = session.tokens?.idToken
-        if (!idToken) return null
-        return {
-          role: idToken.payload['custom:role'] as string || 'vendor',
-          vendorId: idToken.payload['custom:vendorId'] as string
-        }
-      }
-    })
-
-    if (!currentUser) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-    if (currentUser.role === 'vendor' || (currentUser.role === 'owner' && currentUser.vendorId !== vendorId)) {
-      return Response.json({ error: 'Unauthorized: Insufficient permissions' }, { status: 403 })
     }
 
     const appId = process.env.SQUARE_APPLICATION_ID || process.env.NEXT_PUBLIC_SQUARE_APPLICATION_ID
