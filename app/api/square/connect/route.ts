@@ -23,14 +23,12 @@ export async function GET(request: NextRequest) {
       ? 'https://connect.squareup.com'
       : 'https://connect.squareupsandbox.com'
 
-    const oauthUrl = new URL('/oauth2/authorize', squareBase)
-    oauthUrl.searchParams.set('client_id', appId)
-    oauthUrl.searchParams.set('scope', 'MERCHANT_PROFILE_READ PAYMENTS_WRITE PAYMENTS_READ ORDERS_WRITE ORDERS_READ')
-    oauthUrl.searchParams.set('session', 'false')
-    oauthUrl.searchParams.set('state', state)
-    oauthUrl.searchParams.set('redirect_uri', `${baseUrl}/api/square/callback`)
+    const redirectUri = encodeURIComponent(`${baseUrl}/api/square/callback`)
+    const scopes = 'MERCHANT_PROFILE_READ+PAYMENTS_WRITE+PAYMENTS_READ+ORDERS_WRITE+ORDERS_READ'
 
-    return NextResponse.redirect(oauthUrl)
+    const oauthUrl = `${squareBase}/oauth2/authorize?client_id=${appId}&scope=${scopes}&session=false&state=${state}&redirect_uri=${redirectUri}`
+
+    return NextResponse.redirect(new URL(oauthUrl))
   } catch (error) {
     console.error('Square connect error:', error)
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
