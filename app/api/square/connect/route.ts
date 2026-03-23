@@ -18,7 +18,9 @@ export async function GET(request: NextRequest) {
     const nonce = randomUUID()
     const state = Buffer.from(JSON.stringify({ vendorId, nonce })).toString('base64url')
 
-    const squareBase = 'https://connect.squareup.com'
+    const squareBase = process.env.NEXT_PUBLIC_SQUARE_ENVIRONMENT === 'sandbox'
+      ? 'https://connect.squareupsandbox.com'
+      : 'https://connect.squareup.com'
 
     const redirectUri = encodeURIComponent(`${baseUrl}/api/square/callback`)
     const scopes = 'MERCHANT_PROFILE_READ+PAYMENTS_WRITE+PAYMENTS_READ+ORDERS_WRITE+ORDERS_READ'
