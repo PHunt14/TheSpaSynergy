@@ -101,6 +101,7 @@ Deployed via AWS Amplify with automatic CI/CD from Git. See `AMPLIFY_SETUP.md`.
 
 ## Known Issues
 
+- [ ] **Square sandbox OAuth is broken** — Square's sandbox login page (`connect.squareupsandbox.com`) renders a blank screen for unauthenticated users. The OAuth flow works correctly with production credentials. To test OAuth without real payments, use production Square credentials and process $0 services or refund small test payments. See `SQUARE_SETUP.md` for details
 - [ ] Relaxation, Beauty, and Wellness category blocks should link to filtered service lists
 - [ ] Recurring services not yet supported (e.g., sauna as a recurring first service)
 - [ ] "Rebook" should suggest dates 4+ weeks out after checkout

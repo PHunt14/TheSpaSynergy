@@ -44,9 +44,9 @@ export async function GET(request: NextRequest) {
       return Response.redirect(`${baseUrl}/dashboard/settings?error=missing_credentials`)
     }
 
-    const env = process.env.NEXT_PUBLIC_SQUARE_ENVIRONMENT || 'sandbox'
+    const isSandbox = appId.startsWith('sandbox-')
     const squareClient = new Client({
-      environment: env === 'production' ? Environment.Production : Environment.Sandbox,
+      environment: isSandbox ? Environment.Sandbox : Environment.Production,
     })
 
     const { result } = await squareClient.oAuthApi.obtainToken({
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
     // Get merchant's location
     const merchantClient = new Client({
       accessToken: result.accessToken,
-      environment: env === 'production' ? Environment.Production : Environment.Sandbox,
+      environment: isSandbox ? Environment.Sandbox : Environment.Production,
     })
 
     let locationId: string | null = null

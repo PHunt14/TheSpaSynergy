@@ -64,7 +64,34 @@ Vendors can disconnect via Settings → "Disconnect Square". This revokes the OA
 
 ## Testing
 
-**Test Card**: `4111 1111 1111 1111`, CVV: `111`, Exp: any future date, Zip: `12345`
+### Sandbox vs Production OAuth
+
+Square's sandbox OAuth login page (`connect.squareupsandbox.com`) is unreliable — it renders a blank screen for unauthenticated users. **Use production Square credentials for all OAuth testing.**
+
+The OAuth flow itself (connect/disconnect) does not involve any money. It only links a vendor's Square account to the platform.
+
+### Testing Payments Without Spending Real Money
+
+With production credentials, use any of these approaches:
+
+1. **$0 services** — Create a test service priced at $0.00. The full payment flow executes without charging anything
+2. **Small amount + refund** — Process a $1.00 payment, then immediately refund it from the [Square Dashboard](https://squareup.com/dashboard). You'll lose a few cents to processing fees
+3. **Test OAuth only** — The connect/disconnect flow doesn't touch payments at all. You can test the entire OAuth lifecycle without any payment configuration
+
+### Setup for Production Testing
+
+1. In the Square Developer Dashboard, get your **production** Application ID and OAuth Secret
+2. Set env vars in Amplify (or `.env.local` for local dev):
+   - `SQUARE_APPLICATION_ID` → production ID (starts with `sq0idb-`, no `sandbox-` prefix)
+   - `SQUARE_APPLICATION_SECRET` → production OAuth secret
+3. Add your redirect URL under the **production** app's OAuth settings:
+   - Dev: `https://www.dev.thespasynergy.com/api/square/callback`
+   - Prod: `https://www.thespasynergy.com/api/square/callback`
+4. The code auto-detects sandbox vs production from the Application ID prefix
+
+### Test Card (Sandbox Only)
+
+`4111 1111 1111 1111`, CVV: `111`, Exp: any future date, Zip: `12345`
 
 ## API Endpoints
 
