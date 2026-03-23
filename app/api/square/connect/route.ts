@@ -27,7 +27,11 @@ export async function GET(request: NextRequest) {
       'ORDERS_READ'
     ].join('%20')
 
-    const oauthUrl = `https://connect.squareup.com/oauth2/authorize?client_id=${appId}&scope=${scopes}&session=false&state=${state}&redirect_uri=${redirectUri}`
+    const squareBase = appId.startsWith('sandbox-')
+      ? 'https://connect.squareupsandbox.com'
+      : 'https://connect.squareup.com'
+
+    const oauthUrl = `${squareBase}/oauth2/authorize?client_id=${appId}&scope=${scopes}&state=${state}&redirect_uri=${redirectUri}`
 
     console.log('Square OAuth redirect URL:', oauthUrl)
 
