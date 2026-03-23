@@ -18,7 +18,8 @@ export async function GET(request: NextRequest) {
     const nonce = randomUUID()
     const state = Buffer.from(JSON.stringify({ vendorId, nonce })).toString('base64url')
 
-    const squareBase = process.env.NEXT_PUBLIC_SQUARE_ENVIRONMENT === 'sandbox'
+    const isSandbox = process.env.NEXT_PUBLIC_SQUARE_ENVIRONMENT === 'sandbox' || appId.startsWith('sandbox-')
+    const squareBase = isSandbox
       ? 'https://connect.squareupsandbox.com'
       : 'https://connect.squareup.com'
 
