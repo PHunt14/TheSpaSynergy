@@ -18,17 +18,20 @@ export async function GET(request: NextRequest) {
     const nonce = randomUUID()
     const state = Buffer.from(JSON.stringify({ vendorId, nonce })).toString('base64url')
 
-    const isSandbox = process.env.NEXT_PUBLIC_SQUARE_ENVIRONMENT === 'sandbox' || appId.startsWith('sandbox-')
-    const squareBase = isSandbox
-      ? 'https://connect.squareupsandbox.com'
-      : 'https://connect.squareup.com'
-
     const redirectUri = encodeURIComponent(`${baseUrl}/api/square/callback`)
-    const scopes = 'MERCHANT_PROFILE_READ+PAYMENTS_WRITE+PAYMENTS_READ+ORDERS_WRITE+ORDERS_READ'
+    const scopes = [
+      'MERCHANT_PROFILE_READ',
+      'PAYMENTS_WRITE',
+      'PAYMENTS_READ',
+      'ORDERS_WRITE',
+      'ORDERS_READ'
+    ].join('%20')
 
-    const oauthUrl = `${squareBase}/oauth2/authorize?client_id=${appId}&scope=${scopes}&session=false&state=${state}&redirect_uri=${redirectUri}`
+    const oauthUrl = `https://connect.squareup.com/oauth2/authorize?client_id=${appId}&scope=${scopes}&session=false&state=${state}&redirect_uri=${redirectUri}`
 
-    return NextResponse.redirect(new URL(oauthUrl))
+    console.log('Square OAuth redirect URL:', oauthUrl)
+
+    return NextResponse.redirect(oauthUrl, { status: 302 })
   } catch (error) {
     console.error('Square connect error:', error)
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
