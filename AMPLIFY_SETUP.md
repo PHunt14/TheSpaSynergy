@@ -89,7 +89,6 @@ In Amplify Console → App Settings → Environment variables, add all variables
 | `EMAIL_PROVIDER` | `ses` | |
 | `SQUARE_ACCESS_TOKEN` | `EAAA...` | Platform (Kera's) production token |
 | `NEXT_PUBLIC_SQUARE_APPLICATION_ID` | `sq0idp-...` | Production Square app ID |
-| `NEXT_PUBLIC_SQUARE_LOCATION_ID` | Your location ID | |
 | `NEXT_PUBLIC_SQUARE_ENVIRONMENT` | `production` | |
 | `NEXT_PUBLIC_APP_URL` | `https://yourdomain.com` | Used for OAuth callbacks |
 

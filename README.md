@@ -119,3 +119,5 @@ Deployed via AWS Amplify with automatic CI/CD from Git. See `AMPLIFY_SETUP.md`.
 - [ ] **Appointment reminders**: SMS/email reminders before appointments
 - [ ] **Calendar sync**: Google/Apple calendar integration
 - [ ] **Auto rent payment**: automated rent collection from subletting vendors
+- [ ] **Square Integration service**: aplit as a backend microservice that can be duplicated and/or used separately
+

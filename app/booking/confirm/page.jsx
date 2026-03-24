@@ -89,7 +89,7 @@ function ConfirmPageContent() {
     if (!window.Square) return
     try {
       const appId = process.env.NEXT_PUBLIC_SQUARE_APPLICATION_ID
-      const locationId = vendorDetails?.squareLocationId || process.env.NEXT_PUBLIC_SQUARE_LOCATION_ID
+      const locationId = vendorDetails?.squareLocationId
       if (!appId || !locationId) return
       const payments = await window.Square.payments(appId, locationId)
       const cardInstance = await payments.card()
@@ -208,6 +208,7 @@ function ConfirmPageContent() {
 
   const hasConsultation = allServiceDetails.some(s => s.requiresConsultation)
   const cardDisabled = allServiceDetails.some(s => s.cardPaymentDisabled)
+  const vendorSquareConnected = !!vendorDetails?.squareLocationId
   const requiresConfirmation = !!bundleId || hasConsultation
 
   return (
@@ -284,7 +285,7 @@ function ConfirmPageContent() {
 
         <div style={{ marginTop: '2rem', marginBottom: '1rem' }}>
           <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600' }}>Payment Method *</label>
-          {(bundleId || cardDisabled) ? (
+          {(bundleId || cardDisabled || !vendorSquareConnected) ? (
             <div style={{ padding: '1rem', borderRadius: '8px', border: '2px solid var(--color-primary)', background: 'var(--color-accent)', textAlign: 'center' }}>
               Pay In-Person {bundleId ? '(Required for bundles)' : '(Card payment not available for this service)'}
             </div>

@@ -6,7 +6,7 @@ Automatic payment splitting for bundle bookings across multiple vendors using Sq
 
 ## How It Works
 
-1. **Vendor connects** by entering their Square credentials in Dashboard → Settings (Application ID, Access Token, Location ID)
+1. **Vendor connects** via OAuth in Dashboard → Settings (tokens and location ID are stored automatically)
 2. **Customer books** a bundle with services from multiple vendors
 3. **Customer pays once** — single payment transaction
 4. **Square splits funds** — house vendor is the primary recipient, other vendors receive their portions via `additionalRecipients`
@@ -43,7 +43,7 @@ House fees are automatically calculated and consolidated. See `docs/HOUSE_FEE_IM
 
 ### Single Vendor
 1. Look up vendor's `squareAccessToken` and `squareLocationId`
-2. Fall back to platform credentials (`SQUARE_ACCESS_TOKEN`, `NEXT_PUBLIC_SQUARE_LOCATION_ID`) if vendor isn't connected
+2. Fail with error if vendor isn't connected to Square
 3. Create payment via Square Payments API
 
 ### Bundle (Multi-Vendor)
@@ -66,7 +66,7 @@ House fees are automatically calculated and consolidated. See `docs/HOUSE_FEE_IM
 | Issue | Fix |
 |-------|-----|
 | "Vendor not connected to Square" | Vendor needs to enter credentials in Dashboard → Settings |
-| "Payment configuration error" | No access token — check vendor or platform credentials |
+| "Payment configuration error" | Vendor hasn't connected Square — only in-person payment is available |
 | "House vendor not configured" | Ensure one vendor has `isHouse: true` in the database |
 
 ## Future Enhancements

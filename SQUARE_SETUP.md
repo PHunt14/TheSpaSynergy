@@ -25,7 +25,6 @@ SQUARE_WEBHOOK_SIGNATURE_KEY=YOUR_WEBHOOK_SIGNATURE_KEY
 
 # Public (exposed to browser)
 NEXT_PUBLIC_SQUARE_APPLICATION_ID=YOUR_APP_ID
-NEXT_PUBLIC_SQUARE_LOCATION_ID=YOUR_LOCATION_ID
 NEXT_PUBLIC_SQUARE_ENVIRONMENT=sandbox  # or production
 ```
 
@@ -45,7 +44,7 @@ NEXT_PUBLIC_SQUARE_ENVIRONMENT=sandbox  # or production
 
 ## How Payments Work
 
-- **Single vendor**: Payment goes to the vendor's Square account (or platform account if vendor isn't connected)
+- **Single vendor**: Payment goes to the vendor's Square account. If a vendor hasn't connected Square, only in-person payment is offered at checkout
 - **Bundle (multi-vendor)**: Payment is split via Square's `additionalRecipients` — house vendor is the primary recipient, other vendors receive their portions
 - **House fees**: Automatically deducted and kept by the house vendor. See `docs/HOUSE_FEE_IMPLEMENTATION.md`
 
