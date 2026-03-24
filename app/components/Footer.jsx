@@ -20,6 +20,8 @@ export default function Footer() {
 
       <div className="footer-bottom">
         © {new Date().getFullYear()} The Spa Synergy. All rights reserved.
+        <br />
+        <span style={{ fontSize: '0.8rem', opacity: 0.7 }}>Built by Patrick Hunt</span>
       </div>
     </footer>
   )
