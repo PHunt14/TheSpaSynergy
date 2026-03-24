@@ -1,28 +1,83 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { fetchAuthSession } from 'aws-amplify/auth'
+import DatePicker from 'react-datepicker'
+import 'react-datepicker/dist/react-datepicker.css'
 
 export default function Appointments() {
   const [appointments, setAppointments] = useState([])
   const [loading, setLoading] = useState(true)
-  const [selectedVendor, setSelectedVendor] = useState('vendor-winsome')
+  const [userVendorId, setUserVendorId] = useState(null)
+  const [userRole, setUserRole] = useState(null)
   const [vendors, setVendors] = useState([])
   const [showReschedule, setShowReschedule] = useState(null)
-  const [newDateTime, setNewDateTime] = useState('')
+  const [rescheduleDate, setRescheduleDate] = useState(new Date())
+  const [rescheduleTime, setRescheduleTime] = useState(null)
+  const [rescheduleSlots, setRescheduleSlots] = useState([])
+  const [rescheduleSlotsLoading, setRescheduleSlotsLoading] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(20)
 
   useEffect(() => {
-    fetch('/api/vendors')
-      .then(res => res.json())
-      .then(data => {
-        setVendors(data.vendors || [])
-      })
+    loadUserVendor()
   }, [])
 
+  // Load available time slots when reschedule date changes
+  useEffect(() => {
+    if (!showReschedule) return
+    const apt = appointments.find(a => a.appointmentId === showReschedule)
+    if (!apt) return
+
+    setRescheduleTime(null)
+    setRescheduleSlotsLoading(true)
+    const dateStr = rescheduleDate.toISOString().split('T')[0]
+
+    fetch(`/api/availability?vendorId=${apt.vendorId}&serviceId=${apt.serviceId}&date=${dateStr}`)
+      .then(res => res.json())
+      .then(data => {
+        setRescheduleSlots(data.availableSlots || [])
+        setRescheduleSlotsLoading(false)
+      })
+      .catch(() => {
+        setRescheduleSlots([])
+        setRescheduleSlotsLoading(false)
+      })
+  }, [showReschedule, rescheduleDate])
+
+  const loadUserVendor = async () => {
+    try {
+      const session = await fetchAuthSession()
+      const vendorId = session.tokens?.idToken?.payload['custom:vendorId']
+      const role = session.tokens?.idToken?.payload['custom:role'] || 'vendor'
+      setUserVendorId(vendorId)
+      setUserRole(role)
+    } catch (error) {
+      console.error('Error loading user vendor:', error)
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (userRole === 'admin') {
+      // Admin can see all vendors
+      fetch('/api/vendors')
+        .then(res => res.json())
+        .then(data => {
+          setVendors(data.vendors || [])
+          // Only set initial vendor if not already set
+          if (!userVendorId && data.vendors?.length > 0) {
+            setUserVendorId(data.vendors[0].vendorId)
+          }
+        })
+    }
+  }, [userRole])
+
   const loadAppointments = () => {
-    if (!selectedVendor) return
+    if (!userVendorId) return
 
     setLoading(true)
-    fetch(`/api/dashboard?vendorId=${selectedVendor}`)
+    fetch(`/api/dashboard?vendorId=${userVendorId}`)
       .then(res => res.json())
       .then(data => {
         setAppointments(data.appointments || [])
@@ -35,10 +90,81 @@ export default function Appointments() {
   }
 
   useEffect(() => {
-    loadAppointments()
-  }, [selectedVendor])
+    if (userVendorId) {
+      loadAppointments()
+    }
+  }, [userVendorId])
 
-  const handleCancel = async (appointmentId) => {
+  const handleConfirm = async (appointmentId, bundleId) => {
+    if (bundleId) {
+      if (!confirm('Confirm your portion of this bundle?')) return
+      try {
+        const response = await fetch('/api/bundles/confirm', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bundleId, vendorId: userVendorId, action: 'confirm' })
+        })
+        const data = await response.json()
+        if (response.ok) {
+          alert(data.bundleStatus === 'confirmed'
+            ? 'Bundle fully confirmed! Customer has been notified.'
+            : 'Your portion confirmed. Waiting on other vendor(s).')
+          loadAppointments()
+        } else {
+          alert('Failed to confirm: ' + (data.error || ''))
+        }
+      } catch (error) {
+        alert('Error confirming bundle')
+      }
+      return
+    }
+
+    if (!confirm('Confirm this appointment?')) return
+
+    try {
+      const response = await fetch('/api/appointments/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ appointmentId })
+      })
+
+      if (response.ok) {
+        alert('Appointment confirmed! Customer has been notified.')
+        loadAppointments()
+      } else {
+        alert('Failed to confirm appointment')
+      }
+    } catch (error) {
+      console.error('Error confirming appointment:', error)
+      alert('Error confirming appointment')
+    }
+  }
+
+  const handleCancel = async (appointmentId, bundleId) => {
+    const msg = bundleId
+      ? 'Cancel this bundle? This will cancel ALL services in the bundle for the customer.'
+      : 'Are you sure you want to cancel this appointment?'
+    if (!confirm(msg)) return
+
+    if (bundleId) {
+      try {
+        const response = await fetch('/api/bundles/confirm', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bundleId, vendorId: userVendorId, action: 'cancel' })
+        })
+        if (response.ok) {
+          alert('Bundle cancelled. Customer has been notified.')
+          loadAppointments()
+        } else {
+          alert('Failed to cancel bundle')
+        }
+      } catch (error) {
+        alert('Error cancelling bundle')
+      }
+      return
+    }
+
     if (!confirm('Are you sure you want to cancel this appointment?')) return
 
     try {
@@ -61,10 +187,14 @@ export default function Appointments() {
   }
 
   const handleReschedule = async (appointmentId) => {
-    if (!newDateTime) {
-      alert('Please enter a new date and time')
+    if (!rescheduleTime) {
+      alert('Please select a time')
       return
     }
+
+    const dateStr = rescheduleDate.toISOString().split('T')[0]
+    const [hours, minutes] = rescheduleTime.split(':')
+    const newDateTime = `${dateStr}T${hours}:${minutes}:00`
 
     try {
       const response = await fetch('/api/appointments/reschedule', {
@@ -76,7 +206,7 @@ export default function Appointments() {
       if (response.ok) {
         alert('Appointment rescheduled successfully!')
         setShowReschedule(null)
-        setNewDateTime('')
+        setRescheduleTime(null)
         loadAppointments()
       } else {
         alert('Failed to reschedule appointment')
@@ -91,10 +221,27 @@ export default function Appointments() {
     switch (status) {
       case 'confirmed': return '#4CAF50'
       case 'pending': return '#FF9800'
+      case 'pending-confirmation': return '#FF9800'
       case 'cancelled': return '#F44336'
       default: return '#999'
     }
   }
+
+  const getStatusLabel = (status) => {
+    switch (status) {
+      case 'confirmed': return 'Confirmed'
+      case 'pending': return 'Pending'
+      case 'pending-confirmation': return 'Awaiting Confirmation'
+      case 'cancelled': return 'Cancelled'
+      default: return status
+    }
+  }
+
+  // Pagination logic
+  const indexOfLastItem = currentPage * itemsPerPage
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage
+  const currentAppointments = appointments.slice(indexOfFirstItem, indexOfLastItem)
+  const totalPages = Math.ceil(appointments.length / itemsPerPage)
 
   return (
     <div>
@@ -103,30 +250,34 @@ export default function Appointments() {
         View and manage your bookings.
       </p>
 
-      <div style={{ marginBottom: '2rem' }}>
-        <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-          Select Vendor:
-        </label>
-        <select
-          value={selectedVendor}
-          onChange={(e) => setSelectedVendor(e.target.value)}
-          style={{
-            padding: '0.75rem',
-            borderRadius: '8px',
-            border: '1px solid var(--color-border)',
-            fontSize: '1rem',
-            minWidth: '250px'
-          }}
-        >
-          {vendors.map(vendor => (
-            <option key={vendor.vendorId} value={vendor.vendorId}>
-              {vendor.name}
-            </option>
-          ))}
-        </select>
-      </div>
+      {userRole === 'admin' && vendors.length > 0 && (
+        <div style={{ marginBottom: '2rem' }}>
+          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+            Select Vendor:
+          </label>
+          <select
+            value={userVendorId || ''}
+            onChange={(e) => setUserVendorId(e.target.value)}
+            style={{
+              padding: '0.75rem',
+              borderRadius: '8px',
+              border: '1px solid var(--color-border)',
+              fontSize: '1rem',
+              minWidth: '250px'
+            }}
+          >
+            {vendors.map(vendor => (
+              <option key={vendor.vendorId} value={vendor.vendorId}>
+                {vendor.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
-      {loading && <p>Loading appointments...</p>}
+      {!userVendorId && <p>Loading...</p>}
+
+      {loading && userVendorId && <p>Loading appointments...</p>}
 
       {!loading && appointments.length === 0 && (
         <p style={{ color: 'var(--color-text-light)' }}>
@@ -135,7 +286,34 @@ export default function Appointments() {
       )}
 
       {!loading && appointments.length > 0 && (
-        <div style={{ overflowX: 'auto' }}>
+        <>
+          <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <label style={{ marginRight: '0.5rem' }}>Show:</label>
+              <select
+                value={itemsPerPage}
+                onChange={(e) => {
+                  setItemsPerPage(Number(e.target.value))
+                  setCurrentPage(1)
+                }}
+                style={{
+                  padding: '0.5rem',
+                  borderRadius: '4px',
+                  border: '1px solid var(--color-border)'
+                }}
+              >
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+              <span style={{ marginLeft: '1rem', color: 'var(--color-text-light)' }}>
+                Showing {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, appointments.length)} of {appointments.length}
+              </span>
+            </div>
+          </div>
+
+          <div style={{ overflowX: 'auto' }}>
           <table style={{
             width: '100%',
             borderCollapse: 'collapse',
@@ -155,7 +333,7 @@ export default function Appointments() {
               </tr>
             </thead>
             <tbody>
-              {appointments.map(apt => (
+              {currentAppointments.map(apt => (
                 <tr key={apt.appointmentId} style={{ borderBottom: '1px solid var(--color-border)' }}>
                   <td style={{ padding: '1rem' }}>{apt.dateTime}</td>
                   <td style={{ padding: '1rem' }}>
@@ -180,12 +358,33 @@ export default function Appointments() {
                       background: getStatusColor(apt.status),
                       color: 'white'
                     }}>
-                      {apt.status}
+                      {getStatusLabel(apt.status)}
                     </span>
+                    {apt.bundleId && (
+                      <div style={{ fontSize: '0.75rem', color: 'var(--color-primary)', marginTop: '0.25rem' }}>
+                        📦 Bundle
+                      </div>
+                    )}
                   </td>
                   <td style={{ padding: '1rem' }}>
                     {apt.status !== 'cancelled' && (
-                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        {(apt.status === 'pending' || apt.status === 'pending-confirmation') && (
+                          <button
+                            onClick={() => handleConfirm(apt.appointmentId, apt.bundleId)}
+                            style={{
+                              padding: '0.5rem 1rem',
+                              borderRadius: '4px',
+                              border: 'none',
+                              background: '#4CAF50',
+                              color: 'white',
+                              cursor: 'pointer',
+                              fontSize: '0.85rem'
+                            }}
+                          >
+                            Confirm
+                          </button>
+                        )}
                         <button
                           onClick={() => setShowReschedule(apt.appointmentId)}
                           style={{
@@ -201,7 +400,7 @@ export default function Appointments() {
                           Reschedule
                         </button>
                         <button
-                          onClick={() => handleCancel(apt.appointmentId)}
+                          onClick={() => handleCancel(apt.appointmentId, apt.bundleId)}
                           style={{
                             padding: '0.5rem 1rem',
                             borderRadius: '4px',
@@ -222,6 +421,41 @@ export default function Appointments() {
             </tbody>
           </table>
         </div>
+
+        {totalPages > 1 && (
+          <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'center', gap: '0.5rem' }}>
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+              style={{
+                padding: '0.5rem 1rem',
+                borderRadius: '4px',
+                border: '1px solid var(--color-border)',
+                background: currentPage === 1 ? '#f5f5f5' : 'white',
+                cursor: currentPage === 1 ? 'not-allowed' : 'pointer'
+              }}
+            >
+              Previous
+            </button>
+            <span style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center' }}>
+              Page {currentPage} of {totalPages}
+            </span>
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+              style={{
+                padding: '0.5rem 1rem',
+                borderRadius: '4px',
+                border: '1px solid var(--color-border)',
+                background: currentPage === totalPages ? '#f5f5f5' : 'white',
+                cursor: currentPage === totalPages ? 'not-allowed' : 'pointer'
+              }}
+            >
+              Next
+            </button>
+          </div>
+        )}
+      </>
       )}
 
       {showReschedule && (
@@ -241,39 +475,71 @@ export default function Appointments() {
             background: 'white',
             padding: '2rem',
             borderRadius: '8px',
-            maxWidth: '400px',
-            width: '90%'
+            maxWidth: '480px',
+            width: '90%',
+            maxHeight: '90vh',
+            overflowY: 'auto'
           }}>
             <h3>Reschedule Appointment</h3>
             <p style={{ marginBottom: '1rem', color: 'var(--color-text-light)' }}>
-              Enter new date and time (e.g., "12/25/2024 2:00 PM")
+              Select a new date and available time.
             </p>
-            <input
-              type="text"
-              value={newDateTime}
-              onChange={(e) => setNewDateTime(e.target.value)}
-              placeholder="MM/DD/YYYY HH:MM AM/PM"
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                borderRadius: '8px',
-                border: '1px solid var(--color-border)',
-                fontSize: '1rem',
-                marginBottom: '1rem'
-              }}
-            />
+
+            <div className="spa-datepicker" style={{ marginBottom: '1.5rem' }}>
+              <DatePicker
+                selected={rescheduleDate}
+                onChange={(date) => setRescheduleDate(date)}
+                minDate={new Date()}
+                inline
+              />
+            </div>
+
+            <h4 style={{ marginBottom: '0.75rem' }}>Available Times</h4>
+            {rescheduleSlotsLoading && <p>Loading times...</p>}
+            {!rescheduleSlotsLoading && rescheduleSlots.length === 0 && (
+              <p style={{ color: 'var(--color-text-light)' }}>No available times for this date.</p>
+            )}
+            {!rescheduleSlotsLoading && rescheduleSlots.length > 0 && (
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: '0.5rem',
+                marginBottom: '1.5rem'
+              }}>
+                {rescheduleSlots.map(slot => (
+                  <div
+                    key={slot.time}
+                    onClick={() => setRescheduleTime(slot.time)}
+                    style={{
+                      padding: '0.75rem',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      background: rescheduleTime === slot.time ? 'var(--color-primary)' : 'var(--color-accent)',
+                      color: rescheduleTime === slot.time ? 'white' : 'var(--color-text)',
+                      textAlign: 'center',
+                      fontWeight: '500',
+                      transition: '0.2s ease'
+                    }}
+                  >
+                    {slot.display}
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div style={{ display: 'flex', gap: '1rem' }}>
               <button
                 onClick={() => handleReschedule(showReschedule)}
+                disabled={!rescheduleTime}
                 className="cta"
-                style={{ flex: 1 }}
+                style={{ flex: 1, opacity: rescheduleTime ? 1 : 0.5 }}
               >
                 Confirm
               </button>
               <button
                 onClick={() => {
                   setShowReschedule(null)
-                  setNewDateTime('')
+                  setRescheduleTime(null)
                 }}
                 style={{
                   flex: 1,

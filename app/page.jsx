@@ -1,79 +1,91 @@
-'use client'
+import CherryBlossom from './components/CherryBlossom';
+import CherryBlossomHero from './components/CherryBlossomHero';
+import CherryBlossomHeading from './components/CherryBlossomHeading';
+
+export const metadata = {
+  title: 'The Spa Synergy | Luxury Spa & Wellness Services in Fort Ritchie, MD',
+  description: 'Book premium spa, beauty, and wellness services at The Spa Synergy in Fort Ritchie, MD. Expert massage, hair styling, and private suite rentals.',
+  keywords: 'spa Fort Ritchie, massage Fort Ritchie MD, hair salon Fort Ritchie, beauty services Maryland, wellness center, spa near Hagerstown MD, massage Thurmont MD, salon Smithsburg MD, spa Sabillasville MD, wellness Leitersburg MD, spa Frederick MD, massage Waynesboro PA, salon Blue Ridge Summit PA, spa Gettysburg PA, wellness Chambersburg PA',
+  openGraph: {
+    title: 'The Spa Synergy | Luxury Spa & Wellness',
+    description: 'Premium spa and wellness services in Fort Ritchie, MD',
+    type: 'website',
+    locale: 'en_US',
+  },
+}
 
 export default function Home() {
   return (
-    <main style={{
-      minHeight: '100vh',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '2rem',
-      fontFamily: 'system-ui, -apple-system, sans-serif',
-      backgroundColor: '#f5f5f5'
-    }}>
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.05); }
-        }
-      `}</style>
-      
-      <div style={{
-        maxWidth: '800px',
-        backgroundColor: 'white',
-        padding: '3rem',
-        borderRadius: '8px',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-      }}>
-        <h1 style={{ 
-          textAlign: 'center', 
-          marginBottom: '2rem', 
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-          backgroundClip: 'text',
-          fontSize: '3rem',
-          fontWeight: 'bold',
-          animation: 'pulse 2s ease-in-out infinite'
-        }}>
-          🚧 Under Construction 🚧
-        </h1>
-        
-        <div style={{ marginBottom: '2.5rem' }}>
-          <h2 style={{ color: '#555', marginBottom: '1rem' }}>The Kera Studio</h2>
-          <p style={{ marginBottom: '0.5rem', lineHeight: '1.6' }}>
-            If you'd like to book now please go to{' '}
-            <a href="https://www.vagaro.com/thekerastudio" target="_blank" rel="noopener noreferrer" style={{ color: '#0066cc' }}>
-              Vagaro.com/Thekerastudio
-            </a>
-          </p>
-          <p style={{ lineHeight: '1.6' }}>
-            Or call <a href="tel:2403296537" style={{ color: '#0066cc' }}>240-329-6537</a> for more information
-          </p>
+    <main className="home">
+      <section className="hero">
+        <h1>Welcome to The Spa Synergy</h1>
+        <p style={{ color: 'var(--color-text-light)', marginTop: '1rem' }}>
+          Your sanctuary for relaxation, beauty, and wellness
+        </p>
+        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginTop: '1.5rem', flexWrap: 'wrap' }}>
+          <a href="/services" className="cta">Book an Appointment</a>
+          <a href="/vendors" className="cta" style={{ background: 'var(--color-warm)' }}>Get to Know Us</a>
         </div>
+      </section>
 
-        <div style={{ marginBottom: '2.5rem' }}>
-          <h2 style={{ color: '#555', marginBottom: '1rem' }}>Winsome Woods</h2>
-          <p style={{ marginBottom: '0.5rem', lineHeight: '1.6' }}>
-            If you'd like more information please visit{' '}
-            <a href="https://www.facebook.com/WinsomeWoodsLLC" target="_blank" rel="noopener noreferrer" style={{ color: '#0066cc' }}>
-              facebook.com/WinsomeWoodsLLC
-            </a>
-          </p>
-          <p style={{ lineHeight: '1.6' }}>
-            Or call <a href="tel:3019923224" style={{ color: '#0066cc' }}>301-992-3224</a> for more information
-          </p>
+      <section style={{ padding: '4rem 2rem', maxWidth: '1200px', margin: '0 auto' }}>
+        <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
+          <CherryBlossomHeading text="Experience Luxury & Wellness" />
         </div>
-
-        <div style={{ textAlign: 'center', padding: '1.5rem', backgroundColor: '#f9f9f9', borderRadius: '4px' }}>
-          <p style={{ margin: 0, lineHeight: '1.6', color: '#666' }}>
-            <strong>Address:</strong><br />
-            14310 Castle Dr<br />
-            Fort Ritchie, MD 21719
-          </p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '2rem' }}>
+          <div style={{
+            borderRadius: '12px',
+            overflow: 'hidden',
+            background: 'var(--color-accent)'
+          }}>
+            <div style={{
+              height: '250px',
+              backgroundImage: 'url(https://the-spa-synergy-public.s3.us-east-1.amazonaws.com/vendorPictures/spa_lounge-00.JPEG)',
+              backgroundSize: 'cover',
+              backgroundPosition: 'center'
+            }}>
+            </div>
+            <div style={{ padding: '1.5rem' }}>
+              <h3>Relaxation Services</h3>
+              <p style={{ color: 'var(--color-text-light)' }}>Unwind with our premium massage and wellness treatments.</p>
+            </div>
+          </div>
+          <div style={{
+            borderRadius: '12px',
+            overflow: 'hidden',
+            background: 'var(--color-accent)'
+          }}>
+            <div style={{
+              height: '250px',
+              backgroundImage: 'url(https://the-spa-synergy-public.s3.us-east-1.amazonaws.com/vendorPictures/hair-00.JPEG)',
+              backgroundSize: 'cover',
+              backgroundPosition: 'center 30%'
+            }}>
+            </div>
+            <div style={{ padding: '1.5rem' }}>
+              <h3>Beauty & Hair</h3>
+              <p style={{ color: 'var(--color-text-light)' }}>Expert styling, coloring, and beauty treatments.</p>
+            </div>
+          </div>
+          <div style={{
+            borderRadius: '12px',
+            overflow: 'hidden',
+            background: 'var(--color-accent)'
+          }}>
+            <div style={{
+              height: '250px',
+              backgroundImage: 'url(https://the-spa-synergy-public.s3.us-east-1.amazonaws.com/vendorPictures/grooms_party-00.JPG)',
+              backgroundSize: 'cover',
+              backgroundPosition: 'center'
+            }}>
+            </div>
+            <div style={{ padding: '1.5rem' }}>
+              <h3>Events & Parties</h3>
+              <p style={{ color: 'var(--color-text-light)' }}>Prepare and relax for your special occasions with our group services and event packages.</p>
+            </div>
+          </div>
         </div>
-      </div>
+      </section>
     </main>
   )
 }

@@ -1,95 +1,68 @@
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
-import { awsConfig } from '../config/aws';
+import { generateClient } from 'aws-amplify/data';
+import { Amplify } from 'aws-amplify';
+import config from '../amplify-config';
 
-const sesClient = new SESClient(awsConfig);
+Amplify.configure(config, { ssr: true });
+const client = generateClient();
 
-export async function sendAppointmentConfirmation(appointment, vendor, service) {
-  const params = {
-    Source: process.env.SES_FROM_EMAIL || 'noreply@yourdomain.com',
-    Destination: {
-      ToAddresses: [appointment.customer.email]
-    },
-    Message: {
-      Subject: {
-        Data: `Appointment Confirmation - ${vendor.name}`
-      },
-      Body: {
-        Html: {
-          Data: `
-            <h2>Appointment Confirmed!</h2>
-            <p>Hi ${appointment.customer.name},</p>
-            <p>Your appointment has been confirmed with the following details:</p>
-            <ul>
-              <li><strong>Vendor:</strong> ${vendor.name}</li>
-              <li><strong>Service:</strong> ${service.name}</li>
-              <li><strong>Duration:</strong> ${service.duration} minutes</li>
-              <li><strong>Date & Time:</strong> ${appointment.dateTime}</li>
-              <li><strong>Price:</strong> $${service.price}</li>
-            </ul>
-            <p>If you need to cancel or reschedule, please contact us.</p>
-            <p>Thank you!</p>
-          `
-        },
-        Text: {
-          Data: `
-Appointment Confirmed!
+const sesClient = new SESClient({ region: 'us-east-1' });
 
-Hi ${appointment.customer.name},
-
-Your appointment has been confirmed:
-- Vendor: ${vendor.name}
-- Service: ${service.name}
-- Duration: ${service.duration} minutes
-- Date & Time: ${appointment.dateTime}
-- Price: $${service.price}
-
-Thank you!
-          `
-        }
-      }
-    }
-  };
-
+export async function sendAppointmentEmail({ to, appointmentId, vendorId, serviceId, dateTime }) {
   try {
-    await sesClient.send(new SendEmailCommand(params));
-    console.log('Confirmation email sent to:', appointment.customer.email);
-  } catch (error) {
-    console.error('Error sending email:', error);
-  }
-}
+    const [vendorRes, serviceRes] = await Promise.all([
+      client.models.Vendor.get({ vendorId }),
+      client.models.Service.get({ serviceId })
+    ]);
 
-export async function sendCancellationEmail(appointment, vendor, service) {
-  const params = {
-    Source: process.env.SES_FROM_EMAIL || 'noreply@yourdomain.com',
-    Destination: {
-      ToAddresses: [appointment.customer.email]
-    },
-    Message: {
-      Subject: {
-        Data: `Appointment Cancelled - ${vendor.name}`
-      },
-      Body: {
-        Html: {
-          Data: `
-            <h2>Appointment Cancelled</h2>
-            <p>Hi ${appointment.customer.name},</p>
-            <p>Your appointment has been cancelled:</p>
-            <ul>
-              <li><strong>Vendor:</strong> ${vendor.name}</li>
-              <li><strong>Service:</strong> ${service.name}</li>
-              <li><strong>Date & Time:</strong> ${appointment.dateTime}</li>
-            </ul>
-            <p>If you'd like to rebook, please visit our website.</p>
-          `
-        }
+    const vendor = vendorRes.data;
+    const service = serviceRes.data;
+
+    const formattedDate = new Date(dateTime).toLocaleString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZone: 'America/New_York'
+    });
+
+    const emailBody = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #8B4789;">Appointment Confirmed</h2>
+        <p>Thank you for booking with The Spa Synergy!</p>
+        
+        <div style="background: #f9f9f9; padding: 20px; border-radius: 8px; margin: 20px 0;">
+          <p><strong>Vendor:</strong> ${vendor?.name || 'N/A'}</p>
+          <p><strong>Service:</strong> ${service?.name || 'N/A'}</p>
+          <p><strong>Date & Time:</strong> ${formattedDate}</p>
+          <p><strong>Duration:</strong> ${service?.duration || 0} minutes</p>
+          <p><strong>Price:</strong> $${service?.price || 0}</p>
+        </div>
+
+        <p>If you need to cancel or reschedule, please contact us at least 24 hours in advance.</p>
+        <p>We look forward to seeing you!</p>
+        
+        <p style="color: #666; font-size: 12px; margin-top: 30px;">
+          The Spa Synergy<br>
+          Fort Ritchie, MD
+        </p>
+      </div>
+    `;
+
+    await sesClient.send(new SendEmailCommand({
+      Source: process.env.SES_FROM_EMAIL || 'patrick@fortinbras.net',
+      Destination: { ToAddresses: [to] },
+      Message: {
+        Subject: { Data: 'Appointment Confirmation - The Spa Synergy' },
+        Body: { Html: { Data: emailBody } }
       }
-    }
-  };
+    }));
 
-  try {
-    await sesClient.send(new SendEmailCommand(params));
-    console.log('Cancellation email sent to:', appointment.customer.email);
+    console.log('Confirmation email sent to:', to);
   } catch (error) {
-    console.error('Error sending email:', error);
+    console.error('Error sending appointment email:', error);
+    throw error;
   }
 }
