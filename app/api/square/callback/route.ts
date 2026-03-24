@@ -41,6 +41,7 @@ export async function GET(request: NextRequest) {
     const appId = process.env.SQUARE_APPLICATION_ID || process.env.NEXT_PUBLIC_SQUARE_APPLICATION_ID
     const appSecret = process.env.SQUARE_APPLICATION_SECRET
     if (!appId || !appSecret) {
+      console.error('Square callback: missing credentials', { hasAppId: !!appId, hasAppSecret: !!appSecret })
       return Response.redirect(`${baseUrl}/dashboard/settings?error=missing_credentials`)
     }
 

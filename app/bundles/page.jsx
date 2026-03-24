@@ -51,7 +51,7 @@ export default function BundlesPage() {
               {bundle.description}
             </p>
             <p style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1.5rem' }}>
-              ${bundle.price}
+              {bundle.price ? `$${bundle.price}` : 'Price Varies'}
             </p>
           </div>
         ))}
