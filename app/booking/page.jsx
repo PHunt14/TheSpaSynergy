@@ -7,11 +7,16 @@ function BookingContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const preselect = searchParams.get('preselect')
+function BookingContent() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const preselect = searchParams.get('preselect')
   const [vendors, setVendors] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     fetch('/api/vendors')
+      .then(res => res.json())
       .then(res => res.json())
       .then(data => {
         setVendors(data.vendors || [])
@@ -19,13 +24,19 @@ function BookingContent() {
       })
       .catch(err => {
         console.error('Error loading data:', err)
+        console.error('Error loading data:', err)
         setLoading(false)
       })
   }, [])
 
   if (loading) return <div style={{ padding: '2rem' }}>Loading...</div>
+  if (loading) return <div style={{ padding: '2rem' }}>Loading...</div>
 
   return (
+    <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
+      <h1>Our Professionals</h1>
+      <p style={{ color: 'var(--color-text-light)', marginBottom: '3rem' }}>
+        Discover our talented professionals and their unique services.
     <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
       <h1>Our Professionals</h1>
       <p style={{ color: 'var(--color-text-light)', marginBottom: '3rem' }}>
@@ -75,6 +86,15 @@ function BookingContent() {
           )
         })}
       </div>
+    </div>
+  )
+}
+
+export default function Booking() {
+  return (
+    <Suspense fallback={<div style={{ padding: '2rem' }}>Loading...</div>}>
+      <BookingContent />
+    </Suspense>
     </div>
   )
 }
