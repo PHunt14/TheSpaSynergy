@@ -1,6 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   env: {
+    SQUARE_APPLICATION_ID: process.env.SQUARE_APPLICATION_ID,
+    SQUARE_APPLICATION_SECRET: process.env.SQUARE_APPLICATION_SECRET,
     SQUARE_ACCESS_TOKEN: process.env.SQUARE_ACCESS_TOKEN,
     EMAIL_PROVIDER: process.env.EMAIL_PROVIDER,
     EMAIL_TEST_ADDRESS: process.env.EMAIL_TEST_ADDRESS,

@@ -16,31 +16,59 @@ That's it — no credentials to copy/paste.
 
 Set in `.env.local` for local development and in **Amplify Console → App Settings → Environment variables** for deployed environments.
 
+**All 6 variables below are required.** The OAuth flow will fail with "Square credentials not configured" if any are missing.
+
 ```env
 # Platform Square app (single developer account)
-SQUARE_APPLICATION_ID=YOUR_APP_ID
-SQUARE_APPLICATION_SECRET=YOUR_OAUTH_SECRET
-SQUARE_ACCESS_TOKEN=YOUR_PLATFORM_ACCESS_TOKEN
-SQUARE_WEBHOOK_SIGNATURE_KEY=YOUR_WEBHOOK_SIGNATURE_KEY
+SQUARE_APPLICATION_ID=sq0idb-XXXXXXXXXXXXXXXXXXXX
+SQUARE_APPLICATION_SECRET=sq0csp-XXXXXXXXXXXXXXXXXXXX
+SQUARE_ACCESS_TOKEN=EAAAl...(your platform access token)
+SQUARE_WEBHOOK_SIGNATURE_KEY=your_webhook_signature_key
 
-# Public (exposed to browser)
-NEXT_PUBLIC_SQUARE_APPLICATION_ID=YOUR_APP_ID
-NEXT_PUBLIC_SQUARE_ENVIRONMENT=sandbox  # or production
+# Public (exposed to browser — MUST match SQUARE_APPLICATION_ID)
+NEXT_PUBLIC_SQUARE_APPLICATION_ID=sq0idb-XXXXXXXXXXXXXXXXXXXX
+NEXT_PUBLIC_SQUARE_ENVIRONMENT=production
 ```
+
+#### Where to find each value
+
+1. Go to https://developer.squareup.com → select your application
+2. **SQUARE_APPLICATION_ID** / **NEXT_PUBLIC_SQUARE_APPLICATION_ID**: Credentials page → "Production Application ID" (starts with `sq0idb-`). Both vars must have the same value
+3. **SQUARE_APPLICATION_SECRET**: OAuth page → "Production Application Secret" (starts with `sq0csp-`)
+4. **SQUARE_ACCESS_TOKEN**: Credentials page → "Production Access Token" (starts with `EAAAl`)
+5. **SQUARE_WEBHOOK_SIGNATURE_KEY**: Webhooks page → your endpoint → "Signature Key"
+
+> **Important**: `SQUARE_APPLICATION_ID` and `SQUARE_APPLICATION_SECRET` are passed to server-side code via `next.config.mjs`. If you add new server-side Square env vars, they must also be added to the `env` block in `next.config.mjs`.
+
+#### Verifying env vars are set correctly
+
+After deploying, visit `/api/square/debug` in your browser. It will show which variables are set (with partial values) without exposing secrets. **Delete this endpoint before going live with real customers.**
 
 ### Square Developer Dashboard Setup
 
 1. Go to https://developer.squareup.com → your application
-2. Under **OAuth**, add the redirect URL: `https://yourdomain.com/api/square/callback`
+2. Under **OAuth**:
+   - Add redirect URL for dev: `https://www.dev.thespasynergy.com/api/square/callback`
+   - Add redirect URL for prod: `https://www.thespasynergy.com/api/square/callback`
+   - Ensure the redirect URL **exactly matches** `NEXT_PUBLIC_APP_URL` + `/api/square/callback`
 3. Under **Webhooks**, add endpoint: `https://yourdomain.com/api/webhooks/square`
    - Subscribe to: `payment.updated`, `payment.completed`
    - Copy the signature key to `SQUARE_WEBHOOK_SIGNATURE_KEY`
+
+### Setting Environment Variables in Amplify
+
+1. Go to **AWS Amplify Console** → your app → **Hosting** → **Environment variables**
+2. Add all 6 variables listed above
+3. Also ensure `NEXT_PUBLIC_APP_URL` is set (e.g., `https://www.thespasynergy.com`)
+4. **Trigger a new build/deploy** — env var changes are NOT picked up until the next deployment
+5. After deploy completes, verify at `https://yoursite.com/api/square/debug`
 
 ### Going to Production
 
 1. Set `NEXT_PUBLIC_SQUARE_ENVIRONMENT=production`
 2. Update all credentials to production values
 3. Update OAuth redirect URL in Square Developer Dashboard
+4. Delete the `/api/square/debug` endpoint
 
 ## How Payments Work
 
@@ -79,14 +107,18 @@ With production credentials, use any of these approaches:
 
 ### Setup for Production Testing
 
-1. In the Square Developer Dashboard, get your **production** Application ID and OAuth Secret
-2. Set env vars in Amplify (or `.env.local` for local dev):
-   - `SQUARE_APPLICATION_ID` → production ID (starts with `sq0idb-`, no `sandbox-` prefix)
-   - `SQUARE_APPLICATION_SECRET` → production OAuth secret
-3. Add your redirect URL under the **production** app's OAuth settings:
+1. In the Square Developer Dashboard, get your **production** Application ID and OAuth Secret (see "Where to find each value" above)
+2. Set all 6 env vars in Amplify Console (or `.env.local` for local dev) — see the Environment Variables section above
+3. Ensure `NEXT_PUBLIC_APP_URL` is set correctly:
+   - Local: `http://localhost:3000`
+   - Dev: `https://www.dev.thespasynergy.com`
+   - Prod: `https://www.thespasynergy.com`
+4. In Square Developer Dashboard → OAuth, add your redirect URL:
    - Dev: `https://www.dev.thespasynergy.com/api/square/callback`
    - Prod: `https://www.thespasynergy.com/api/square/callback`
-4. The code auto-detects sandbox vs production from the Application ID prefix
+5. **Deploy** — env var changes require a new build
+6. Verify at `/api/square/debug` that all vars show as "set"
+7. Test the OAuth flow: Dashboard → Settings → Connect with Square
 
 ### Test Card (Sandbox Only)
 
