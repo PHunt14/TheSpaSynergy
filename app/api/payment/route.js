@@ -51,10 +51,10 @@ async function processSinglePayment(sourceId, amount, vendorId) {
 
   // Use vendor's Square token if available, otherwise use platform token
   const accessToken = vendor.squareAccessToken || process.env.SQUARE_ACCESS_TOKEN;
-  const locationId = vendor.squareLocationId || process.env.NEXT_PUBLIC_SQUARE_LOCATION_ID;
+  const locationId = vendor.squareLocationId;
 
-  if (!accessToken) {
-    console.error('No Square access token available for vendor:', vendorId);
+  if (!accessToken || !locationId) {
+    console.error('Square not configured for vendor:', vendorId);
     return Response.json({ 
       error: 'Payment configuration error',
       details: 'Square payment not configured for this vendor'
@@ -193,7 +193,7 @@ async function processBundlePayment(sourceId, totalAmount, bundlePayments) {
       amount: Math.round(totalAmount * 100),
       currency: 'USD'
     },
-    locationId: primaryVendor.squareLocationId || process.env.NEXT_PUBLIC_SQUARE_LOCATION_ID,
+    locationId: primaryVendor.squareLocationId,
     additionalRecipients: additionalRecipients.length > 0 ? additionalRecipients : undefined
   });
 
