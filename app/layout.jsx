@@ -18,8 +18,14 @@ export default function RootLayout({ children }) {
     <html lang="en" className={`${allura.variable} ${quicksand.variable}`}>
       <body className="layout-body">
         <Navbar />
+        <div style={{ background: '#fff3cd', borderBottom: '1px solid #ffc107', padding: '0.5rem 1rem', textAlign: 'center', fontSize: '0.95rem', fontFamily: 'var(--font-quicksand), sans-serif' }}>
+          ⚠️ This is a test site only — no real bookings or payments will be processed.
+        </div>
         <div className="layout-content">
           {children}
+        </div>
+        <div style={{ background: '#fff3cd', borderTop: '1px solid #ffc107', padding: '0.5rem 1rem', textAlign: 'center', fontSize: '0.95rem', fontFamily: 'var(--font-quicksand), sans-serif' }}>
+          ⚠️ This is a test site only — no real bookings or payments will be processed.
         </div>
         <Footer />
       </body>
