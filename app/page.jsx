@@ -24,7 +24,8 @@ export default function Home() {
         </p>
         <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginTop: '1.5rem', flexWrap: 'wrap' }}>
           <a href="/services" className="cta">Book an Appointment</a>
-          <a href="/vendors" className="cta" style={{ background: 'var(--color-warm)' }}>Get to Know Us</a>
+          <a href="/sauna" className="cta" style={{ background: 'var(--color-warm)' }}>Book the Sauna</a>
+          <a href="/vendors" className="cta" style={{ background: 'var(--color-primary)' }}>Get to Know Us</a>
         </div>
       </section>
 
