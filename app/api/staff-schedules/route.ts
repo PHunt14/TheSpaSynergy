@@ -68,7 +68,7 @@ export async function POST(request: Request) {
     if (!currentUser) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await request.json();
-    const { staffName, staffEmail, vendorId, schedule, autoAssignRules } = body;
+    const { staffName, staffEmail, vendorId, schedule, autoAssignRules, smsAlertsEnabled, smsAlertPhone, emailAlertsEnabled } = body;
 
     if (!staffName || !vendorId) {
       return Response.json({ error: 'Staff name and vendor required' }, { status: 400 });
@@ -88,6 +88,9 @@ export async function POST(request: Request) {
       vendorId,
       schedule: JSON.stringify(schedule || {}),
       autoAssignRules: autoAssignRules ? JSON.stringify(autoAssignRules) : null,
+      smsAlertsEnabled: smsAlertsEnabled || false,
+      smsAlertPhone: smsAlertPhone || '',
+      emailAlertsEnabled: emailAlertsEnabled || false,
       isActive: true,
     } as any);
 
@@ -124,6 +127,9 @@ export async function PATCH(request: Request) {
     if (schedule !== undefined) updateData.schedule = JSON.stringify(schedule);
     if (autoAssignRules !== undefined) updateData.autoAssignRules = autoAssignRules ? JSON.stringify(autoAssignRules) : null;
     if (isActive !== undefined) updateData.isActive = isActive;
+    if (body.smsAlertsEnabled !== undefined) updateData.smsAlertsEnabled = body.smsAlertsEnabled;
+    if (body.smsAlertPhone !== undefined) updateData.smsAlertPhone = body.smsAlertPhone;
+    if (body.emailAlertsEnabled !== undefined) updateData.emailAlertsEnabled = body.emailAlertsEnabled;
 
     const { data, errors } = await client.models.StaffSchedule.update(updateData as any);
     if (errors) return Response.json({ error: 'Failed to update' }, { status: 500 });

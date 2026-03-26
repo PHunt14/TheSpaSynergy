@@ -4,9 +4,11 @@ The Spa Synergy sends SMS and email notifications to both customers and vendors 
 
 ## What Gets Sent
 
-| Event | Customer SMS | Customer Email | Vendor SMS | Vendor Email |
-|-------|-------------|----------------|------------|--------------|
-| Booking created | ✅ (if opted in) | ✅ (always) | ✅ (if enabled) | ✅ (always) |
+| Event | Customer SMS | Customer Email | Vendor SMS | Vendor Email | Staff SMS | Staff Email |
+|-------|-------------|----------------|------------|--------------|-----------|-------------|
+| Booking created | ✅ (if opted in) | ✅ (always) | ✅ (if enabled) | ✅ (always) | ✅ (if enabled) | ✅ (if enabled) |
+
+**Staff notifications** are sent to the individual staff member assigned to the appointment, in addition to the vendor-level notifications. Each staff member can enable/disable their own SMS and email alerts via the Staff Schedule editor in the dashboard.
 
 ## Architecture
 
@@ -15,6 +17,11 @@ All notifications flow through two shared utilities:
 - `lib/email.ts` — pluggable email (SES or Console)
 
 Both support test overrides to route all messages to your personal phone/email during development.
+
+### Notification Levels
+
+- **Vendor-level**: Configured in Dashboard → Settings. The vendor's SMS alert phone and email receive all bookings for that vendor.
+- **Staff-level**: Configured in Dashboard → Staff (schedule editor). Each staff member can set their own SMS phone number and email preferences. Staff notifications are sent to the assigned staff member for a given appointment, in addition to vendor-level notifications. Both the staff member and the owner/admin can manage these settings.
 
 ---
 
@@ -213,6 +220,13 @@ Emails will include a banner showing the original recipient.
 ### Customer email not sending
 - Customer must provide an email address during booking
 - Check server console for `Customer email failed:` errors
+
+### Staff SMS/email not sending
+- Staff member must have `smsAlertsEnabled` and/or `emailAlertsEnabled` turned on in their staff schedule
+- SMS requires a valid 10-digit `smsAlertPhone` on the staff schedule
+- Email requires a `staffEmail` on the staff schedule
+- The staff member must be the one assigned to the appointment (via `staffId` or auto-assign rules)
+- Check server console for `Staff SMS failed:` or `Staff email failed:` errors
 
 ---
 

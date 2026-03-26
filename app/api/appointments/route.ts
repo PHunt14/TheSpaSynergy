@@ -122,6 +122,45 @@ export async function POST(request: Request) {
       console.log('Vendor email skipped: no vendorEmail set and no EMAIL_TEST_ADDRESS');
     }
 
+    // Staff member notifications
+    try {
+      let assignedStaffRecord = null;
+      if (staffId) {
+        const { data: staffRec } = await client.models.StaffSchedule.get({ visibleId: staffId });
+        assignedStaffRecord = staffRec;
+      }
+      if (!assignedStaffRecord) {
+        const { data: staffList } = await client.models.StaffSchedule.listStaffScheduleByVendorId({ vendorId });
+        const activeStaff = (staffList || []).filter(s => s.isActive);
+        if (activeStaff.length === 1) {
+          assignedStaffRecord = activeStaff[0];
+        } else if (activeStaff.length > 1) {
+          const bookingDate = new Date(dateTime);
+          const dayOfWeek = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'][bookingDate.getDay()];
+          for (const staff of activeStaff) {
+            if (!staff.autoAssignRules) continue;
+            const rules = JSON.parse(staff.autoAssignRules as string);
+            if (rules.some((r: any) => r.action === 'auto-assign' && r.days?.includes(dayOfWeek))) {
+              assignedStaffRecord = staff;
+              break;
+            }
+          }
+        }
+      }
+      if (assignedStaffRecord) {
+        if (assignedStaffRecord.smsAlertsEnabled && assignedStaffRecord.smsAlertPhone) {
+          const staffMsg = `New Booking Alert!\n\nService: ${serviceName}\nCustomer: ${customer.name}\nPhone: ${customer.phone}\nDate/Time: ${formattedDateTime}\n\nThe Spa Synergy\nReply STOP to opt out`;
+          notifications.push(sendSms(assignedStaffRecord.smsAlertPhone, staffMsg).catch(err => console.error('Staff SMS failed:', err)) as Promise<void>);
+        }
+        if (assignedStaffRecord.emailAlertsEnabled && assignedStaffRecord.staffEmail) {
+          notifications.push(sendVendorBookingEmail({
+            to: assignedStaffRecord.staffEmail, customerName: customer.name, customerPhone: customer.phone || '',
+            customerEmail: customer.email || '', serviceName, dateTime,
+          }).catch(err => console.error('Staff email failed:', err)));
+        }
+      }
+    } catch (e) { console.error('Staff notification lookup failed:', e); }
+
     await Promise.all(notifications);
 
     return Response.json({ 
