@@ -30,7 +30,7 @@ export default function Staff() {
   const [schedules, setSchedules] = useState([])
   const [loadingSchedules, setLoadingSchedules] = useState(true)
   const [editingSchedule, setEditingSchedule] = useState(null) // visibleId or 'new'
-  const [scheduleForm, setScheduleForm] = useState({ staffName: '', staffEmail: '', vendorId: '', schedule: emptySchedule(), autoAssignDays: [] })
+  const [scheduleForm, setScheduleForm] = useState({ staffName: '', staffEmail: '', vendorId: '', schedule: emptySchedule(), autoAssignDays: [], smsAlertsEnabled: false, smsAlertPhone: '', emailAlertsEnabled: false })
   const [savingSchedule, setSavingSchedule] = useState(false)
 
   useEffect(() => {
@@ -123,7 +123,7 @@ export default function Staff() {
   // --- Schedule management handlers ---
   const startNewSchedule = () => {
     const vendorId = currentUserRole === 'vendor' ? currentUserVendorId : (vendors[0]?.vendorId || '')
-    setScheduleForm({ staffName: '', staffEmail: '', vendorId, schedule: emptySchedule(), autoAssignDays: [] })
+    setScheduleForm({ staffName: '', staffEmail: '', vendorId, schedule: emptySchedule(), autoAssignDays: [], smsAlertsEnabled: false, smsAlertPhone: '', emailAlertsEnabled: false })
     setEditingSchedule('new')
   }
 
@@ -131,7 +131,7 @@ export default function Staff() {
     const schedule = typeof s.schedule === 'string' ? JSON.parse(s.schedule) : (s.schedule || emptySchedule())
     const rules = s.autoAssignRules ? (typeof s.autoAssignRules === 'string' ? JSON.parse(s.autoAssignRules) : s.autoAssignRules) : []
     const autoAssignDays = rules.length > 0 && rules[0].days ? rules[0].days : []
-    setScheduleForm({ staffName: s.staffName || '', staffEmail: s.staffEmail || '', vendorId: s.vendorId, schedule, autoAssignDays })
+    setScheduleForm({ staffName: s.staffName || '', staffEmail: s.staffEmail || '', vendorId: s.vendorId, schedule, autoAssignDays, smsAlertsEnabled: s.smsAlertsEnabled || false, smsAlertPhone: s.smsAlertPhone || '', emailAlertsEnabled: s.emailAlertsEnabled || false })
     setEditingSchedule(s.visibleId)
   }
 
@@ -169,6 +169,13 @@ export default function Staff() {
       ? [{ days: scheduleForm.autoAssignDays, action: 'auto-assign', vendorId: scheduleForm.vendorId }]
       : null
 
+    if (scheduleForm.smsAlertsEnabled && scheduleForm.smsAlertPhone.replace(/\D/g, '').length !== 10) {
+      alert('Please enter a valid 10-digit phone number for SMS alerts'); setSavingSchedule(false); return
+    }
+    if (scheduleForm.emailAlertsEnabled && !scheduleForm.staffEmail) {
+      alert('Email address is required to enable email alerts'); setSavingSchedule(false); return
+    }
+
     try {
       const isNew = editingSchedule === 'new'
       const res = await fetch('/api/staff-schedules', {
@@ -180,7 +187,10 @@ export default function Staff() {
           staffEmail: scheduleForm.staffEmail,
           vendorId: scheduleForm.vendorId,
           schedule: scheduleForm.schedule,
-          autoAssignRules
+          autoAssignRules,
+          smsAlertsEnabled: scheduleForm.smsAlertsEnabled,
+          smsAlertPhone: scheduleForm.smsAlertPhone.replace(/\D/g, ''),
+          emailAlertsEnabled: scheduleForm.emailAlertsEnabled,
         })
       })
       if (res.ok) { setEditingSchedule(null); loadSchedules() }
@@ -378,6 +388,27 @@ export default function Staff() {
               </div>
             )}
 
+            <h4 style={{ marginBottom: '0.75rem' }}>Notifications</h4>
+            <div style={{ marginBottom: '1.5rem', maxWidth: '500px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', marginBottom: '0.75rem' }}>
+                <input type="checkbox" checked={scheduleForm.emailAlertsEnabled} onChange={(e) => setScheduleForm(p => ({ ...p, emailAlertsEnabled: e.target.checked }))} style={{ width: '18px', height: '18px' }} />
+                <span style={{ fontWeight: 500 }}>Email alerts for new bookings</span>
+              </label>
+              {scheduleForm.emailAlertsEnabled && !scheduleForm.staffEmail && (
+                <p style={{ fontSize: '0.85rem', color: '#c33', margin: '0 0 0.75rem 0' }}>⚠ Enter an email address above to receive email alerts.</p>
+              )}
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', marginBottom: '0.5rem' }}>
+                <input type="checkbox" checked={scheduleForm.smsAlertsEnabled} onChange={(e) => setScheduleForm(p => ({ ...p, smsAlertsEnabled: e.target.checked }))} style={{ width: '18px', height: '18px' }} />
+                <span style={{ fontWeight: 500 }}>SMS alerts for new bookings</span>
+              </label>
+              {scheduleForm.smsAlertsEnabled && (
+                <div style={{ marginLeft: '1.75rem' }}>
+                  <input type="tel" value={scheduleForm.smsAlertPhone} onChange={(e) => setScheduleForm(p => ({ ...p, smsAlertPhone: e.target.value }))} placeholder="2403670395" style={{ width: '100%', ...inputStyle }} />
+                  <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.25rem' }}>10-digit phone number (no dashes or spaces)</p>
+                </div>
+              )}
+            </div>
+
             <h4 style={{ marginBottom: '0.75rem' }}>Working Hours</h4>
             <div style={{ display: 'grid', gap: '0.5rem', marginBottom: '1.5rem' }}>
               {DAYS.map(day => {
@@ -449,6 +480,12 @@ export default function Staff() {
                       <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>{s.staffName}</div>
                       <div style={{ fontSize: '0.9rem', color: 'var(--color-text-light)' }}>{getVendorName(s.vendorId)}</div>
                       {s.staffEmail && <div style={{ fontSize: '0.85rem', color: 'var(--color-text-light)' }}>{s.staffEmail}</div>}
+                      {(s.emailAlertsEnabled || s.smsAlertsEnabled) && (
+                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
+                          {s.emailAlertsEnabled && <span style={{ fontSize: '0.8rem', background: '#d4edda', color: '#155724', padding: '0.15rem 0.5rem', borderRadius: '10px' }}>📧 Email</span>}
+                          {s.smsAlertsEnabled && <span style={{ fontSize: '0.8rem', background: '#d4edda', color: '#155724', padding: '0.15rem 0.5rem', borderRadius: '10px' }}>📱 SMS</span>}
+                        </div>
+                      )}
                     </div>
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                       <button onClick={() => startEditSchedule(s)} style={btnStyle('#2196F3')}>Edit</button>

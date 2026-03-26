@@ -116,6 +116,9 @@ const schema = a.schema({
       vendorId: a.string().required(),
       schedule: a.json(),
       autoAssignRules: a.json(),
+      smsAlertsEnabled: a.boolean().default(false),
+      smsAlertPhone: a.string(),
+      emailAlertsEnabled: a.boolean().default(false),
       isActive: a.boolean().default(true),
     })
     .identifier(['visibleId'])
