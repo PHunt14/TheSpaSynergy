@@ -14,7 +14,12 @@ function BookingContent() {
     fetch('/api/vendors')
       .then(res => res.json())
       .then(data => {
-        setVendors(data.vendors || [])
+        const v = [...(data.vendors || [])]
+        for (let i = v.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [v[i], v[j]] = [v[j], v[i]]
+        }
+        setVendors(v)
         setLoading(false)
       })
       .catch(err => {
