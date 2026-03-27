@@ -294,7 +294,7 @@ function ConfirmPageContent() {
               onChange={(e) => setFormData({ ...formData, smsOptIn: e.target.checked })}
               style={{ marginTop: '0.25rem' }} />
             <span style={{ fontSize: '0.9rem', color: 'var(--color-text-light)' }}>
-              I agree to receive text message updates about my appointment from The Spa Synergy. Msg & data rates may apply. Reply STOP to opt out.
+              I agree to receive automated SMS appointment updates from The Spa Synergy (e.g. confirmations, reminders, cancellations). Msg frequency: ~1–5 msgs per booking. Msg & data rates may apply. Reply STOP to cancel, HELP for help. Consent is not required to book. <a href="/privacy" target="_blank" style={{ color: 'var(--color-primary)' }}>Privacy Policy</a> & <a href="/terms" target="_blank" style={{ color: 'var(--color-primary)' }}>Terms</a>.
             </span>
           </label>
         </div>

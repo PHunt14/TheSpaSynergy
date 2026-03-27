@@ -34,6 +34,8 @@ export default function Tooltip({ text }) {
           padding: '0.5rem 0.75rem',
           borderRadius: '8px',
           fontSize: '0.8rem',
+          fontFamily: 'var(--font-quicksand), sans-serif',
+          fontStyle: 'normal',
           lineHeight: 1.4,
           width: '220px',
           textAlign: 'center',

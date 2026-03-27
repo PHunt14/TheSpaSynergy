@@ -95,7 +95,74 @@ Deployed via AWS Amplify with automatic CI/CD from Git. See `AMPLIFY_SETUP.md`.
 | `docs/SQUARE_MULTI_PARTY_PAYMENTS.md` | Technical details: payment API, multi-vendor splits |
 | `docs/HOUSE_FEE_IMPLEMENTATION.md` | House fee business model, payment flow examples, configuration |
 | `docs/NOTIFICATIONS_SETUP.md` | SMS + email setup: providers, testing, production checklist |
+| `docs/REFUND_STRATEGY.md` | Refund logic, house fee reversal, vendor ledger design, phased build plan |
 | `docs/CHERRY_BLOSSOM_USAGE.md` | Cherry blossom decorative component usage guide |
+
+---
+
+## Microservice Architecture (Planned)
+
+The following bounded contexts are candidates for extraction from the Next.js monolith into standalone services. Listed in recommended order of extraction.
+
+### 1. Payment Service (highest priority)
+
+**Current code**: `app/api/payment/route.js`, `lib/square/core.js`, `app/api/square/*`, `app/api/webhooks/square/`
+
+**Why extract**:
+- Square credentials and token refresh logic are security-sensitive and shouldn't live in the frontend deployment
+- Multi-party payment splitting is complex business logic that other apps could reuse
+- Has a clean API boundary: `processPayment`, `connectOAuth`, `refreshToken`, `handleWebhook`
+
+**Suggested deployment**: API Gateway + Lambda or standalone Amplify function
+
+### 2. Notification Service
+
+**Current code**: `lib/sms.ts`, `lib/email.ts`, `amplify/functions/send-email/`, `amplify/functions/send-sms/`, inline notification logic in `app/api/appointments/route.ts`
+
+**Why extract**:
+- The appointment POST route currently has ~80 lines of notification logic inlined (staff resolution, message building, multi-channel delivery)
+- An event-driven service would accept events (`booking.created`, `booking.confirmed`, `booking.cancelled`) and handle all recipient resolution + delivery
+- Enables appointment reminders without touching booking code
+- Decouples delivery provider choices (SNS vs Twilio) from business logic
+
+**Suggested deployment**: SQS queue → Lambda consumer. Booking endpoint publishes an event and returns immediately instead of awaiting all notifications
+
+### 3. Availability/Scheduling Service
+
+**Current code**: `app/api/availability/route.ts`, `app/api/staff-schedules/route.ts`
+
+**Why extract**:
+- Most computationally complex route — N+1 queries per request, staff schedule resolution with recurrence patterns, time slot generation
+- Read-heavy workload that can scale independently from writes
+- Availability results are cacheable
+- Duplicated `resolveStaff` logic would be consolidated
+
+**Suggested deployment**: Lambda behind API Gateway with caching (API Gateway cache or ElastiCache)
+
+### 4. Vendor/Service Catalog (lowest urgency)
+
+**Current code**: `app/api/vendors/route.ts`, `app/api/services/route.ts`
+
+**Why extract**:
+- Mostly CRUD with auth checks — fine as Next.js API routes for now
+- Becomes valuable if a mobile app or the booking flow redesign requires a standalone catalog API
+
+### Target Architecture
+
+```
+┌─────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│  Next.js UI  │────▶│  Payment Service  │────▶│  Square API     │
+│  (Amplify)   │     │  (Lambda/ECS)     │     └─────────────────┘
+│              │     └──────────────────┘
+│              │     ┌──────────────────┐     ┌─────────────────┐
+│              │────▶│ Notification Svc  │────▶│  SNS/SES/Twilio │
+│              │     │  (Lambda + SQS)   │     └─────────────────┘
+│              │     └──────────────────┘
+│              │     ┌──────────────────┐     ┌─────────────────┐
+│              │────▶│ Availability Svc  │────▶│  DynamoDB       │
+│              │     │  (Lambda)         │     └─────────────────┘
+└─────────────┘     └──────────────────┘
+```
 
 ---
 
