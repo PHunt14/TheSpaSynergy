@@ -95,6 +95,7 @@ Deployed via AWS Amplify with automatic CI/CD from Git. See `AMPLIFY_SETUP.md`.
 | `docs/SQUARE_MULTI_PARTY_PAYMENTS.md` | Technical details: payment API, multi-vendor splits |
 | `docs/HOUSE_FEE_IMPLEMENTATION.md` | House fee business model, payment flow examples, configuration |
 | `docs/NOTIFICATIONS_SETUP.md` | SMS + email setup: providers, testing, production checklist |
+| `docs/REFUND_STRATEGY.md` | Refund logic, house fee reversal, vendor ledger design, phased build plan |
 | `docs/CHERRY_BLOSSOM_USAGE.md` | Cherry blossom decorative component usage guide |
 
 ---
