@@ -47,7 +47,12 @@ export default function ServicesPage() {
       fetch('/api/services').then(r => r.json())
     ])
       .then(([vendorData, serviceData]) => {
-        setVendors(vendorData.vendors || [])
+        const v = [...(vendorData.vendors || [])]
+        for (let i = v.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [v[i], v[j]] = [v[j], v[i]]
+        }
+        setVendors(v)
         setServices((serviceData.services || []).filter(s => s.isActive !== false))
         setLoading(false)
       })
