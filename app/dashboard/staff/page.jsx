@@ -37,6 +37,14 @@ export default function Staff() {
     initStaff()
   }, [])
 
+  const loadUsers = async () => {
+    try {
+      const res = await fetch('/api/staff')
+      const data = await res.json()
+      setUsers(data.users || [])
+    } catch (error) { console.error('Error loading users:', error) }
+  }
+
   const initStaff = async () => {
     try {
       const [session, vendorRes, staffRes] = await Promise.all([

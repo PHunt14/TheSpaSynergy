@@ -114,8 +114,8 @@ export async function POST(request: Request) {
       });
     }
 
-    // Only add vendorId for vendor users
-    if (role === 'vendor' && vendorId) {
+    // Add vendorId for vendor and owner users
+    if ((role === 'vendor' || role === 'owner') && vendorId) {
       userAttributes.push({
         Name: 'custom:vendorId',
         Value: vendorId

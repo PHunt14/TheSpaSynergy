@@ -120,6 +120,13 @@ const schema = a.schema({
       smsAlertPhone: a.string(),
       emailAlertsEnabled: a.boolean().default(false),
       isActive: a.boolean().default(true),
+      squareAccessToken: a.string(),
+      squareRefreshToken: a.string(),
+      squareLocationId: a.string(),
+      squareMerchantId: a.string(),
+      squareOAuthStatus: a.string().default('disconnected'),
+      squareTokenExpiresAt: a.string(),
+      squareConnectedAt: a.string(),
     })
     .identifier(['visibleId'])
     .secondaryIndexes((index) => [index('vendorId')])

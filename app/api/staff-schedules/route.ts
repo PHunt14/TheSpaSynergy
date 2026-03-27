@@ -38,6 +38,27 @@ const getCurrentUser = async () => {
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const vendorId = searchParams.get('vendorId');
+  const visibleId = searchParams.get('visibleId');
+
+  // Public lookup by visibleId (for booking flow to check staff Square status)
+  if (visibleId) {
+    try {
+      const { data, errors } = await client.models.StaffSchedule.get({ visibleId } as any);
+      if (errors || !data) return Response.json({ schedule: null });
+      // Only expose non-sensitive fields
+      return Response.json({
+        schedule: {
+          visibleId: data.visibleId,
+          staffName: data.staffName,
+          vendorId: data.vendorId,
+          squareLocationId: data.squareLocationId,
+          squareOAuthStatus: data.squareOAuthStatus,
+        }
+      });
+    } catch {
+      return Response.json({ schedule: null });
+    }
+  }
 
   const currentUser = await getCurrentUser();
   if (!currentUser) return Response.json({ error: 'Unauthorized' }, { status: 401 });

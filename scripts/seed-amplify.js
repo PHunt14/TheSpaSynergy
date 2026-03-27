@@ -65,9 +65,9 @@ const vendors = [
     name: 'Selene Glow Studio',
     description: 'Where Radiance meets Ritual',
     email: 'contact@seleneglow.com',
-    phone: '301-992-3224',
+    phone: '240-919-6294',
     smsAlertsEnabled: true,
-    smsAlertPhone: devSmsPhone || '3019923224',
+    smsAlertPhone: devSmsPhone || '2409196294',
     isHouse: false,
     isActive: true,
     workingHours: {
