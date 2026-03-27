@@ -39,6 +39,7 @@ export default function ServicesPage() {
   const [services, setServices] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedServices, setSelectedServices] = useState([])
+  const [categoryFilter, setCategoryFilter] = useState('All')
 
   useEffect(() => {
     document.title = 'Our Services | The Spa Synergy'
@@ -81,7 +82,11 @@ export default function ServicesPage() {
 
   if (loading) return <div style={{ padding: '2rem' }}>Loading...</div>
 
-  const grouped = services.reduce((acc, s) => {
+  const allCategories = ['All', ...new Set(services.map(s => s.category || 'Other'))]
+
+  const filtered = categoryFilter === 'All' ? services : services.filter(s => (s.category || 'Other') === categoryFilter)
+
+  const grouped = filtered.reduce((acc, s) => {
     if (!acc[s.vendorId]) acc[s.vendorId] = {}
     const cat = s.category || 'Other'
     if (!acc[s.vendorId][cat]) acc[s.vendorId][cat] = []
@@ -95,13 +100,38 @@ export default function ServicesPage() {
       <p style={{ color: 'var(--color-text-light)', textAlign: 'center', marginBottom: '0.5rem' }}>
         Browse all of our services and book your next appointment.
       </p>
-      <p style={{ color: 'var(--color-text-light)', textAlign: 'center', marginBottom: '3rem', fontSize: '1.1rem' }}>
+      <p style={{ color: 'var(--color-text-light)', textAlign: 'center', marginBottom: '1.5rem', fontSize: '1.1rem' }}>
         Select one or more services, then continue to book.
       </p>
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '0.5rem', marginBottom: '2.5rem' }}>
+        {allCategories.map(cat => (
+          <button
+            key={cat}
+            onClick={() => setCategoryFilter(cat)}
+            style={{
+              padding: '0.5rem 1.25rem',
+              borderRadius: '999px',
+              border: '2px solid var(--color-primary)',
+              background: categoryFilter === cat ? 'var(--color-primary)' : 'transparent',
+              color: categoryFilter === cat ? 'white' : 'var(--color-primary)',
+              cursor: 'pointer',
+              fontSize: '0.95rem',
+              fontWeight: 500,
+              transition: '0.2s ease',
+            }}
+          >
+            {cat}
+          </button>
+        ))}
+      </div>
 
       {vendors.map(vendor => {
         const categories = grouped[vendor.vendorId]
         if (!categories) return null
+
+        const isFiltered = categoryFilter !== 'All'
+        const allVendorServices = isFiltered ? Object.values(categories).flat() : null
 
         return (
           <FadeIn key={vendor.vendorId} style={{ marginBottom: '3rem' }}>
@@ -109,62 +139,100 @@ export default function ServicesPage() {
               {vendor.name}
             </h2>
 
-            <div className="grid-3-cols" style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(3, 1fr)',
-              gap: '1.5rem',
-            }}>
-              {Object.entries(categories).map(([category, catServices]) => (
-                <FadeIn key={category} style={{
-                  background: 'var(--color-accent)',
-                  borderRadius: '12px',
-                  border: '1px solid var(--color-border)',
-                  padding: '1.5rem',
-                }}>
-                  <h3 style={{
-                    color: 'var(--color-primary-dark)',
-                    marginBottom: '1rem',
-                    marginTop: 0,
-                    textAlign: 'center',
-                    borderBottom: '2px solid var(--color-primary)',
-                    paddingBottom: '0.5rem',
-                  }}>{category}</h3>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                    {catServices.map(service => {
-                      const isSelected = selectedServices.find(s => s.serviceId === service.serviceId)
-                      return (
-                        <div
-                          key={service.serviceId}
-                          onClick={() => toggleService(service)}
-                          style={{
-                            padding: '0.75rem',
-                            borderRadius: '8px',
-                            cursor: 'pointer',
-                            background: isSelected ? 'var(--color-primary)' : 'white',
-                            color: isSelected ? 'white' : 'var(--color-text)',
-                            border: isSelected ? '2px solid var(--color-primary-dark)' : '2px solid transparent',
-                            transition: '0.2s ease',
-                          }}
-                        >
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <strong>{service.name}</strong>
-                            <span style={{ fontSize: '1.2rem', opacity: 0.7 }}>{isSelected ? '✓' : '+'}</span>
-                          </div>
-                          {service.description && (
-                            <div style={{ fontSize: '1rem', opacity: 0.9, margin: '0.25rem 0' }}>
-                              {service.description}
-                            </div>
-                          )}
-                          <div style={{ fontSize: '1.05rem', opacity: 0.8 }}>
-                            {service.duration} min • ${service.price}
-                          </div>
+            {isFiltered ? (
+              <div className="grid-3-cols" style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: '1.5rem',
+              }}>
+                {allVendorServices.map(service => {
+                  const isSelected = selectedServices.find(s => s.serviceId === service.serviceId)
+                  return (
+                    <FadeIn key={service.serviceId} style={{
+                      padding: '0.75rem',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      background: isSelected ? 'var(--color-primary)' : 'var(--color-accent)',
+                      color: isSelected ? 'white' : 'var(--color-text)',
+                      border: isSelected ? '2px solid var(--color-primary-dark)' : '1px solid var(--color-border)',
+                      transition: '0.2s ease',
+                    }}>
+                      <div onClick={() => toggleService(service)}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <strong>{service.name}</strong>
+                          <span style={{ fontSize: '1.2rem', opacity: 0.7 }}>{isSelected ? '✓' : '+'}</span>
                         </div>
-                      )
-                    })}
-                  </div>
-                </FadeIn>
-              ))}
-            </div>
+                        {service.description && (
+                          <div style={{ fontSize: '1rem', opacity: 0.9, margin: '0.25rem 0' }}>
+                            {service.description}
+                          </div>
+                        )}
+                        <div style={{ fontSize: '1.05rem', opacity: 0.8 }}>
+                          {service.duration} min • ${service.price}
+                        </div>
+                      </div>
+                    </FadeIn>
+                  )
+                })}
+              </div>
+            ) : (
+              <div className="grid-3-cols" style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: '1.5rem',
+              }}>
+                {Object.entries(categories).map(([category, catServices]) => (
+                  <FadeIn key={category} style={{
+                    background: 'var(--color-accent)',
+                    borderRadius: '12px',
+                    border: '1px solid var(--color-border)',
+                    padding: '1.5rem',
+                  }}>
+                    <h3 style={{
+                      color: 'var(--color-primary-dark)',
+                      marginBottom: '1rem',
+                      marginTop: 0,
+                      textAlign: 'center',
+                      borderBottom: '2px solid var(--color-primary)',
+                      paddingBottom: '0.5rem',
+                    }}>{category}</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                      {catServices.map(service => {
+                        const isSelected = selectedServices.find(s => s.serviceId === service.serviceId)
+                        return (
+                          <div
+                            key={service.serviceId}
+                            onClick={() => toggleService(service)}
+                            style={{
+                              padding: '0.75rem',
+                              borderRadius: '8px',
+                              cursor: 'pointer',
+                              background: isSelected ? 'var(--color-primary)' : 'white',
+                              color: isSelected ? 'white' : 'var(--color-text)',
+                              border: isSelected ? '2px solid var(--color-primary-dark)' : '2px solid transparent',
+                              transition: '0.2s ease',
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <strong>{service.name}</strong>
+                              <span style={{ fontSize: '1.2rem', opacity: 0.7 }}>{isSelected ? '✓' : '+'}</span>
+                            </div>
+                            {service.description && (
+                              <div style={{ fontSize: '1rem', opacity: 0.9, margin: '0.25rem 0' }}>
+                                {service.description}
+                              </div>
+                            )}
+                            <div style={{ fontSize: '1.05rem', opacity: 0.8 }}>
+                              {service.duration} min • ${service.price}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </FadeIn>
+                ))}
+              </div>
+            )}
           </FadeIn>
         )
       })}
