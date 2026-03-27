@@ -8,7 +8,7 @@ Amplify.configure(config, { ssr: true });
 
 export async function POST(request) {
   try {
-    const { sourceId, amount, vendorId, bundlePayments, appointmentId } = await request.json();
+    const { sourceId, amount, vendorId, staffId, bundlePayments, appointmentId } = await request.json();
 
     if (!sourceId || !amount) {
       return Response.json({ error: 'Missing payment details' }, { status: 400 });
@@ -16,7 +16,7 @@ export async function POST(request) {
 
     // Single vendor payment
     if (vendorId && !bundlePayments) {
-      return await processSinglePayment(sourceId, amount, vendorId);
+      return await processSinglePayment(sourceId, amount, vendorId, staffId);
     }
 
     // Multi-vendor bundle payment
@@ -34,32 +34,41 @@ export async function POST(request) {
   }
 }
 
-async function processSinglePayment(sourceId, amount, vendorId) {
-  const dataClient = generateClient();
+async function resolveSquareCredentials(dataClient, vendorId, staffId) {
+  // Try staff member's Square account first
+  if (staffId) {
+    const { data: staff } = await dataClient.models.StaffSchedule.get({ visibleId: staffId });
+    if (staff?.squareAccessToken && staff.squareOAuthStatus !== 'error') {
+      return { accessToken: staff.squareAccessToken, locationId: staff.squareLocationId };
+    }
+    if (staff?.squareOAuthStatus === 'error') {
+      console.warn(`Staff ${staffId} Square token in error state, falling back to vendor`);
+    }
+  }
+
+  // Fall back to vendor's Square account
   const { data: vendor } = await dataClient.models.Vendor.get({ vendorId });
-
-  if (!vendor) {
-    return Response.json({ error: 'Vendor not found' }, { status: 404 });
-  }
-
+  if (!vendor) return { error: 'Vendor not found', status: 404 };
   if (vendor.squareOAuthStatus === 'error') {
-    return Response.json({
-      error: 'Payment unavailable',
-      details: 'Vendor Square account needs to be reconnected'
-    }, { status: 400 });
+    return { error: 'Payment unavailable', details: 'Square account needs to be reconnected', status: 400 };
   }
-
-  // Use vendor's Square token if available, otherwise use platform token
   const accessToken = vendor.squareAccessToken || process.env.SQUARE_ACCESS_TOKEN;
   const locationId = vendor.squareLocationId;
-
   if (!accessToken || !locationId) {
-    console.error('Square not configured for vendor:', vendorId);
-    return Response.json({ 
-      error: 'Payment configuration error',
-      details: 'Square payment not configured for this vendor'
-    }, { status: 500 });
+    return { error: 'Payment configuration error', details: 'Square payment not configured', status: 500 };
   }
+  return { accessToken, locationId };
+}
+
+async function processSinglePayment(sourceId, amount, vendorId, staffId) {
+  const dataClient = generateClient();
+  const creds = await resolveSquareCredentials(dataClient, vendorId, staffId);
+
+  if (creds.error) {
+    return Response.json({ error: creds.error, details: creds.details }, { status: creds.status });
+  }
+
+  const { accessToken, locationId } = creds;
 
   const client = new Client({
     accessToken,

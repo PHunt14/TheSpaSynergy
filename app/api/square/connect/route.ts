@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto'
 export async function GET(request: NextRequest) {
   try {
     const vendorId = request.nextUrl.searchParams.get('vendorId')
+    const staffId = request.nextUrl.searchParams.get('staffId')
     if (!vendorId) {
       return Response.json({ error: 'vendorId required' }, { status: 400 })
     }
@@ -16,7 +17,7 @@ export async function GET(request: NextRequest) {
     }
 
     const nonce = randomUUID()
-    const state = Buffer.from(JSON.stringify({ vendorId, nonce })).toString('base64url')
+    const state = Buffer.from(JSON.stringify({ vendorId, staffId, nonce })).toString('base64url')
 
     const redirectUri = encodeURIComponent(`${baseUrl}/api/square/callback`)
     const scopes = [
@@ -32,8 +33,6 @@ export async function GET(request: NextRequest) {
       : 'https://connect.squareup.com'
 
     const oauthUrl = `${squareBase}/oauth2/authorize?client_id=${appId}&scope=${scopes}&state=${state}&redirect_uri=${redirectUri}`
-
-    console.log('Square OAuth redirect URL:', oauthUrl)
 
     return NextResponse.redirect(oauthUrl, { status: 302 })
   } catch (error) {

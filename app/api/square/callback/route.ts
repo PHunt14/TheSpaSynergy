@@ -24,11 +24,12 @@ export async function GET(request: NextRequest) {
       return Response.redirect(`${baseUrl}/dashboard/settings?error=oauth_failed&details=missing_code_or_state`)
     }
 
-    // Decode state to get vendorId
     let vendorId: string
+    let staffId: string | null = null
     try {
       const decoded = JSON.parse(Buffer.from(state, 'base64url').toString())
       vendorId = decoded.vendorId
+      staffId = decoded.staffId || null
     } catch {
       return Response.redirect(`${baseUrl}/dashboard/settings?error=oauth_failed&details=invalid_state`)
     }
@@ -41,7 +42,6 @@ export async function GET(request: NextRequest) {
     const appId = process.env.SQUARE_APPLICATION_ID || process.env.NEXT_PUBLIC_SQUARE_APPLICATION_ID
     const appSecret = process.env.SQUARE_APPLICATION_SECRET
     if (!appId || !appSecret) {
-      console.error('Square callback: missing credentials', { hasAppId: !!appId, hasAppSecret: !!appSecret })
       return Response.redirect(`${baseUrl}/dashboard/settings?error=missing_credentials`)
     }
 
@@ -81,28 +81,40 @@ export async function GET(request: NextRequest) {
       return Response.redirect(`${baseUrl}/dashboard/settings?error=no_locations`)
     }
 
-    // Calculate token expiry
     const expiresAt = result.expiresAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-
-    // Update vendor record
-    const { errors } = await client.models.Vendor.update({
-      vendorId,
+    const tokenFields = {
       squareAccessToken: result.accessToken,
       squareRefreshToken: result.refreshToken || null,
       squareMerchantId: result.merchantId || null,
       squareLocationId: locationId,
-      squareApplicationId: appId,
       squareOAuthStatus: 'connected',
       squareTokenExpiresAt: expiresAt,
       squareConnectedAt: new Date().toISOString(),
-    } as any)
-
-    if (errors) {
-      console.error('Error updating vendor:', errors)
-      return Response.redirect(`${baseUrl}/dashboard/settings?error=oauth_failed&details=db_update_failed`)
     }
 
-    return Response.redirect(`${baseUrl}/dashboard/settings?success=square_connected`)
+    // Save to StaffSchedule or Vendor
+    if (staffId) {
+      const { errors } = await client.models.StaffSchedule.update({
+        visibleId: staffId,
+        ...tokenFields,
+      } as any)
+      if (errors) {
+        console.error('Error updating staff schedule:', errors)
+        return Response.redirect(`${baseUrl}/dashboard/settings?error=oauth_failed&details=db_update_failed`)
+      }
+      return Response.redirect(`${baseUrl}/dashboard/settings?success=square_connected&staffId=${staffId}`)
+    } else {
+      const { errors } = await client.models.Vendor.update({
+        vendorId,
+        squareApplicationId: appId,
+        ...tokenFields,
+      } as any)
+      if (errors) {
+        console.error('Error updating vendor:', errors)
+        return Response.redirect(`${baseUrl}/dashboard/settings?error=oauth_failed&details=db_update_failed`)
+      }
+      return Response.redirect(`${baseUrl}/dashboard/settings?success=square_connected`)
+    }
   } catch (error: any) {
     console.error('Square callback error:', error)
     return Response.redirect(`${baseUrl}/dashboard/settings?error=oauth_failed&details=${encodeURIComponent(error.message || 'unknown')}`)
