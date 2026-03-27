@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { generateClient } from 'aws-amplify/data'
 import { fetchAuthSession } from 'aws-amplify/auth'
+import Tooltip from '../../components/Tooltip'
 
 const client = generateClient()
 
@@ -241,7 +242,7 @@ export default function Settings() {
 
       {/* Contact Information */}
       <div style={sectionStyle}>
-        <h2 style={{ marginTop: 0, marginBottom: '1.5rem' }}>Contact Information</h2>
+        <h2 style={{ marginTop: 0, marginBottom: '1.5rem' }}>Contact Information<Tooltip text="This info appears on your public vendor page and the contact page." /></h2>
         <div style={{ marginBottom: '1rem' }}>
           <label style={labelStyle}>Business Name</label>
           <input type="text" value={vendorName} onChange={(e) => setVendorName(e.target.value)} style={inputStyle} />
@@ -255,7 +256,7 @@ export default function Settings() {
           <input type="tel" value={vendorPhone} onChange={(e) => setVendorPhone(e.target.value)} placeholder="(240) 367-0395" style={inputStyle} />
         </div>
         <div style={{ marginBottom: '1rem' }}>
-          <label style={labelStyle}>Description</label>
+          <label style={labelStyle}>Description<Tooltip text="A short summary shown on your public profile. Describe what makes your services unique." /></label>
           <textarea value={vendorDescription} onChange={(e) => setVendorDescription(e.target.value)} rows="3"
             style={{ ...inputStyle, resize: 'vertical' }} />
         </div>
@@ -266,7 +267,7 @@ export default function Settings() {
 
       {/* Social Media Links */}
       <div style={sectionStyle}>
-        <h2 style={{ marginTop: 0, marginBottom: '1.5rem' }}>Social Media</h2>
+        <h2 style={{ marginTop: 0, marginBottom: '1.5rem' }}>Social Media<Tooltip text="These links appear on your public vendor page so customers can find you online." /></h2>
         <div style={{ marginBottom: '1rem' }}>
           <label style={labelStyle}>Facebook URL</label>
           <input type="url" value={socialFacebook} onChange={(e) => setSocialFacebook(e.target.value)} placeholder="https://facebook.com/yourbusiness" style={inputStyle} />
@@ -291,7 +292,7 @@ export default function Settings() {
       {/* Square Payment Integration */}
       {(currentUserRole === 'owner' || currentUserRole === 'admin') && (
         <div style={sectionStyle}>
-          <h2 style={{ marginTop: 0, marginBottom: '1.5rem' }}>Square Payment Integration</h2>
+          <h2 style={{ marginTop: 0, marginBottom: '1.5rem' }}>Square Payment Integration<Tooltip text="Connect your Square account so customers can pay online at checkout. Payments are deposited directly to your Square account." /></h2>
 
           {squareConnected ? (
             <div>
@@ -337,12 +338,12 @@ export default function Settings() {
 
       {/* SMS Notifications */}
       <div style={sectionStyle}>
-        <h2 style={{ marginTop: 0, marginBottom: '1.5rem' }}>SMS Notifications</h2>
+        <h2 style={{ marginTop: 0, marginBottom: '1.5rem' }}>SMS Notifications<Tooltip text="When enabled, you'll receive a text message each time a customer books an appointment with you." /></h2>
         <div style={{ marginBottom: '1.5rem' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}>
             <input type="checkbox" checked={smsAlertsEnabled} onChange={(e) => setSmsAlertsEnabled(e.target.checked)}
               style={{ width: '20px', height: '20px', cursor: 'pointer' }} />
-            <span style={{ fontSize: '1.1rem', fontWeight: '500' }}>Enable SMS alerts for new bookings</span>
+            <span style={{ fontSize: '1.1rem', fontWeight: '500' }}>Enable SMS alerts for new bookings<Tooltip text="You'll get a text for each new booking, confirmation, and cancellation." /></span>
           </label>
         </div>
         {smsAlertsEnabled && (
