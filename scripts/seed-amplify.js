@@ -13,7 +13,7 @@ const vendors = [
     vendorId: 'vendor-winsome-woods',
     name: 'Winsome Woods',
     description: 'Natural remedies for stress relief',
-    email: 'contact@winsomewoods.com',
+    email: 'winsomegnomes@gmail.com',
     phone: '301-992-3224',
     smsAlertsEnabled: true,
     smsAlertPhone: devSmsPhone || '3019923224',
