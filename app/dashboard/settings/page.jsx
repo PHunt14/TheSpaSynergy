@@ -21,6 +21,14 @@ export default function Settings() {
   const [message, setMessage] = useState('')
   const [currentUserRole, setCurrentUserRole] = useState(null)
   const [currentUserVendorId, setCurrentUserVendorId] = useState(null)
+  const [currentUserEmail, setCurrentUserEmail] = useState(null)
+
+  // Staff Square
+  const [myStaffSchedule, setMyStaffSchedule] = useState(null)
+  const [staffSquareConnected, setStaffSquareConnected] = useState(false)
+  const [staffSquareConnectedAt, setStaffSquareConnectedAt] = useState(null)
+  const [staffSquareStatus, setStaffSquareStatus] = useState('disconnected')
+  const [connectingStaffSquare, setConnectingStaffSquare] = useState(false)
 
   // Contact info
   const [vendorName, setVendorName] = useState('')
@@ -40,7 +48,12 @@ export default function Settings() {
     const params = new URLSearchParams(window.location.search)
     if (params.get('success') === 'square_connected') {
       setMessage('Square account connected successfully!')
-      setTimeout(() => { setMessage(''); loadVendorSettings(selectedVendorId) }, 5000)
+      const connectedStaffId = params.get('staffId')
+      setTimeout(() => {
+        setMessage('')
+        if (connectedStaffId) loadMyStaffSchedule()
+        else loadVendorSettings(selectedVendorId)
+      }, 3000)
       window.history.replaceState({}, '', '/dashboard/settings')
     }
     if (params.get('error')) {
@@ -64,8 +77,10 @@ export default function Settings() {
       const session = await fetchAuthSession()
       const vendorId = session.tokens?.idToken?.payload['custom:vendorId']
       const role = session.tokens?.idToken?.payload['custom:role'] || 'vendor'
+      const email = session.tokens?.idToken?.payload['email']
       setCurrentUserRole(role)
       setCurrentUserVendorId(vendorId)
+      setCurrentUserEmail(email)
 
       const { data: vendorList } = await client.models.Vendor.list()
       setVendors(vendorList || [])
@@ -76,9 +91,68 @@ export default function Settings() {
         setSelectedVendorId(vendorId)
       }
       setLoading(false)
+
+      // Load staff schedule for current user's email
+      if (email && vendorId) {
+        loadMyStaffScheduleByEmail(email, vendorId)
+      }
     } catch (error) {
       console.error('Error initializing settings:', error)
       setLoading(false)
+    }
+  }
+
+  const loadMyStaffScheduleByEmail = async (email, vendorId) => {
+    try {
+      const res = await fetch(`/api/staff-schedules?vendorId=${vendorId}`)
+      const data = await res.json()
+      const mine = (data.schedules || []).find(s => s.staffEmail === email)
+      if (mine) {
+        setMyStaffSchedule(mine)
+        setStaffSquareConnected(!!mine.squareAccessToken)
+        setStaffSquareConnectedAt(mine.squareConnectedAt)
+        setStaffSquareStatus(mine.squareOAuthStatus || 'disconnected')
+      }
+    } catch (error) {
+      console.error('Error loading staff schedule:', error)
+    }
+  }
+
+  const loadMyStaffSchedule = async () => {
+    if (currentUserEmail && currentUserVendorId) {
+      await loadMyStaffScheduleByEmail(currentUserEmail, currentUserVendorId)
+    }
+  }
+
+  const handleConnectStaffSquare = () => {
+    if (!myStaffSchedule) return
+    window.location.href = `/api/square/connect?vendorId=${myStaffSchedule.vendorId}&staffId=${myStaffSchedule.visibleId}`
+  }
+
+  const handleDisconnectStaffSquare = async () => {
+    if (!myStaffSchedule) return
+    if (!confirm('Disconnect your Square account? Customers will need to pay in-person for your services.')) return
+    setConnectingStaffSquare(true)
+    try {
+      const res = await fetch('/api/square/disconnect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ staffId: myStaffSchedule.visibleId })
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        setMessage('Error disconnecting Square: ' + (data.error || 'Unknown error'))
+      } else {
+        setStaffSquareConnected(false)
+        setStaffSquareConnectedAt(null)
+        setStaffSquareStatus('disconnected')
+        setMessage('Your Square account has been disconnected')
+        setTimeout(() => setMessage(''), 3000)
+      }
+    } catch (error) {
+      setMessage('Error disconnecting Square account')
+    } finally {
+      setConnectingStaffSquare(false)
     }
   }
 
@@ -331,6 +405,56 @@ export default function Settings() {
                 Connect your Square account to receive payments directly. You'll be redirected to Square to authorize access.
               </p>
               <button onClick={handleConnectSquare} className="cta">Connect with Square</button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Staff Square Payment Integration */}
+      {myStaffSchedule && (
+        <div style={sectionStyle}>
+          <h2 style={{ marginTop: 0, marginBottom: '1.5rem' }}>Your Payment Account<Tooltip text="Connect your own Square account to receive payments directly for services you perform. If not connected, customers will pay in-person." /></h2>
+          <p style={{ fontSize: '0.9rem', color: 'var(--color-text-light)', marginBottom: '1rem' }}>
+            Staff member: <strong>{myStaffSchedule.staffName}</strong>
+          </p>
+
+          {staffSquareConnected ? (
+            <div>
+              <div style={{ padding: '1rem', background: staffSquareStatus === 'error' ? '#f8d7da' : '#d4edda', border: `1px solid ${staffSquareStatus === 'error' ? '#f5c6cb' : '#c3e6cb'}`, borderRadius: '8px', marginBottom: '1rem' }}>
+                {staffSquareStatus === 'error' ? (
+                  <div>
+                    <div style={{ fontWeight: '500', color: '#721c24', marginBottom: '0.5rem' }}>⚠ Square Connection Error</div>
+                    <p style={{ fontSize: '0.85rem', color: '#721c24', margin: 0 }}>Your Square connection needs to be refreshed. Please reconnect.</p>
+                  </div>
+                ) : (
+                  <div>
+                    <div style={{ fontWeight: '500', color: '#155724', marginBottom: '0.5rem' }}>✓ Your Square Account Connected</div>
+                    {staffSquareConnectedAt && (
+                      <div style={{ fontSize: '0.85rem', color: '#155724' }}>
+                        Connected on {new Date(staffSquareConnectedAt).toLocaleDateString()}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                {staffSquareStatus === 'error' && (
+                  <button onClick={handleConnectStaffSquare} className="cta">Reconnect Square</button>
+                )}
+                <button onClick={handleDisconnectStaffSquare} disabled={connectingStaffSquare} style={{
+                  padding: '0.75rem 1.5rem', background: '#dc3545', color: 'white', border: 'none',
+                  borderRadius: '8px', cursor: 'pointer', fontSize: '1rem', fontWeight: '500'
+                }}>
+                  {connectingStaffSquare ? 'Disconnecting...' : 'Disconnect Square'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <p style={{ fontSize: '0.9rem', color: 'var(--color-text-light)', marginBottom: '1rem' }}>
+                Connect your Square account so customers can pay you directly online. Without this, customers will pay in-person.
+              </p>
+              <button onClick={handleConnectStaffSquare} className="cta">Connect with Square</button>
             </div>
           )}
         </div>

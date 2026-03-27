@@ -26,6 +26,7 @@ function ConfirmPageContent() {
   const [card, setCard] = useState(null)
   const [allServiceDetails, setAllServiceDetails] = useState([])
   const [vendorDetails, setVendorDetails] = useState(null)
+  const [staffSquareConnected, setStaffSquareConnected] = useState(null) // null=loading, true/false
   const [paymentMethod, setPaymentMethod] = useState('in-person')
 
   // For single service, use the first service detail
@@ -44,6 +45,19 @@ function ConfirmPageContent() {
         setAllServiceDetails(selected)
         if (selected.some(s => s.cardPaymentDisabled)) setPaymentMethod('in-person')
       })
+
+    // Fetch staff Square status if a staff member is assigned
+    if (staffId) {
+      fetch(`/api/staff-schedules?visibleId=${staffId}`)
+        .then(res => res.json())
+        .then(data => {
+          const staff = data.schedule || data.schedules?.[0]
+          setStaffSquareConnected(!!staff?.squareLocationId && staff?.squareOAuthStatus !== 'error')
+        })
+        .catch(() => setStaffSquareConnected(false))
+    } else {
+      setStaffSquareConnected(false)
+    }
 
     // Fetch vendor details (use vendor param or derive from first service)
     const vendorId = vendor
@@ -130,7 +144,8 @@ function ConfirmPageContent() {
           body: JSON.stringify({
             sourceId: result.token,
             amount: totalPrice,
-            vendorId: vendor || allServiceDetails[0]?.vendorId
+            vendorId: vendor || allServiceDetails[0]?.vendorId,
+            staffId: staffId || undefined
           })
         })
         const paymentData = await paymentResponse.json()
@@ -209,6 +224,7 @@ function ConfirmPageContent() {
   const hasConsultation = allServiceDetails.some(s => s.requiresConsultation)
   const cardDisabled = allServiceDetails.some(s => s.cardPaymentDisabled)
   const vendorSquareConnected = !!vendorDetails?.squareLocationId
+  const squareAvailable = staffSquareConnected || vendorSquareConnected
   const requiresConfirmation = !!bundleId || hasConsultation
 
   return (
@@ -285,7 +301,7 @@ function ConfirmPageContent() {
 
         <div style={{ marginTop: '2rem', marginBottom: '1rem' }}>
           <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600' }}>Payment Method *</label>
-          {(bundleId || cardDisabled || !vendorSquareConnected) ? (
+          {(bundleId || cardDisabled || !squareAvailable) ? (
             <div style={{ padding: '1rem', borderRadius: '8px', border: '2px solid var(--color-primary)', background: 'var(--color-accent)', textAlign: 'center' }}>
               Pay In-Person {bundleId ? '(Required for bundles)' : '(Card payment not available for this service)'}
             </div>

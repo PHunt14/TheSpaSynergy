@@ -39,7 +39,7 @@ const sections = [
   {
     title: 'Settings',
     description:
-      'Configure your vendor profile, connect your Square account for online payments, enable or disable SMS alerts, set your alert phone number, and add social media links (Facebook, Instagram, TikTok, website).',
+      'Configure your vendor profile, connect your Square account for online payments, enable or disable SMS alerts, set your alert phone number, and add social media links (Facebook, Instagram, TikTok, website). Staff members will also see a "Your Payment Account" section to connect their own Square account for direct payments.',
   },
 ]
 
