@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import BookingDisabled, { isBookingEnabled } from '../components/BookingDisabled'
 
 function FadeIn({ children, style }) {
   const ref = useRef(null)
@@ -71,7 +72,10 @@ export default function ServicesPage() {
   const totalPrice = selectedServices.reduce((sum, s) => sum + s.price, 0)
   const totalDuration = selectedServices.reduce((sum, s) => sum + s.duration, 0)
 
+  const [showDisabled, setShowDisabled] = useState(false)
+
   const handleContinue = () => {
+    if (!isBookingEnabled) { setShowDisabled(true); return }
     if (selectedServices.length === 1) {
       const s = selectedServices[0]
       router.push(`/booking/time?vendor=${s.vendorId}&service=${s.serviceId}`)
@@ -81,6 +85,10 @@ export default function ServicesPage() {
   }
 
   if (loading) return <div style={{ padding: '2rem' }}>Loading...</div>
+  if (showDisabled) {
+    const v = selectedServices.length > 0 ? vendors.find(v => v.vendorId === selectedServices[0].vendorId) : null
+    return <BookingDisabled phone={v?.phone} vendorName={v?.name} />
+  }
 
   const allCategories = ['All', ...new Set(services.map(s => s.category || 'Other'))]
 
