@@ -2,11 +2,14 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import BookingDisabled, { isBookingEnabled } from '../components/BookingDisabled'
 
 export default function BundlesPage() {
   const router = useRouter()
   const [bundles, setBundles] = useState([])
   const [loading, setLoading] = useState(true)
+
+  const [showDisabled, setShowDisabled] = useState(false)
 
   useEffect(() => {
     fetch('/api/bundles')
@@ -19,6 +22,7 @@ export default function BundlesPage() {
   }, [])
 
   if (loading) return <div style={{ padding: '2rem' }}>Loading...</div>
+  if (showDisabled) return <BookingDisabled />
 
   return (
     <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
@@ -31,7 +35,7 @@ export default function BundlesPage() {
         {bundles.map(bundle => (
           <div
             key={bundle.bundleId}
-            onClick={() => router.push(`/booking/bundle?id=${bundle.bundleId}`)}
+            onClick={() => isBookingEnabled ? router.push(`/booking/bundle?id=${bundle.bundleId}`) : setShowDisabled(true)}
             style={{
               background: 'var(--color-accent)',
               borderRadius: '12px',

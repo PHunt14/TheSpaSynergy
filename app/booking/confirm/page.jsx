@@ -2,6 +2,7 @@
 
 import { useSearchParams } from 'next/navigation'
 import { useState, useEffect, Suspense } from 'react'
+import BookingDisabled, { isBookingEnabled } from '../../components/BookingDisabled'
 
 function ConfirmPageContent() {
   const params = useSearchParams()
@@ -79,7 +80,7 @@ function ConfirmPageContent() {
   }, [allServiceDetails])
 
   useEffect(() => {
-    if (paymentMethod !== 'card' || !vendorDetails) return
+    if (!isBookingEnabled || paymentMethod !== 'card' || !vendorDetails) return
 
     let isMounted = true
 
@@ -98,6 +99,8 @@ function ConfirmPageContent() {
     loadSquare()
     return () => { isMounted = false }
   }, [paymentMethod, vendorDetails])
+
+  if (!isBookingEnabled) return <BookingDisabled phone={vendorDetails?.phone} vendorName={vendorDetails?.name} />
 
   const initializeSquare = async () => {
     if (!window.Square) return

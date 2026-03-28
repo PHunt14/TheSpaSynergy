@@ -5,6 +5,7 @@ import { useState, useEffect, Suspense } from 'react'
 import Link from 'next/link'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
+import BookingDisabled, { isBookingEnabled } from '../../components/BookingDisabled'
 
 function BundleTimeContent() {
   const params = useSearchParams()
@@ -17,20 +18,26 @@ function BundleTimeContent() {
   const [availableSlots, setAvailableSlots] = useState([])
   const [loading, setLoading] = useState(false)
   const [services, setServices] = useState([])
+  const [vendorInfo, setVendorInfo] = useState(null)
 
   useEffect(() => {
     if (serviceIds.length === 0) return
     
-    fetch('/api/services')
-      .then(res => res.json())
-      .then(data => {
-        const selected = data.services?.filter(s => serviceIds.includes(s.serviceId)) || []
-        setServices(selected)
-      })
+    Promise.all([
+      fetch('/api/services').then(res => res.json()),
+      fetch('/api/vendors').then(res => res.json())
+    ]).then(([serviceData, vendorData]) => {
+      const selected = serviceData.services?.filter(s => serviceIds.includes(s.serviceId)) || []
+      setServices(selected)
+      if (selected.length > 0) {
+        const vnd = vendorData.vendors?.find(v => v.vendorId === selected[0].vendorId)
+        setVendorInfo(vnd)
+      }
+    })
   }, [])
 
   useEffect(() => {
-    if (serviceIds.length === 0 || !selectedDate) return
+    if (!isBookingEnabled || serviceIds.length === 0 || !selectedDate) return
 
     setLoading(true)
     setSelectedTime(null)
@@ -48,6 +55,8 @@ function BundleTimeContent() {
       })
       .catch(() => setLoading(false))
   }, [selectedDate, services])
+
+  if (!isBookingEnabled) return <BookingDisabled phone={vendorInfo?.phone} vendorName={vendorInfo?.name} />
 
   const totalDuration = services.reduce((sum, s) => sum + s.duration, 0)
   const totalPrice = services.reduce((sum, s) => sum + s.price, 0)

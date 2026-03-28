@@ -3,8 +3,10 @@
 import { useSearchParams } from 'next/navigation'
 import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter } from 'next/navigation'
+import BookingDisabled, { isBookingEnabled } from '../../components/BookingDisabled'
 
 function ServicePageContent() {
+  const [showDisabled, setShowDisabled] = useState(false)
   const params = useSearchParams()
   const router = useRouter()
   const vendor = params.get('vendor')
@@ -53,6 +55,7 @@ function ServicePageContent() {
   }, [loading, selectedCategory])
 
   if (loading) return <main><h1>Loading...</h1></main>
+  if (showDisabled) return <BookingDisabled phone={vendorInfo?.phone} vendorName={vendorInfo?.name} />
 
   return (
     <main>
@@ -128,7 +131,7 @@ function ServicePageContent() {
               {categoryServices.map(service => (
                 <div
                   key={service.serviceId}
-                  onClick={() => router.push(`/booking/time?vendor=${vendor}&service=${service.serviceId}`)}
+                  onClick={() => isBookingEnabled ? router.push(`/booking/time?vendor=${vendor}&service=${service.serviceId}`) : setShowDisabled(true)}
                   style={{
                     padding: '1rem',
                     borderRadius: '8px',
