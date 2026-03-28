@@ -10,7 +10,7 @@ const quicksand = Quicksand({ subsets: ['latin'], weight: ['400', '500', '600', 
 
 export const metadata = {
   title: 'Spa Synergy',
-  description: 'Demo for booking + dashboard',
+  description: 'Luxury spa and wellness booking — Fort Ritchie, MD',
 }
 
 export default function RootLayout({ children }) {
@@ -18,14 +18,14 @@ export default function RootLayout({ children }) {
     <html lang="en" className={`${allura.variable} ${quicksand.variable}`}>
       <body className="layout-body">
         <Navbar />
-        <div style={{ background: '#fff3cd', borderBottom: '1px solid #ffc107', padding: '0.5rem 1rem', textAlign: 'center', fontSize: '0.95rem', fontFamily: 'var(--font-quicksand), sans-serif' }}>
-          ⚠️ This is a test site only — no real bookings or payments will be processed.
+        <div style={{ background: 'var(--color-accent)', borderBottom: '2px solid var(--color-primary)', padding: '0.5rem 1rem', textAlign: 'center', fontSize: '0.95rem', fontFamily: 'var(--font-quicksand), sans-serif', color: 'var(--color-primary-dark)' }}>
+          🚧 We&rsquo;re still under construction &mdash; online booking coming soon! <a href="/contact" style={{ fontWeight: 'bold', color: 'var(--color-primary-dark)' }}>Contact us</a> to schedule.
         </div>
         <div className="layout-content">
           {children}
         </div>
-        <div style={{ background: '#fff3cd', borderTop: '1px solid #ffc107', padding: '0.5rem 1rem', textAlign: 'center', fontSize: '0.95rem', fontFamily: 'var(--font-quicksand), sans-serif' }}>
-          ⚠️ This is a test site only — no real bookings or payments will be processed.
+        <div style={{ background: 'var(--color-accent)', borderTop: '2px solid var(--color-primary)', padding: '0.5rem 1rem', textAlign: 'center', fontSize: '0.95rem', fontFamily: 'var(--font-quicksand), sans-serif', color: 'var(--color-primary-dark)' }}>
+          🚧 We&rsquo;re still under construction &mdash; online booking coming soon! <a href="/contact" style={{ fontWeight: 'bold', color: 'var(--color-primary-dark)' }}>Contact us</a> to schedule.
         </div>
         <Footer />
       </body>

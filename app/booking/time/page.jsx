@@ -5,6 +5,7 @@ import { useState, useEffect, Suspense } from 'react'
 import Link from 'next/link'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
+import BookingDisabled, { isBookingEnabled } from '../../components/BookingDisabled'
 
 function TimePageContent() {
   const params = useSearchParams()
@@ -40,7 +41,7 @@ function TimePageContent() {
   }, [service, vendor])
 
   useEffect(() => {
-    if (!vendor || !service || !selectedDate) return
+    if (!vendor || !service || !selectedDate || !isBookingEnabled) return
 
     setLoading(true)
     setSelectedTime(null)
@@ -59,6 +60,8 @@ function TimePageContent() {
         setLoading(false)
       })
   }, [vendor, service, selectedDate])
+
+  if (!isBookingEnabled) return <BookingDisabled phone={vendorInfo?.phone} vendorName={vendorInfo?.name} />
 
   return (
     <main>

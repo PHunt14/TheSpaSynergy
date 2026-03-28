@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import BookingDisabled, { isBookingEnabled } from '../../components/BookingDisabled'
 
 function BundleBookingContent() {
   const searchParams = useSearchParams()
@@ -103,12 +104,16 @@ function BundleBookingContent() {
         </div>
       </div>
 
-      <Link
-        href={`/booking/bundle-time?${continueParams}`}
-        className="cta"
-      >
-        Continue to Schedule
-      </Link>
+      {isBookingEnabled ? (
+        <Link
+          href={`/booking/bundle-time?${continueParams}`}
+          className="cta"
+        >
+          Continue to Schedule
+        </Link>
+      ) : (
+        <BookingDisabled />
+      )}
     </main>
   )
 }

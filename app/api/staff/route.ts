@@ -149,6 +149,7 @@ export async function POST(request: Request) {
         </div>
         <p>You'll be asked to set a new password on your first login.</p>
         <p><a href="${appUrl}/dashboard" style="display: inline-block; background: #8B4789; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: bold;">Log In to Dashboard</a></p>
+        <p style="margin-top: 16px;"><a href="${appUrl}" style="color: #8B4789; text-decoration: underline;">Visit The Spa Synergy</a></p>
         <p style="color: #666; font-size: 12px; margin-top: 30px;">
           The Spa Synergy<br>Fort Ritchie, MD
         </p>
