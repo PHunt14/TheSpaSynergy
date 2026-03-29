@@ -6,7 +6,7 @@ import { Amplify } from 'aws-amplify'
 import { useEffect, useRef } from 'react'
 import outputs from '../../amplify_outputs.json'
 
-Amplify.configure(outputs)
+Amplify.configure(outputs, { ssr: true })
 
 const TIMEOUT_DURATION = 60 * 60 * 1000 // 1 hour
 
