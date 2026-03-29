@@ -36,6 +36,11 @@ const getCurrentUserFromSession = async () => {
       nextServerContext: { cookies },
       operation: async (contextSpec) => {
         const session = await fetchAuthSession(contextSpec);
+        console.log('Staff route session check:', {
+          hasTokens: !!session.tokens,
+          hasIdToken: !!session.tokens?.idToken,
+          hasCredentials: !!session.credentials,
+        });
         const idToken = session.tokens?.idToken;
         if (!idToken) return null;
         
@@ -54,6 +59,7 @@ const getCurrentUserFromSession = async () => {
 export async function POST(request: Request) {
   try {
     const currentUser = await getCurrentUserFromSession();
+    console.log('Staff POST - currentUser:', currentUser);
     if (!currentUser) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -178,6 +184,7 @@ export async function GET(request: Request) {
     }
 
     const currentUser = await getCurrentUserFromSession();
+    console.log('Staff GET - currentUser:', currentUser);
     if (!currentUser) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
