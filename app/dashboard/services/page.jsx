@@ -24,7 +24,8 @@ export default function Services() {
     cardPaymentDisabled: false,
     resourceType: 'staff',
     staffRestriction: 'all',
-    allowedStaff: []
+    allowedStaff: [],
+    parentServiceId: ''
   })
 
   useEffect(() => {
@@ -89,6 +90,7 @@ export default function Services() {
       cardPaymentDisabled: newService.cardPaymentDisabled,
       resourceType: newService.resourceType,
       allowedStaff: newService.staffRestriction === 'all' ? null : newService.allowedStaff,
+      parentServiceId: newService.parentServiceId || null,
       isActive: editingService ? editingService.isActive : true
     }
     
@@ -103,7 +105,7 @@ export default function Services() {
         alert(editingService ? 'Service updated successfully!' : 'Service added successfully!')
         setShowAddForm(false)
         setEditingService(null)
-        setNewService({ name: '', category: '', description: '', duration: 30, price: 0, requiresConsultation: false, cardPaymentDisabled: false, resourceType: 'staff', staffRestriction: 'all', allowedStaff: [] })
+        setNewService({ name: '', category: '', description: '', duration: 30, price: 0, requiresConsultation: false, cardPaymentDisabled: false, resourceType: 'staff', staffRestriction: 'all', allowedStaff: [], parentServiceId: '' })
         const data = await fetch(`/api/services?vendorId=${selectedVendor}&includeInactive=true`).then(r => r.json())
         setServices(data.services || [])
       } else {
@@ -150,7 +152,8 @@ export default function Services() {
       cardPaymentDisabled: service.cardPaymentDisabled || false,
       resourceType: service.resourceType || 'staff',
       staffRestriction: (service.allowedStaff && service.allowedStaff.length > 0) ? 'specific' : 'all',
-      allowedStaff: service.allowedStaff || []
+      allowedStaff: service.allowedStaff || [],
+      parentServiceId: service.parentServiceId || ''
     })
     setShowAddForm(true)
     setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
@@ -159,7 +162,7 @@ export default function Services() {
   const handleCancelEdit = () => {
     setEditingService(null)
     setShowAddForm(false)
-    setNewService({ name: '', category: '', description: '', duration: 30, price: 0, requiresConsultation: false, cardPaymentDisabled: false, resourceType: 'staff', staffRestriction: 'all', allowedStaff: [] })
+    setNewService({ name: '', category: '', description: '', duration: 30, price: 0, requiresConsultation: false, cardPaymentDisabled: false, resourceType: 'staff', staffRestriction: 'all', allowedStaff: [], parentServiceId: '' })
   }
 
   const handleDelete = async (service) => {
@@ -357,6 +360,29 @@ export default function Services() {
           </div>
 
           <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Add-on of Service</label>
+            <select
+              value={newService.parentServiceId}
+              onChange={(e) => setNewService({ ...newService, parentServiceId: e.target.value })}
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                borderRadius: '8px',
+                border: '1px solid var(--color-border)',
+                fontSize: '1rem'
+              }}
+            >
+              <option value="">None (standalone service)</option>
+              {services.filter(s => !s.parentServiceId && s.serviceId !== editingService?.serviceId).map(s => (
+                <option key={s.serviceId} value={s.serviceId}>{s.name}</option>
+              ))}
+            </select>
+            <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.5rem' }}>
+              If this is an add-on, select the parent service it belongs to.
+            </p>
+          </div>
+
+          <div style={{ marginBottom: '1rem' }}>
             <label style={{ display: 'block', marginBottom: '0.5rem' }}>Resource Type</label>
             <select
               value={newService.resourceType}
@@ -471,6 +497,7 @@ export default function Services() {
                   {service.category && `${service.category} • `}{service.duration} min • ${service.price}
                   {service.requiresConsultation && ' • ⚠️ Requires Consultation'}
                   {service.cardPaymentDisabled && ' • 💳 Card Payment Disabled'}
+                  {service.parentServiceId && ` • 🔗 Add-on of ${services.find(s => s.serviceId === service.parentServiceId)?.name || service.parentServiceId}`}
                 </p>
               </div>
               <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>

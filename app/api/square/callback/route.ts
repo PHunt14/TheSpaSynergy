@@ -1,12 +1,13 @@
 import { NextRequest } from 'next/server'
 import { Client, Environment } from 'square'
-import { generateClient } from 'aws-amplify/data'
+import { generateServerClientUsingCookies } from '@aws-amplify/adapter-nextjs/data'
+import { cookies } from 'next/headers'
 import type { Schema } from '@/amplify/data/resource'
 import { Amplify } from 'aws-amplify'
 import config from '@/amplify_outputs.json'
 
 Amplify.configure(config, { ssr: true })
-const client = generateClient<Schema>()
+const client = generateServerClientUsingCookies<Schema>({ config, cookies })
 
 export async function GET(request: NextRequest) {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
@@ -59,6 +60,7 @@ export async function GET(request: NextRequest) {
     })
 
     if (!result.accessToken) {
+      console.error('Square OAuth: no access token in result', JSON.stringify(result))
       return Response.redirect(`${baseUrl}/dashboard/settings?error=oauth_failed&details=no_access_token`)
     }
 
@@ -99,7 +101,7 @@ export async function GET(request: NextRequest) {
         ...tokenFields,
       } as any)
       if (errors) {
-        console.error('Error updating staff schedule:', errors)
+        console.error('Error updating staff schedule:', JSON.stringify(errors, null, 2))
         return Response.redirect(`${baseUrl}/dashboard/settings?error=oauth_failed&details=db_update_failed`)
       }
       return Response.redirect(`${baseUrl}/dashboard/settings?success=square_connected&staffId=${staffId}`)
@@ -110,7 +112,7 @@ export async function GET(request: NextRequest) {
         ...tokenFields,
       } as any)
       if (errors) {
-        console.error('Error updating vendor:', errors)
+        console.error('Error updating vendor:', JSON.stringify(errors, null, 2))
         return Response.redirect(`${baseUrl}/dashboard/settings?error=oauth_failed&details=db_update_failed`)
       }
       return Response.redirect(`${baseUrl}/dashboard/settings?success=square_connected`)
