@@ -25,7 +25,7 @@ export default function Services() {
     resourceType: 'staff',
     staffRestriction: 'all',
     allowedStaff: [],
-    parentServiceId: ''
+    parentServiceIds: []
   })
 
   useEffect(() => {
@@ -90,7 +90,7 @@ export default function Services() {
       cardPaymentDisabled: newService.cardPaymentDisabled,
       resourceType: newService.resourceType,
       allowedStaff: newService.staffRestriction === 'all' ? null : newService.allowedStaff,
-      parentServiceId: newService.parentServiceId || null,
+      parentServiceIds: newService.parentServiceIds.length > 0 ? newService.parentServiceIds : null,
       isActive: editingService ? editingService.isActive : true
     }
     
@@ -105,7 +105,7 @@ export default function Services() {
         alert(editingService ? 'Service updated successfully!' : 'Service added successfully!')
         setShowAddForm(false)
         setEditingService(null)
-        setNewService({ name: '', category: '', description: '', duration: 30, price: 0, requiresConsultation: false, cardPaymentDisabled: false, resourceType: 'staff', staffRestriction: 'all', allowedStaff: [], parentServiceId: '' })
+        setNewService({ name: '', category: '', description: '', duration: 30, price: 0, requiresConsultation: false, cardPaymentDisabled: false, resourceType: 'staff', staffRestriction: 'all', allowedStaff: [], parentServiceIds: [] })
         const data = await fetch(`/api/services?vendorId=${selectedVendor}&includeInactive=true`).then(r => r.json())
         setServices(data.services || [])
       } else {
@@ -153,7 +153,7 @@ export default function Services() {
       resourceType: service.resourceType || 'staff',
       staffRestriction: (service.allowedStaff && service.allowedStaff.length > 0) ? 'specific' : 'all',
       allowedStaff: service.allowedStaff || [],
-      parentServiceId: service.parentServiceId || ''
+      parentServiceIds: service.parentServiceIds || []
     })
     setShowAddForm(true)
     setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
@@ -162,7 +162,7 @@ export default function Services() {
   const handleCancelEdit = () => {
     setEditingService(null)
     setShowAddForm(false)
-    setNewService({ name: '', category: '', description: '', duration: 30, price: 0, requiresConsultation: false, cardPaymentDisabled: false, resourceType: 'staff', staffRestriction: 'all', allowedStaff: [], parentServiceId: '' })
+    setNewService({ name: '', category: '', description: '', duration: 30, price: 0, requiresConsultation: false, cardPaymentDisabled: false, resourceType: 'staff', staffRestriction: 'all', allowedStaff: [], parentServiceIds: [] })
   }
 
   const handleDelete = async (service) => {
@@ -360,25 +360,29 @@ export default function Services() {
           </div>
 
           <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Add-on of Service</label>
+            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Add-on of Service(s)</label>
             <select
-              value={newService.parentServiceId}
-              onChange={(e) => setNewService({ ...newService, parentServiceId: e.target.value })}
+              multiple
+              value={newService.parentServiceIds}
+              onChange={(e) => {
+                const selected = Array.from(e.target.selectedOptions, option => option.value)
+                setNewService({ ...newService, parentServiceIds: selected })
+              }}
               style={{
                 width: '100%',
                 padding: '0.75rem',
                 borderRadius: '8px',
                 border: '1px solid var(--color-border)',
-                fontSize: '1rem'
+                fontSize: '1rem',
+                minHeight: '100px'
               }}
             >
-              <option value="">None (standalone service)</option>
-              {services.filter(s => !s.parentServiceId && s.serviceId !== editingService?.serviceId).map(s => (
+              {services.filter(s => !(s.parentServiceIds?.length > 0) && s.serviceId !== editingService?.serviceId).map(s => (
                 <option key={s.serviceId} value={s.serviceId}>{s.name}</option>
               ))}
             </select>
             <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.5rem' }}>
-              If this is an add-on, select the parent service it belongs to.
+              Hold Ctrl (Cmd on Mac) to select multiple parent services. Leave empty for a standalone service.
             </p>
           </div>
 
@@ -472,79 +476,64 @@ export default function Services() {
         <p style={{ color: 'var(--color-text-light)' }}>No services found.</p>
       )}
 
-      {!loading && services.length > 0 && (
-        <div style={{ display: 'grid', gap: '1rem' }}>
-          {services.map(service => (
-            <div
-              key={service.serviceId}
-              style={{
-                background: 'var(--color-accent)',
-                padding: '1.5rem',
-                borderRadius: '8px',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center'
-              }}
-            >
-              <div>
-                <h3 style={{ marginBottom: '0.5rem' }}>{service.name}</h3>
-                {service.description && (
-                  <p style={{ color: 'var(--color-text)', fontSize: '0.9rem', marginBottom: '0.5rem' }}>
-                    {service.description}
-                  </p>
-                )}
-                <p style={{ color: 'var(--color-text-light)', fontSize: '0.9rem' }}>
-                  {service.category && `${service.category} • `}{service.duration} min • ${service.price}
-                  {service.requiresConsultation && ' • ⚠️ Requires Consultation'}
-                  {service.cardPaymentDisabled && ' • 💳 Card Payment Disabled'}
-                  {service.parentServiceId && ` • 🔗 Add-on of ${services.find(s => s.serviceId === service.parentServiceId)?.name || service.parentServiceId}`}
+      {!loading && services.length > 0 && (() => {
+        const parentServices = services.filter(s => !(s.parentServiceIds?.length > 0))
+        const getAddons = (parentId) => services.filter(s => s.parentServiceIds?.includes(parentId))
+
+        const ServiceRow = ({ service, isAddon }) => (
+          <div
+            key={service.serviceId}
+            style={{
+              background: isAddon ? '#f9f5f0' : 'var(--color-accent)',
+              padding: isAddon ? '1rem 1.5rem 1rem 2.5rem' : '1.5rem',
+              borderRadius: isAddon ? '0' : '8px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              ...(isAddon ? { borderTop: '1px dashed var(--color-border)' } : {})
+            }}
+          >
+            <div>
+              <h3 style={{ marginBottom: '0.5rem', fontSize: isAddon ? '1rem' : undefined }}>
+                {isAddon && <span style={{ color: 'var(--color-text-light)', marginRight: '0.5rem' }}>↳</span>}
+                {service.name}
+                {isAddon && <span style={{ fontSize: '0.8rem', color: 'var(--color-primary)', marginLeft: '0.5rem', fontWeight: 'normal' }}>Add-on</span>}
+              </h3>
+              {service.description && (
+                <p style={{ color: 'var(--color-text)', fontSize: '0.9rem', marginBottom: '0.5rem' }}>
+                  {service.description}
                 </p>
-              </div>
-              <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                <button
-                  onClick={() => handleEdit(service)}
-                  style={{
-                    padding: '0.5rem 1rem',
-                    borderRadius: '8px',
-                    border: 'none',
-                    cursor: 'pointer',
-                    background: 'var(--color-primary)',
-                    color: 'white'
-                  }}
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={() => handleToggleActive(service)}
-                  style={{
-                    padding: '0.5rem 1rem',
-                    borderRadius: '8px',
-                    border: 'none',
-                    cursor: 'pointer',
-                    background: service.isActive ? '#4CAF50' : '#999',
-                    color: 'white'
-                  }}
-                >
-                  {service.isActive ? 'Active' : 'Inactive'}
-                </button>
-                <button
-                  onClick={() => handleDelete(service)}
-                  style={{
-                    padding: '0.5rem 1rem',
-                    borderRadius: '8px',
-                    border: 'none',
-                    cursor: 'pointer',
-                    background: '#f44336',
-                    color: 'white'
-                  }}
-                >
-                  Delete
-                </button>
-              </div>
+              )}
+              <p style={{ color: 'var(--color-text-light)', fontSize: '0.9rem' }}>
+                {service.category && `${service.category} • `}{service.duration} min • ${service.price}
+                {service.requiresConsultation && ' • ⚠️ Requires Consultation'}
+                {service.cardPaymentDisabled && ' • 💳 Card Payment Disabled'}
+              </p>
             </div>
-          ))}
-        </div>
-      )}
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexShrink: 0 }}>
+              <button onClick={() => handleEdit(service)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: 'var(--color-primary)', color: 'white' }}>Edit</button>
+              <button onClick={() => handleToggleActive(service)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: service.isActive ? '#4CAF50' : '#999', color: 'white' }}>{service.isActive ? 'Active' : 'Inactive'}</button>
+              <button onClick={() => handleDelete(service)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: '#f44336', color: 'white' }}>Delete</button>
+            </div>
+          </div>
+        )
+
+        return (
+          <div style={{ display: 'grid', gap: '1rem' }}>
+            {parentServices.map(service => {
+              const addons = getAddons(service.serviceId)
+              return (
+                <div key={service.serviceId} style={{ borderRadius: '8px', overflow: 'hidden', border: addons.length > 0 ? '1px solid var(--color-border)' : 'none' }}>
+                  <ServiceRow service={service} isAddon={false} />
+                  {addons.map(addon => (
+                    <ServiceRow key={addon.serviceId} service={addon} isAddon={true} />
+                  ))}
+                </div>
+              )
+            })}
+          </div>
+        )
+      })()}
     </div>
   )
 }

@@ -12,9 +12,9 @@ function ServicePageContent() {
   const vendor = params.get('vendor')
   const selectedCategory = params.get('category')
   const [services, setServices] = useState([])
-  const [allServices, setAllServices] = useState([])
   const [vendorInfo, setVendorInfo] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [expandedService, setExpandedService] = useState(null)
   const [selectedAddons, setSelectedAddons] = useState({})
   const categoryRefs = useRef({})
 
@@ -27,12 +27,11 @@ function ServicePageContent() {
     ])
       .then(([servicesData, vendorsData]) => {
         const serviceList = servicesData.services || []
-        setAllServices(serviceList)
-        const parentServices = serviceList.filter(s => !s.parentServiceId)
+        const parentServices = serviceList.filter(s => !(s.parentServiceIds?.length > 0))
         const grouped = parentServices.reduce((acc, service) => {
           const category = service.category || 'Other'
           if (!acc[category]) acc[category] = []
-          service._addons = serviceList.filter(a => a.parentServiceId === service.serviceId)
+          service._addons = serviceList.filter(a => a.parentServiceIds?.includes(service.serviceId))
           acc[category].push(service)
           return acc
         }, {})
@@ -71,6 +70,17 @@ function ServicePageContent() {
   }
 
   const handleServiceClick = (service) => {
+    if (!isBookingEnabled) { setShowDisabled(true); return }
+    // If service has addons, expand/collapse instead of navigating
+    if (service._addons?.length > 0) {
+      setExpandedService(prev => prev === service.serviceId ? null : service.serviceId)
+      return
+    }
+    router.push(`/booking/time?vendor=${vendor}&service=${service.serviceId}`)
+  }
+
+  const handleBook = (e, service) => {
+    e.stopPropagation()
     if (!isBookingEnabled) { setShowDisabled(true); return }
     const addons = selectedAddons[service.serviceId] || []
     if (addons.length > 0) {
@@ -157,10 +167,15 @@ function ServicePageContent() {
             }}>
               {categoryServices.map(service => {
                 const addons = service._addons || []
+                const isExpanded = expandedService === service.serviceId
                 const selected = selectedAddons[service.serviceId] || []
                 const addonTotal = selected.reduce((sum, id) => {
                   const addon = addons.find(a => a.serviceId === id)
                   return sum + (addon?.price || 0)
+                }, 0)
+                const addonDuration = selected.reduce((sum, id) => {
+                  const addon = addons.find(a => a.serviceId === id)
+                  return sum + (addon?.duration || 0)
                 }, 0)
 
                 return (
@@ -169,22 +184,33 @@ function ServicePageContent() {
                       onClick={() => handleServiceClick(service)}
                       style={{
                         padding: '1rem',
-                        borderRadius: addons.length > 0 ? '8px 8px 0 0' : '8px',
+                        borderRadius: isExpanded ? '8px 8px 0 0' : '8px',
                         cursor: 'pointer',
-                        background: 'var(--color-accent)',
-                        color: 'var(--color-text)',
+                        background: isExpanded ? 'var(--color-primary)' : 'var(--color-accent)',
+                        color: isExpanded ? 'white' : 'var(--color-text)',
                         transition: '0.2s ease',
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'var(--color-primary)'
-                        e.currentTarget.style.color = 'white'
+                        if (!isExpanded) {
+                          e.currentTarget.style.background = 'var(--color-primary)'
+                          e.currentTarget.style.color = 'white'
+                        }
                       }}
                       onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'var(--color-accent)'
-                        e.currentTarget.style.color = 'var(--color-text)'
+                        if (!isExpanded) {
+                          e.currentTarget.style.background = 'var(--color-accent)'
+                          e.currentTarget.style.color = 'var(--color-text)'
+                        }
                       }}
                     >
-                      <strong>{service.name}</strong>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <strong>{service.name}</strong>
+                        {addons.length > 0 && (
+                          <span style={{ fontSize: '0.8rem', opacity: 0.8 }}>
+                            {isExpanded ? '▲' : '▼ add-ons'}
+                          </span>
+                        )}
+                      </div>
                       {service.description && (
                         <div style={{ fontSize: '0.85rem', opacity: 0.9, margin: '0.5rem 0' }}>
                           {service.description}
@@ -192,10 +218,11 @@ function ServicePageContent() {
                       )}
                       <div style={{ fontSize: '0.9rem', opacity: 0.8 }}>
                         {service.duration} min • ${service.price}
-                        {addonTotal > 0 && ` (+$${addonTotal} add-ons)`}
                       </div>
                     </div>
-                    {addons.length > 0 && (
+
+                    {/* Expanded addon panel */}
+                    {isExpanded && (
                       <div style={{
                         background: '#f9f5f0',
                         borderRadius: '0 0 8px 8px',
@@ -203,15 +230,14 @@ function ServicePageContent() {
                         borderTop: '1px dashed var(--color-border)'
                       }}>
                         <div style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--color-text-light)' }}>
-                          Available Add-ons:
+                          Optional Add-ons:
                         </div>
                         {addons.map(addon => (
                           <label
                             key={addon.serviceId}
-                            onClick={(e) => e.stopPropagation()}
                             style={{
                               display: 'flex', alignItems: 'center', gap: '0.5rem',
-                              cursor: 'pointer', padding: '0.25rem 0', fontSize: '0.9rem'
+                              cursor: 'pointer', padding: '0.35rem 0', fontSize: '0.9rem'
                             }}
                           >
                             <input
@@ -226,6 +252,27 @@ function ServicePageContent() {
                             </span>
                           </label>
                         ))}
+
+                        {/* Summary + Book button */}
+                        <div style={{
+                          marginTop: '0.75rem', paddingTop: '0.75rem',
+                          borderTop: '1px solid var(--color-border)',
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                        }}>
+                          <div style={{ fontSize: '0.9rem', fontWeight: 600 }}>
+                            Total: ${service.price + addonTotal}
+                            <span style={{ fontWeight: 400, color: 'var(--color-text-light)', marginLeft: '0.5rem' }}>
+                              ({service.duration + addonDuration} min)
+                            </span>
+                          </div>
+                          <button
+                            onClick={(e) => handleBook(e, service)}
+                            className="cta"
+                            style={{ margin: 0, padding: '0.5rem 1.25rem', fontSize: '0.9rem' }}
+                          >
+                            Book{selected.length > 0 ? ` with ${selected.length} add-on${selected.length > 1 ? 's' : ''}` : ''}
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>

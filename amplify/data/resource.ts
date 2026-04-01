@@ -49,7 +49,7 @@ const schema = a.schema({
       requiresConsultation: a.boolean().default(false),
       cardPaymentDisabled: a.boolean().default(false),
       allowedStaff: a.string().array(),
-      parentServiceId: a.string(),
+      parentServiceIds: a.string().array(),
     })
     .identifier(['serviceId'])
     .secondaryIndexes((index) => [index('vendorId')])
