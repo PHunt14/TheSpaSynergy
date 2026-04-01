@@ -134,10 +134,16 @@ export async function PATCH(request: Request) {
       return Response.json({ error: 'visibleId required' }, { status: 400 });
     }
 
+    // Verify the record exists before updating
+    const { data: existing, errors: getErrors } = await client.models.StaffSchedule.get({ visibleId } as any);
+    if (getErrors || !existing) {
+      console.error('Staff schedule not found or get error:', getErrors);
+      return Response.json({ error: 'Staff schedule not found' }, { status: 404 });
+    }
+
     // Vendor/owner can only edit schedules for their own vendor
     if (currentUser.role === 'vendor' || currentUser.role === 'owner') {
-      const { data: existing } = await client.models.StaffSchedule.get({ visibleId } as any);
-      if (existing && existing.vendorId !== currentUser.vendorId) {
+      if (existing.vendorId !== currentUser.vendorId) {
         return Response.json({ error: 'Unauthorized: Can only manage schedules for your own vendor' }, { status: 403 });
       }
     }
@@ -145,18 +151,30 @@ export async function PATCH(request: Request) {
     const updateData: any = { visibleId };
     if (staffName !== undefined) updateData.staffName = staffName;
     if (staffEmail !== undefined) updateData.staffEmail = staffEmail;
-    if (schedule !== undefined) updateData.schedule = JSON.stringify(schedule);
-    if (autoAssignRules !== undefined) updateData.autoAssignRules = autoAssignRules ? JSON.stringify(autoAssignRules) : null;
+    if (schedule !== undefined) {
+      updateData.schedule = typeof schedule === 'string' ? schedule : JSON.stringify(schedule);
+    }
+    if (autoAssignRules !== undefined) {
+      if (autoAssignRules === null) {
+        updateData.autoAssignRules = null;
+      } else {
+        updateData.autoAssignRules = typeof autoAssignRules === 'string' ? autoAssignRules : JSON.stringify(autoAssignRules);
+      }
+    }
     if (isActive !== undefined) updateData.isActive = isActive;
     if (body.smsAlertsEnabled !== undefined) updateData.smsAlertsEnabled = body.smsAlertsEnabled;
     if (body.smsAlertPhone !== undefined) updateData.smsAlertPhone = body.smsAlertPhone;
     if (body.emailAlertsEnabled !== undefined) updateData.emailAlertsEnabled = body.emailAlertsEnabled;
 
     const { data, errors } = await client.models.StaffSchedule.update(updateData as any);
-    if (errors) return Response.json({ error: 'Failed to update' }, { status: 500 });
+    if (errors) {
+      console.error('Staff schedule update errors:', JSON.stringify(errors, null, 2));
+      return Response.json({ error: 'Failed to update', details: errors }, { status: 500 });
+    }
     return Response.json({ success: true, schedule: data });
-  } catch (error) {
-    return Response.json({ error: 'Failed to update staff schedule' }, { status: 500 });
+  } catch (error: any) {
+    console.error('Staff schedule PATCH error:', error?.message || error);
+    return Response.json({ error: 'Failed to update staff schedule', details: error?.message }, { status: 500 });
   }
 }
 

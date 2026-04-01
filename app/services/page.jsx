@@ -42,6 +42,8 @@ export default function ServicesPage() {
   const [selectedServices, setSelectedServices] = useState([])
   const [categoryFilter, setCategoryFilter] = useState('All')
 
+  const [allServicesRaw, setAllServicesRaw] = useState([])
+
   useEffect(() => {
     document.title = 'Our Services | The Spa Synergy'
     Promise.all([
@@ -55,7 +57,10 @@ export default function ServicesPage() {
           [v[i], v[j]] = [v[j], v[i]]
         }
         setVendors(v)
-        setServices((serviceData.services || []).filter(s => s.isActive !== false))
+        const active = (serviceData.services || []).filter(s => s.isActive !== false)
+        setAllServicesRaw(active)
+        // Only show parent services (not addons) in the main list
+        setServices(active.filter(s => !(s.parentServiceIds?.length > 0)))
         setLoading(false)
       })
       .catch(() => setLoading(false))
@@ -89,6 +94,8 @@ export default function ServicesPage() {
     const v = selectedServices.length > 0 ? vendors.find(v => v.vendorId === selectedServices[0].vendorId) : null
     return <BookingDisabled phone={v?.phone} vendorName={v?.name} />
   }
+
+  const getAddons = (serviceId) => allServicesRaw.filter(s => s.parentServiceIds?.includes(serviceId))
 
   const allCategories = ['All', ...new Set(services.map(s => s.category || 'Other'))]
 
@@ -155,17 +162,20 @@ export default function ServicesPage() {
               }}>
                 {allVendorServices.map(service => {
                   const isSelected = selectedServices.find(s => s.serviceId === service.serviceId)
+                  const addons = getAddons(service.serviceId)
                   return (
                     <FadeIn key={service.serviceId} style={{
-                      padding: '0.75rem',
                       borderRadius: '8px',
                       cursor: 'pointer',
-                      background: isSelected ? 'var(--color-primary)' : 'var(--color-accent)',
-                      color: isSelected ? 'white' : 'var(--color-text)',
                       border: isSelected ? '2px solid var(--color-primary-dark)' : '1px solid var(--color-border)',
                       transition: '0.2s ease',
+                      overflow: 'hidden',
                     }}>
-                      <div onClick={() => toggleService(service)}>
+                      <div onClick={() => toggleService(service)} style={{
+                        padding: '0.75rem',
+                        background: isSelected ? 'var(--color-primary)' : 'var(--color-accent)',
+                        color: isSelected ? 'white' : 'var(--color-text)',
+                      }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <strong>{service.name}</strong>
                           <span style={{ fontSize: '1.2rem', opacity: 0.7 }}>{isSelected ? '✓' : '+'}</span>
@@ -179,6 +189,15 @@ export default function ServicesPage() {
                           {service.duration} min • ${service.price}
                         </div>
                       </div>
+                      {addons.length > 0 && (
+                        <div style={{
+                          background: '#f9f5f0', padding: '0.5rem 0.75rem',
+                          borderTop: '1px dashed var(--color-border)',
+                          fontSize: '0.85rem', color: 'var(--color-text-light)'
+                        }}>
+                          Add-ons: {addons.map(a => `${a.name} (+$${a.price})`).join(', ')}
+                        </div>
+                      )}
                     </FadeIn>
                   )
                 })}
@@ -207,32 +226,43 @@ export default function ServicesPage() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                       {catServices.map(service => {
                         const isSelected = selectedServices.find(s => s.serviceId === service.serviceId)
+                        const addons = getAddons(service.serviceId)
                         return (
-                          <div
-                            key={service.serviceId}
-                            onClick={() => toggleService(service)}
-                            style={{
-                              padding: '0.75rem',
-                              borderRadius: '8px',
-                              cursor: 'pointer',
-                              background: isSelected ? 'var(--color-primary)' : 'white',
-                              color: isSelected ? 'white' : 'var(--color-text)',
-                              border: isSelected ? '2px solid var(--color-primary-dark)' : '2px solid transparent',
-                              transition: '0.2s ease',
-                            }}
-                          >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <strong>{service.name}</strong>
-                              <span style={{ fontSize: '1.2rem', opacity: 0.7 }}>{isSelected ? '✓' : '+'}</span>
+                          <div key={service.serviceId}>
+                            <div
+                              onClick={() => toggleService(service)}
+                              style={{
+                                padding: '0.75rem',
+                                borderRadius: addons.length > 0 ? '8px 8px 0 0' : '8px',
+                                cursor: 'pointer',
+                                background: isSelected ? 'var(--color-primary)' : 'white',
+                                color: isSelected ? 'white' : 'var(--color-text)',
+                                border: isSelected ? '2px solid var(--color-primary-dark)' : '2px solid transparent',
+                                transition: '0.2s ease',
+                              }}
+                            >
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <strong>{service.name}</strong>
+                                <span style={{ fontSize: '1.2rem', opacity: 0.7 }}>{isSelected ? '✓' : '+'}</span>
+                              </div>
+                              {service.description && (
+                                <div style={{ fontSize: '1rem', opacity: 0.9, margin: '0.25rem 0' }}>
+                                  {service.description}
+                                </div>
+                              )}
+                              <div style={{ fontSize: '1.05rem', opacity: 0.8 }}>
+                                {service.duration} min • ${service.price}
+                              </div>
                             </div>
-                            {service.description && (
-                              <div style={{ fontSize: '1rem', opacity: 0.9, margin: '0.25rem 0' }}>
-                                {service.description}
+                            {addons.length > 0 && (
+                              <div style={{
+                                background: '#f9f5f0', borderRadius: '0 0 8px 8px',
+                                padding: '0.5rem 0.75rem', borderTop: '1px dashed var(--color-border)',
+                                fontSize: '0.85rem', color: 'var(--color-text-light)'
+                              }}>
+                                Add-ons: {addons.map(a => `${a.name} (+$${a.price})`).join(', ')}
                               </div>
                             )}
-                            <div style={{ fontSize: '1.05rem', opacity: 0.8 }}>
-                              {service.duration} min • ${service.price}
-                            </div>
                           </div>
                         )
                       })}
