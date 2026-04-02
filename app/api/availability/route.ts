@@ -47,7 +47,7 @@ export async function GET(request: Request) {
     // Resolve staff assignment
     let assignedStaff = null;
     if (!isSauna) {
-      assignedStaff = await resolveStaff(vendorId, dayOfWeek, requestedDate);
+      assignedStaff = await resolveStaff(vendorId, dayOfWeek, requestedDate, service.allowedStaff as string[] | null);
     }
 
     // Get existing appointments for conflict checking
@@ -104,7 +104,7 @@ async function getDayHours(vendor: any, service: any, dayOfWeek: string, request
 
   // Non-sauna: try staff schedules first
   if (!isSauna) {
-    const staff = await resolveStaff(vendor.vendorId, dayOfWeek, requestedDate);
+    const staff = await resolveStaff(vendor.vendorId, dayOfWeek, requestedDate, service.allowedStaff as string[] | null);
     if (staff) {
       const schedule = JSON.parse(staff.schedule as string);
       const daySchedule = schedule[dayOfWeek];
@@ -120,16 +120,18 @@ async function getDayHours(vendor: any, service: any, dayOfWeek: string, request
   return workingHours[dayOfWeek] || null;
 }
 
-async function resolveStaff(vendorId: string, dayOfWeek: string, requestedDate: Date) {
+async function resolveStaff(vendorId: string, dayOfWeek: string, requestedDate: Date, allowedStaffIds?: string[] | null) {
   const { data: staffList } = await client.models.StaffSchedule.listStaffScheduleByVendorId({
     vendorId
   });
 
   if (!staffList || staffList.length === 0) return null;
 
+  const isAllowed = (staff: any) => !allowedStaffIds || allowedStaffIds.length === 0 || allowedStaffIds.includes(staff.visibleId);
+
   // Check for auto-assign rules first
   for (const staff of staffList) {
-    if (!staff.isActive || !staff.autoAssignRules) continue;
+    if (!staff.isActive || !staff.autoAssignRules || !isAllowed(staff)) continue;
     const rules = JSON.parse(staff.autoAssignRules as string);
     for (const rule of rules) {
       if (rule.action === 'auto-assign' && rule.days?.includes(dayOfWeek)) {
@@ -138,9 +140,9 @@ async function resolveStaff(vendorId: string, dayOfWeek: string, requestedDate: 
     }
   }
 
-  // Find any staff member available on this day
+  // Find any allowed staff member available on this day
   for (const staff of staffList) {
-    if (!staff.isActive || !staff.schedule) continue;
+    if (!staff.isActive || !staff.schedule || !isAllowed(staff)) continue;
     const schedule = JSON.parse(staff.schedule as string);
     const daySchedule = schedule[dayOfWeek];
     if (!daySchedule) continue;
@@ -159,10 +161,18 @@ async function resolveStaff(vendorId: string, dayOfWeek: string, requestedDate: 
 
 function getRecurrenceHours(daySchedule: any, requestedDate: Date) {
   if (daySchedule.recurrence === 'every-other') {
-    // Simple even/odd week check — can be refined with a known anchor date
-    const weekNum = Math.floor(requestedDate.getTime() / (7 * 24 * 60 * 60 * 1000));
-    if (weekNum % 2 === 0) {
-      return { start: daySchedule.start, end: daySchedule.end };
+    if (daySchedule.anchorDate) {
+      const anchor = new Date(daySchedule.anchorDate + 'T00:00:00');
+      const diffMs = requestedDate.getTime() - anchor.getTime();
+      const diffWeeks = Math.round(diffMs / (7 * 24 * 60 * 60 * 1000));
+      if (diffWeeks % 2 === 0) {
+        return { start: daySchedule.start, end: daySchedule.end };
+      }
+    } else {
+      const weekNum = Math.floor(requestedDate.getTime() / (7 * 24 * 60 * 60 * 1000));
+      if (weekNum % 2 === 0) {
+        return { start: daySchedule.start, end: daySchedule.end };
+      }
     }
     return null;
   }

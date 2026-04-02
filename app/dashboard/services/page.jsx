@@ -7,6 +7,7 @@ export default function Services() {
   const [services, setServices] = useState([])
   const [vendors, setVendors] = useState([])
   const [staffMembers, setStaffMembers] = useState([])
+  const [staffSchedules, setStaffSchedules] = useState([])
   const [selectedVendor, setSelectedVendor] = useState('')
   const [loading, setLoading] = useState(true)
   const [showAddForm, setShowAddForm] = useState(false)
@@ -34,10 +35,11 @@ export default function Services() {
 
   const initServices = async () => {
     try {
-      const [session, vendorRes, staffRes] = await Promise.all([
+      const [session, vendorRes, staffRes, scheduleRes] = await Promise.all([
         fetchAuthSession(),
         fetch('/api/vendors').then(r => r.json()),
-        fetch('/api/staff').then(r => r.json())
+        fetch('/api/staff').then(r => r.json()),
+        fetch('/api/staff-schedules').then(r => r.json())
       ])
       const vendorId = session.tokens?.idToken?.payload['custom:vendorId']
       const role = session.tokens?.idToken?.payload['custom:role'] || 'vendor'
@@ -45,6 +47,7 @@ export default function Services() {
       setCurrentUserVendorId(vendorId)
       setVendors(vendorRes.vendors || [])
       setStaffMembers(staffRes.users || [])
+      setStaffSchedules(scheduleRes.schedules || [])
 
       if ((role === 'vendor' || role === 'owner') && vendorId) {
         setSelectedVendor(vendorId)
@@ -434,32 +437,31 @@ export default function Services() {
               {newService.staffRestriction === 'specific' && (
                 <div style={{ marginBottom: '1rem' }}>
                   <label style={{ display: 'block', marginBottom: '0.5rem' }}>Select Staff Members</label>
-                  <select
-                    multiple
-                    value={newService.allowedStaff}
-                    onChange={(e) => {
-                      const selected = Array.from(e.target.selectedOptions, option => option.value)
-                      setNewService({ ...newService, allowedStaff: selected })
-                    }}
-                    style={{
-                      width: '100%',
-                      padding: '0.75rem',
-                      borderRadius: '8px',
-                      border: '1px solid var(--color-border)',
-                      fontSize: '1rem',
-                      minHeight: '120px'
-                    }}
-                  >
-                    {staffMembers
-                      .filter(staff => staff.vendorId === selectedVendor || staff.role === 'owner')
-                      .map(staff => (
-                        <option key={staff.username} value={staff.username}>
-                          {staff.email}
-                        </option>
+                  <div style={{ border: '1px solid var(--color-border)', borderRadius: '8px', padding: '0.75rem', maxHeight: '200px', overflowY: 'auto' }}>
+                    {staffSchedules
+                      .filter(s => s.vendorId === selectedVendor && s.isActive !== false)
+                      .map(s => (
+                        <label key={s.visibleId} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', padding: '0.35rem 0' }}>
+                          <input
+                            type="checkbox"
+                            checked={newService.allowedStaff.includes(s.visibleId)}
+                            onChange={(e) => {
+                              const updated = e.target.checked
+                                ? [...newService.allowedStaff, s.visibleId]
+                                : newService.allowedStaff.filter(id => id !== s.visibleId)
+                              setNewService({ ...newService, allowedStaff: updated })
+                            }}
+                            style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                          />
+                          <span>{s.staffName}</span>
+                        </label>
                       ))}
-                  </select>
+                    {staffSchedules.filter(s => s.vendorId === selectedVendor && s.isActive !== false).length === 0 && (
+                      <p style={{ color: 'var(--color-text-light)', fontSize: '0.9rem', margin: 0 }}>No staff schedules found for this vendor.</p>
+                    )}
+                  </div>
                   <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.5rem' }}>
-                    Hold Ctrl (Cmd on Mac) to select multiple staff members
+                    Only selected staff members will be available for this service.
                   </p>
                 </div>
               )}
