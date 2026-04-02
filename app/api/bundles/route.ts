@@ -31,6 +31,9 @@ export async function POST(request: Request) {
       isActive: body.isActive ?? true,
       ...(body.minPeople !== undefined && { minPeople: body.minPeople }),
       ...(body.maxPeople !== undefined && { maxPeople: body.maxPeople }),
+      ...(body.allowedDays !== undefined && { allowedDays: body.allowedDays }),
+      ...(body.addOns !== undefined && { addOns: body.addOns }),
+      ...(body.contactOnly !== undefined && { contactOnly: body.contactOnly }),
     })
     return Response.json({ bundle })
   } catch (error) {
@@ -53,6 +56,9 @@ export async function PATCH(request: Request) {
     if (body.isActive !== undefined) updateData.isActive = body.isActive
     if (body.minPeople !== undefined) updateData.minPeople = body.minPeople
     if (body.maxPeople !== undefined) updateData.maxPeople = body.maxPeople
+    if (body.allowedDays !== undefined) updateData.allowedDays = body.allowedDays
+    if (body.addOns !== undefined) updateData.addOns = body.addOns
+    if (body.contactOnly !== undefined) updateData.contactOnly = body.contactOnly
     if (body.status !== undefined) updateData.status = body.status
     if (body.vendorConfirmations !== undefined) updateData.vendorConfirmations = JSON.stringify(body.vendorConfirmations)
     if (body.appointmentIds !== undefined) updateData.appointmentIds = body.appointmentIds

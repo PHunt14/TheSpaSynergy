@@ -72,6 +72,9 @@ const schema = a.schema({
       dateTime: a.string(),
       minPeople: a.integer(),
       maxPeople: a.integer(),
+      allowedDays: a.string().array(),
+      addOns: a.json(),
+      contactOnly: a.boolean().default(false),
     })
     .identifier(['bundleId'])
     .authorization((allow) => [allow.publicApiKey()]),

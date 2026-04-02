@@ -31,7 +31,7 @@ const MODEL_CONFIG = {
   Service:       { idField: 'serviceId',     jsonFields: [] },
   Appointment:   { idField: 'appointmentId', jsonFields: ['customer'] },
   StaffSchedule: { idField: 'visibleId',     jsonFields: ['schedule', 'autoAssignRules'] },
-  Bundle:        { idField: 'bundleId',      jsonFields: ['vendorConfirmations'] },
+  Bundle:        { idField: 'bundleId',      jsonFields: ['vendorConfirmations', 'addOns'] },
   BundleSettings:{ idField: 'settingsId',    jsonFields: [] },
 };
 
