@@ -278,25 +278,6 @@ const bundles = [
     price: 180.00,
     discountPercent: 0,
     isActive: true
-  },
-  {
-    bundleId: 'bundle-make-your-own-spa-day',
-    name: 'Make Your Own Spa Day',
-    description: 'Curate your perfect spa day: 15-min targeted massage, 30-min mini head bath, 30-min mini facial, sauna session, Himalayan salt foot soak, and 30–60 min group sound bath',
-    serviceIds: [
-      'svc-winsome-massage-30',
-      'svc-kera-head-bath-30',
-      'svc-kera-mini-facial',
-      'svc-kera-sauna-25',
-      'svc-winsome-salt-soak',
-      'svc-winsome-sound-healing-30'
-    ],
-    vendorIds: ['vendor-winsome-woods', 'vendor-kera-studio'],
-    price: 0,
-    discountPercent: 0,
-    isActive: true,
-    minPeople: 4,
-    maxPeople: 10
   }
 ];
 

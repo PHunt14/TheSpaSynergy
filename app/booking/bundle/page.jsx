@@ -12,8 +12,10 @@ function BundleBookingContent() {
   const [services, setServices] = useState([])
   const [loading, setLoading] = useState(true)
   const [people, setPeople] = useState(null)
+  const [selectedAddOns, setSelectedAddOns] = useState({})
 
   const hasGroupSize = bundle?.minPeople && bundle?.maxPeople
+  const addOns = bundle?.addOns ? (typeof bundle.addOns === 'string' ? JSON.parse(bundle.addOns) : bundle.addOns) : []
 
   useEffect(() => {
     if (!bundleId) return
@@ -39,22 +41,33 @@ function BundleBookingContent() {
   }, [bundleId])
 
   if (loading) return <main><h1>Loading...</h1></main>
-  if (!bundle) return <main><h1>Bundle not found</h1></main>
+  if (!bundle) return <main><h1>Package not found</h1></main>
 
-  const serviceTotal = services.reduce((sum, s) => sum + (s?.price || 0), 0)
-  const perPersonPrice = bundle.price || serviceTotal
-  const totalPrice = hasGroupSize ? perPersonPrice * people : perPersonPrice
+  const perPersonPrice = bundle.price
+  const isGroup = people && people >= 3
+  const addOnTotal = addOns.reduce((sum, ao, i) => {
+    if (!selectedAddOns[i]) return sum
+    if (ao.groupOnly && !isGroup) return sum
+    return sum + (ao.perPerson ? ao.price * (people || 1) : ao.price)
+  }, 0)
+  const totalPrice = (perPersonPrice * (people || 1)) + addOnTotal
 
   const continueParams = new URLSearchParams({
     bundleId: bundle.bundleId,
     services: bundle.serviceIds.join(',')
   })
   if (hasGroupSize) continueParams.set('people', people)
+  // Pass selected add-on service IDs
+  const addOnServiceIds = addOns
+    .filter((ao, i) => selectedAddOns[i] && (!ao.groupOnly || isGroup) && ao.serviceId)
+    .map(ao => ao.serviceId)
+  if (addOnServiceIds.length > 0) continueParams.set('addOnServices', addOnServiceIds.join(','))
+  if (addOnTotal > 0) continueParams.set('addOnTotal', addOnTotal)
 
   return (
     <main style={{ padding: '2rem', maxWidth: '800px', margin: '0 auto' }}>
-      <Link href="/booking" style={{ color: 'var(--color-primary)', marginBottom: '2rem', display: 'inline-block' }}>
-        ← Back to Booking
+      <Link href="/bundles" style={{ color: 'var(--color-primary)', marginBottom: '2rem', display: 'inline-block' }}>
+        ← Back to Packages
       </Link>
 
       <h1>{bundle.name}</h1>
@@ -99,9 +112,50 @@ function BundleBookingContent() {
           </div>
         )}
 
+        {addOns.length > 0 && (
+          <div style={{ marginTop: '1.5rem' }}>
+            <h3 style={{ marginBottom: '0.75rem' }}>Add-Ons</h3>
+            {addOns.map((ao, i) => {
+              const disabled = ao.groupOnly && !isGroup
+              return (
+                <label
+                  key={i}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '0.75rem',
+                    padding: '0.75rem', borderRadius: '8px', marginBottom: '0.5rem',
+                    background: disabled ? '#f5f5f5' : 'white',
+                    opacity: disabled ? 0.5 : 1,
+                    cursor: disabled ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={!!selectedAddOns[i] && !disabled}
+                    disabled={disabled}
+                    onChange={(e) => setSelectedAddOns({ ...selectedAddOns, [i]: e.target.checked })}
+                  />
+                  <span style={{ flex: 1 }}>
+                    <strong>{ao.name}</strong>
+                    {ao.perPerson && <span style={{ color: 'var(--color-text-light)' }}> (per person)</span>}
+                    {disabled && <span style={{ color: 'var(--color-text-light)', fontSize: '0.85rem' }}> — available for groups of 3+</span>}
+                  </span>
+                  <span style={{ fontWeight: '600' }}>+${ao.price}</span>
+                </label>
+              )
+            })}
+          </div>
+        )}
+
         <div style={{ marginTop: '1.5rem', fontSize: '1.3rem', fontWeight: 'bold' }}>
           Total: ${totalPrice.toFixed(2)}
         </div>
+      </div>
+
+      <div style={{
+        background: '#fff3cd', border: '1px solid #ffc107', borderRadius: '8px',
+        padding: '1rem', marginBottom: '1.5rem', fontSize: '0.9rem'
+      }}>
+        📅 Spa Packages are available <strong>Fridays through Mondays</strong> only.
       </div>
 
       {isBookingEnabled ? (

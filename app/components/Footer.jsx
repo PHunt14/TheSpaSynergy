@@ -11,7 +11,7 @@ export default function Footer() {
 
         <div className="footer-links">
           <Link href="/vendors">Practitioners</Link>
-          <Link href="/bundles">Bundles</Link>
+          <Link href="/bundles">Packages</Link>
           <Link href="/booking">Book Now</Link>
           <Link href="/contact">Contact</Link>
           <Link href="/dashboard">Vendor Dashboard</Link>

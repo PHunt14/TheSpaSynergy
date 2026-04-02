@@ -51,7 +51,7 @@ export default function Navbar() {
               </div>
             )}
           </div>
-          <Link href="/bundles">Bundles</Link>
+          <Link href="/bundles">Packages</Link>
           <Link href="/booking">Book Now</Link>
           <Link href="/contact">Contact</Link>
         </div>

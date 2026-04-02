@@ -7,31 +7,59 @@ import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import BookingDisabled, { isBookingEnabled } from '../../components/BookingDisabled'
 
+const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+const PACKAGE_ALLOWED_DAYS = ['friday', 'saturday', 'sunday', 'monday']
+
 function BundleTimeContent() {
   const params = useSearchParams()
   const bundleId = params.get('bundleId')
   const serviceIds = params.get('services')?.split(',') || []
   const people = params.get('people')
 
-  const [selectedDate, setSelectedDate] = useState(new Date())
+  const [selectedDate, setSelectedDate] = useState(null)
   const [selectedTime, setSelectedTime] = useState(null)
   const [availableSlots, setAvailableSlots] = useState([])
   const [loading, setLoading] = useState(false)
   const [services, setServices] = useState([])
   const [vendorInfo, setVendorInfo] = useState(null)
+  const [bundle, setBundle] = useState(null)
+
+  const allowedDays = bundle?.allowedDays?.length > 0 ? bundle.allowedDays : PACKAGE_ALLOWED_DAYS
+
+  const isAllowedDay = (date) => {
+    const dayName = DAY_NAMES[date.getDay()]
+    return allowedDays.includes(dayName)
+  }
+
+  // Find the next allowed date from today
+  useEffect(() => {
+    const today = new Date()
+    for (let i = 0; i < 7; i++) {
+      const candidate = new Date(today)
+      candidate.setDate(today.getDate() + i)
+      if (isAllowedDay(candidate)) {
+        setSelectedDate(candidate)
+        break
+      }
+    }
+  }, [bundle])
 
   useEffect(() => {
     if (serviceIds.length === 0) return
     
     Promise.all([
       fetch('/api/services').then(res => res.json()),
-      fetch('/api/vendors').then(res => res.json())
-    ]).then(([serviceData, vendorData]) => {
+      fetch('/api/vendors').then(res => res.json()),
+      fetch('/api/bundles').then(res => res.json())
+    ]).then(([serviceData, vendorData, bundleData]) => {
       const selected = serviceData.services?.filter(s => serviceIds.includes(s.serviceId)) || []
       setServices(selected)
       if (selected.length > 0) {
         const vnd = vendorData.vendors?.find(v => v.vendorId === selected[0].vendorId)
         setVendorInfo(vnd)
+      }
+      if (bundleId) {
+        setBundle(bundleData.bundles?.find(b => b.bundleId === bundleId))
       }
     })
   }, [])
@@ -65,8 +93,15 @@ function BundleTimeContent() {
     <main>
       <h1>Select Date & Time</h1>
       <p style={{ color: 'var(--color-text-light)', marginBottom: '1rem' }}>
-        Bundle: {services.length} services • {totalDuration} min • ${totalPrice.toFixed(2)}
+        {bundle?.name || 'Package'}: {services.length} services • {totalDuration} min
       </p>
+
+      <div style={{
+        background: '#fff3cd', border: '1px solid #ffc107', borderRadius: '8px',
+        padding: '0.75rem 1rem', marginBottom: '1.5rem', fontSize: '0.9rem'
+      }}>
+        📅 Available <strong>Fridays through Mondays</strong> only.
+      </div>
 
       <div style={{ marginTop: '1.5rem' }}>
         <h3>Select Your Date</h3>
@@ -75,6 +110,7 @@ function BundleTimeContent() {
             selected={selectedDate}
             onChange={setSelectedDate}
             minDate={new Date()}
+            filterDate={isAllowedDay}
             inline
           />
         </div>
@@ -84,7 +120,7 @@ function BundleTimeContent() {
         <h3>Available Times</h3>
         {loading && <p>Loading available times...</p>}
         
-        {!loading && availableSlots.length === 0 && (
+        {!loading && availableSlots.length === 0 && selectedDate && (
           <p style={{ color: 'var(--color-text-light)' }}>
             No available times for this date. Please select another date.
           </p>
