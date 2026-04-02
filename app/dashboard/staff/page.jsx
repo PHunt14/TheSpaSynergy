@@ -131,7 +131,7 @@ export default function Staff() {
   // --- Schedule management handlers ---
   const startNewSchedule = () => {
     const vendorId = currentUserRole === 'vendor' ? currentUserVendorId : (vendors[0]?.vendorId || '')
-    setScheduleForm({ staffName: '', staffEmail: '', vendorId, schedule: emptySchedule(), autoAssignDays: [], smsAlertsEnabled: false, smsAlertPhone: '', emailAlertsEnabled: false })
+    setScheduleForm({ staffName: '', staffEmail: '', vendorId, schedule: emptySchedule(), autoAssignDays: [], recurrenceDays: {}, smsAlertsEnabled: false, smsAlertPhone: '', emailAlertsEnabled: false })
     setEditingSchedule('new')
   }
 
@@ -139,7 +139,17 @@ export default function Staff() {
     const schedule = typeof s.schedule === 'string' ? JSON.parse(s.schedule) : (s.schedule || emptySchedule())
     const rules = s.autoAssignRules ? (typeof s.autoAssignRules === 'string' ? JSON.parse(s.autoAssignRules) : s.autoAssignRules) : []
     const autoAssignDays = rules.length > 0 && rules[0].days ? rules[0].days : []
-    setScheduleForm({ staffName: s.staffName || '', staffEmail: s.staffEmail || '', vendorId: s.vendorId, schedule, autoAssignDays, smsAlertsEnabled: s.smsAlertsEnabled || false, smsAlertPhone: s.smsAlertPhone || '', emailAlertsEnabled: s.emailAlertsEnabled || false })
+    // Extract recurrence info per day
+    const recurrenceDays = {}
+    DAYS.forEach(day => {
+      if (schedule[day]?.recurrence) {
+        recurrenceDays[day] = {
+          type: schedule[day].recurrence,
+          anchorDate: schedule[day].anchorDate || ''
+        }
+      }
+    })
+    setScheduleForm({ staffName: s.staffName || '', staffEmail: s.staffEmail || '', vendorId: s.vendorId, schedule, autoAssignDays, recurrenceDays, smsAlertsEnabled: s.smsAlertsEnabled || false, smsAlertPhone: s.smsAlertPhone || '', emailAlertsEnabled: s.emailAlertsEnabled || false })
     setEditingSchedule(s.visibleId)
   }
 
@@ -184,6 +194,18 @@ export default function Staff() {
       alert('Email address is required to enable email alerts'); setSavingSchedule(false); return
     }
 
+    // Merge recurrence info into schedule
+    const finalSchedule = { ...scheduleForm.schedule }
+    DAYS.forEach(day => {
+      const rec = scheduleForm.recurrenceDays?.[day]
+      if (rec?.type && finalSchedule[day]?.start) {
+        finalSchedule[day] = { ...finalSchedule[day], recurrence: rec.type, anchorDate: rec.anchorDate || undefined }
+      } else if (finalSchedule[day]) {
+        const { recurrence, anchorDate, ...rest } = finalSchedule[day]
+        finalSchedule[day] = rest
+      }
+    })
+
     try {
       const isNew = editingSchedule === 'new'
       const res = await fetch('/api/staff-schedules', {
@@ -194,7 +216,7 @@ export default function Staff() {
           staffName: scheduleForm.staffName,
           staffEmail: scheduleForm.staffEmail,
           vendorId: scheduleForm.vendorId,
-          schedule: scheduleForm.schedule,
+          schedule: finalSchedule,
           autoAssignRules,
           smsAlertsEnabled: scheduleForm.smsAlertsEnabled,
           smsAlertPhone: scheduleForm.smsAlertPhone.replace(/\D/g, ''),
@@ -222,7 +244,9 @@ export default function Staff() {
     const schedule = typeof s.schedule === 'string' ? JSON.parse(s.schedule) : (s.schedule || {})
     return DAYS.filter(d => schedule[d]?.start).map(d => {
       const h = schedule[d]
-      const rec = h.recurrence ? ` (${h.recurrence})` : ''
+      let rec = ''
+      if (h.recurrence === 'every-other') rec = ' (every other)'
+      else if (h.recurrence === '2nd-of-month') rec = ' (2nd of month)'
       return `${DAY_LABELS[d]} ${h.start}–${h.end}${rec}`
     }).join(', ') || 'No hours set'
   }
@@ -422,20 +446,62 @@ export default function Staff() {
               {DAYS.map(day => {
                 const dayData = scheduleForm.schedule[day] || {}
                 const isWorking = !!dayData.start
+                const rec = scheduleForm.recurrenceDays?.[day]
                 return (
-                  <div key={day} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 0.75rem', background: isWorking ? 'white' : '#f5f5f5', borderRadius: '8px' }}>
-                    <span style={{ width: '40px', fontWeight: 600, fontSize: '0.9rem' }}>{DAY_LABELS[day]}</span>
-                    <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                      <input type="checkbox" checked={isWorking} onChange={() => toggleDayOff(day)} />
-                    </label>
-                    {isWorking ? (
-                      <>
-                        <input type="time" value={dayData.start || ''} onChange={(e) => updateDay(day, 'start', e.target.value)} style={{ ...inputStyle, width: '130px' }} />
-                        <span>to</span>
-                        <input type="time" value={dayData.end || ''} onChange={(e) => updateDay(day, 'end', e.target.value)} style={{ ...inputStyle, width: '130px' }} />
-                      </>
-                    ) : (
-                      <span style={{ color: '#999', fontSize: '0.9rem' }}>Off</span>
+                  <div key={day} style={{ padding: '0.5rem 0.75rem', background: isWorking ? 'white' : '#f5f5f5', borderRadius: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      <span style={{ width: '40px', fontWeight: 600, fontSize: '0.9rem' }}>{DAY_LABELS[day]}</span>
+                      <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                        <input type="checkbox" checked={isWorking} onChange={() => toggleDayOff(day)} />
+                      </label>
+                      {isWorking ? (
+                        <>
+                          <input type="time" value={dayData.start || ''} onChange={(e) => updateDay(day, 'start', e.target.value)} style={{ ...inputStyle, width: '130px' }} />
+                          <span>to</span>
+                          <input type="time" value={dayData.end || ''} onChange={(e) => updateDay(day, 'end', e.target.value)} style={{ ...inputStyle, width: '130px' }} />
+                        </>
+                      ) : (
+                        <span style={{ color: '#999', fontSize: '0.9rem' }}>Off</span>
+                      )}
+                    </div>
+                    {isWorking && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.4rem', marginLeft: '40px', paddingLeft: '0.75rem' }}>
+                        <select
+                          value={rec?.type || ''}
+                          onChange={(e) => {
+                            const type = e.target.value
+                            setScheduleForm(prev => ({
+                              ...prev,
+                              recurrenceDays: {
+                                ...prev.recurrenceDays,
+                                [day]: type ? { type, anchorDate: prev.recurrenceDays?.[day]?.anchorDate || '' } : undefined
+                              }
+                            }))
+                          }}
+                          style={{ ...inputStyle, fontSize: '0.85rem' }}
+                        >
+                          <option value="">Every week</option>
+                          <option value="every-other">Every other week</option>
+                          <option value="2nd-of-month">2nd of month</option>
+                        </select>
+                        {rec?.type === 'every-other' && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            <label style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', whiteSpace: 'nowrap' }}>Working on:</label>
+                            <input
+                              type="date"
+                              value={rec.anchorDate || ''}
+                              onChange={(e) => setScheduleForm(prev => ({
+                                ...prev,
+                                recurrenceDays: {
+                                  ...prev.recurrenceDays,
+                                  [day]: { ...prev.recurrenceDays[day], anchorDate: e.target.value }
+                                }
+                              }))}
+                              style={{ ...inputStyle, fontSize: '0.85rem' }}
+                            />
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
                 )
