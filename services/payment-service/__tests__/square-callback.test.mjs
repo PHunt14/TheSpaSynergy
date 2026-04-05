@@ -129,6 +129,18 @@ describe('GET /square/callback', () => {
     }))
   })
 
+  test('redirects with no_locations when listLocations throws', async () => {
+    mockObtainToken.mockResolvedValue({
+      result: { accessToken: 'tok', refreshToken: 'ref', merchantId: 'm1' },
+    })
+    mockListLocations.mockRejectedValue(new Error('locations api down'))
+
+    const state = makeState({ vendorId: 'v1', nonce: 'n' })
+    const res = await request(app).get(`/square/callback?code=abc&state=${state}`)
+    expect(res.status).toBe(302)
+    expect(res.headers.location).toContain('no_locations')
+  })
+
   test('redirects with error when obtainToken throws', async () => {
     mockObtainToken.mockRejectedValue(new Error('network fail'))
     const state = makeState({ vendorId: 'v1', nonce: 'n' })

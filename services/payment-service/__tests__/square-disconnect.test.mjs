@@ -72,6 +72,17 @@ describe('POST /square/disconnect', () => {
     }))
   })
 
+  test('disconnects staff even when staff token revocation fails', async () => {
+    dbMocks.getStaff.mockResolvedValue({ visibleId: 's1', squareAccessToken: 'staff-tok' })
+    dbMocks.updateStaff.mockResolvedValue()
+    mockRevokeToken.mockRejectedValue(new Error('staff revoke fail'))
+
+    const res = await request(app).post('/square/disconnect').send({ staffId: 's1' })
+    expect(res.status).toBe(200)
+    expect(res.body.success).toBe(true)
+    expect(dbMocks.updateStaff).toHaveBeenCalled()
+  })
+
   test('404 when staff not found', async () => {
     dbMocks.getStaff.mockResolvedValue(null)
     const res = await request(app).post('/square/disconnect').send({ staffId: 's1' })
