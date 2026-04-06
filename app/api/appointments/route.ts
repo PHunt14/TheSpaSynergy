@@ -20,6 +20,19 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
+    // Check global booking blackout
+    const { data: globalSetting } = await client.models.SiteSettings.get({ settingKey: 'globalBookingDisabledUntil' });
+    if (globalSetting?.settingValue && new Date(globalSetting.settingValue) > new Date()) {
+      return Response.json({ error: 'Online booking is temporarily disabled' }, { status: 403 });
+    }
+
+    // Check vendor-level booking blackout
+    const { data: vendorCheck } = await client.models.Vendor.get({ vendorId });
+    const vendorUntil = vendorCheck?.bookingDisabledUntil as string | null;
+    if (vendorUntil && new Date(vendorUntil) > new Date()) {
+      return Response.json({ error: 'Booking is temporarily disabled for this vendor' }, { status: 403 });
+    }
+
     const appointmentId = randomUUID();
 
     const { data, errors } = await client.models.Appointment.create({

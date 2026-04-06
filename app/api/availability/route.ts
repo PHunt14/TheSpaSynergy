@@ -19,9 +19,10 @@ export async function GET(request: Request) {
   }
 
   try {
-    const [vendorRes, serviceRes] = await Promise.all([
+    const [vendorRes, serviceRes, globalSettingRes] = await Promise.all([
       client.models.Vendor.get({ vendorId }),
       client.models.Service.get({ serviceId }),
+      client.models.SiteSettings.get({ settingKey: 'globalBookingDisabledUntil' }),
     ]);
 
     if (vendorRes.errors || !vendorRes.data) {
@@ -33,6 +34,18 @@ export async function GET(request: Request) {
 
     const vendor = vendorRes.data;
     const service = serviceRes.data;
+
+    // Check global booking blackout
+    const globalUntil = globalSettingRes.data?.settingValue;
+    if (globalUntil && new Date(globalUntil) > new Date()) {
+      return Response.json({ availableSlots: [], bookingDisabled: true, disabledUntil: globalUntil });
+    }
+
+    // Check vendor-level booking blackout
+    const vendorUntil = vendor.bookingDisabledUntil as string | null;
+    if (vendorUntil && new Date(vendorUntil) > new Date()) {
+      return Response.json({ availableSlots: [], bookingDisabled: true, disabledUntil: vendorUntil });
+    }
     const isSauna = (service.resourceType || 'staff') === 'sauna';
 
     const requestedDate = new Date(date + 'T00:00:00');

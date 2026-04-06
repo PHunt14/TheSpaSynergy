@@ -28,6 +28,7 @@ const schema = a.schema({
       socialInstagram: a.string(),
       socialTiktok: a.string(),
       socialWebsite: a.string(),
+      bookingDisabledUntil: a.string(),
     })
     .identifier(['vendorId'])
     .authorization((allow) => [allow.publicApiKey()]),
@@ -110,6 +111,14 @@ const schema = a.schema({
     .secondaryIndexes((index) => [
       index('vendorId').sortKeys(['dateTime'])
     ])
+    .authorization((allow) => [allow.publicApiKey()]),
+
+  SiteSettings: a
+    .model({
+      settingKey: a.id().required(),
+      settingValue: a.string(),
+    })
+    .identifier(['settingKey'])
     .authorization((allow) => [allow.publicApiKey()]),
 
   StaffSchedule: a

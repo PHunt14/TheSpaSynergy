@@ -42,6 +42,11 @@ export default function Settings() {
   const [socialTiktok, setSocialTiktok] = useState('')
   const [socialWebsite, setSocialWebsite] = useState('')
 
+  // Booking blackout
+  const [vendorBlackoutDate, setVendorBlackoutDate] = useState('')
+  const [globalBlackoutDate, setGlobalBlackoutDate] = useState('')
+  const [blackoutLoading, setBlackoutLoading] = useState(false)
+
   useEffect(() => {
     initSettings()
 
@@ -157,7 +162,10 @@ export default function Settings() {
   }
 
   useEffect(() => {
-    if (selectedVendorId) loadVendorSettings(selectedVendorId)
+    if (selectedVendorId) {
+      loadVendorSettings(selectedVendorId)
+      loadBlackoutSettings(selectedVendorId)
+    }
   }, [selectedVendorId])
 
   const loadVendorSettings = async (vendorId) => {
@@ -272,6 +280,56 @@ export default function Settings() {
     } catch (error) {
       setMessage('Error saving settings: ' + error.message)
     } finally { setSaving(false) }
+  }
+
+  const loadBlackoutSettings = async (vendorId) => {
+    try {
+      const res = await fetch(`/api/booking-blackout?vendorId=${vendorId}`)
+      const data = await res.json()
+      setVendorBlackoutDate(data.vendorDisabledUntil ? data.vendorDisabledUntil.split('T')[0] : '')
+      setGlobalBlackoutDate(data.globalDisabledUntil ? data.globalDisabledUntil.split('T')[0] : '')
+    } catch (error) {
+      console.error('Error loading blackout settings:', error)
+    }
+  }
+
+  const handleSaveVendorBlackout = async () => {
+    setBlackoutLoading(true); setMessage('')
+    try {
+      const res = await fetch('/api/booking-blackout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vendorId: selectedVendorId,
+          scope: 'vendor',
+          disabledUntil: vendorBlackoutDate ? new Date(vendorBlackoutDate + 'T23:59:59').toISOString() : null,
+        })
+      })
+      if (!res.ok) { setMessage('Error saving blackout'); return }
+      setMessage(vendorBlackoutDate ? 'Vendor booking disabled until ' + vendorBlackoutDate : 'Vendor booking re-enabled!')
+      setTimeout(() => setMessage(''), 3000)
+    } catch (error) {
+      setMessage('Error saving blackout: ' + error.message)
+    } finally { setBlackoutLoading(false) }
+  }
+
+  const handleSaveGlobalBlackout = async () => {
+    setBlackoutLoading(true); setMessage('')
+    try {
+      const res = await fetch('/api/booking-blackout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          scope: 'global',
+          disabledUntil: globalBlackoutDate ? new Date(globalBlackoutDate + 'T23:59:59').toISOString() : null,
+        })
+      })
+      if (!res.ok) { setMessage('Error saving global blackout'); return }
+      setMessage(globalBlackoutDate ? 'All booking disabled until ' + globalBlackoutDate : 'Global booking re-enabled!')
+      setTimeout(() => setMessage(''), 3000)
+    } catch (error) {
+      setMessage('Error saving global blackout: ' + error.message)
+    } finally { setBlackoutLoading(false) }
   }
 
   if (loading) return <div>Loading...</div>
@@ -457,6 +515,58 @@ export default function Settings() {
               <button onClick={handleConnectStaffSquare} className="cta">Connect with Square</button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Booking Blackout */}
+      <div style={sectionStyle}>
+        <h2 style={{ marginTop: 0, marginBottom: '1.5rem' }}>Booking Blackout<Tooltip text="Temporarily disable online booking for this vendor. Useful when syncing with external calendars like Vagaro. Customers will see a message to call instead." /></h2>
+        <div style={{ marginBottom: '1rem' }}>
+          <label style={labelStyle}>Disable booking until</label>
+          <input type="date" value={vendorBlackoutDate} onChange={(e) => setVendorBlackoutDate(e.target.value)}
+            min={new Date().toISOString().split('T')[0]} style={inputStyle} />
+          <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.5rem' }}>
+            {vendorBlackoutDate ? `Booking disabled until end of ${vendorBlackoutDate}` : 'No blackout set — booking is active'}
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          <button onClick={handleSaveVendorBlackout} disabled={blackoutLoading} className="cta">
+            {blackoutLoading ? 'Saving...' : 'Save'}
+          </button>
+          {vendorBlackoutDate && (
+            <button onClick={() => { setVendorBlackoutDate(''); handleSaveVendorBlackout() }}
+              disabled={blackoutLoading}
+              style={{ padding: '0.75rem 1.5rem', background: '#dc3545', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '1rem', fontWeight: '500' }}>
+              Re-enable Booking
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Global Booking Blackout (admin only) */}
+      {currentUserRole === 'admin' && (
+        <div style={{ ...sectionStyle, border: '2px solid #dc3545' }}>
+          <h2 style={{ marginTop: 0, marginBottom: '1.5rem', color: '#dc3545' }}>Global Booking Blackout<Tooltip text="Disable online booking for ALL vendors site-wide. Use this during Vagaro calendar sync or maintenance windows." /></h2>
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={labelStyle}>Disable all booking until</label>
+            <input type="date" value={globalBlackoutDate} onChange={(e) => setGlobalBlackoutDate(e.target.value)}
+              min={new Date().toISOString().split('T')[0]} style={inputStyle} />
+            <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.5rem' }}>
+              {globalBlackoutDate ? `ALL booking disabled until end of ${globalBlackoutDate}` : 'No global blackout — booking is active for all vendors'}
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: '1rem' }}>
+            <button onClick={handleSaveGlobalBlackout} disabled={blackoutLoading} className="cta">
+              {blackoutLoading ? 'Saving...' : 'Save Global Blackout'}
+            </button>
+            {globalBlackoutDate && (
+              <button onClick={() => { setGlobalBlackoutDate(''); handleSaveGlobalBlackout() }}
+                disabled={blackoutLoading}
+                style={{ padding: '0.75rem 1.5rem', background: '#dc3545', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '1rem', fontWeight: '500' }}>
+                Re-enable All Booking
+              </button>
+            )}
+          </div>
         </div>
       )}
 
