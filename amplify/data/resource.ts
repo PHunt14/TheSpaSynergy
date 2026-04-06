@@ -115,7 +115,7 @@ const schema = a.schema({
 
   SiteSettings: a
     .model({
-      settingKey: a.string().required(),
+      settingKey: a.id().required(),
       settingValue: a.string(),
     })
     .identifier(['settingKey'])
