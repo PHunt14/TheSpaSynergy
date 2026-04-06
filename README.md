@@ -97,6 +97,7 @@ Deployed via AWS Amplify with automatic CI/CD from Git. See `AMPLIFY_SETUP.md`.
 | `docs/NOTIFICATIONS_SETUP.md` | SMS + email setup: providers, testing, production checklist |
 | `docs/REFUND_STRATEGY.md` | Refund logic, house fee reversal, vendor ledger design, phased build plan |
 | `docs/CHERRY_BLOSSOM_USAGE.md` | Cherry blossom decorative component usage guide |
+| `docs/BOOKING_BLACKOUT_MANUAL_APPOINTMENTS.md` | Booking blackout system and manual appointment entry |
 
 ---
 
@@ -176,6 +177,7 @@ The following bounded contexts are candidates for extraction from the Next.js mo
 - [ ] Need to remove inactive/old vendors from public pages
 - [ ] Some services are offered by multiple vendors — need shared service support
 - [ ] Update Kera's service list
+- [ ] Vagaro calendar sync — currently handled via booking blackout + manual entry (see `docs/BOOKING_BLACKOUT_MANUAL_APPOINTMENTS.md`)
 
 ## Future Enhancements
 

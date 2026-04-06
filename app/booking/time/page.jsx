@@ -19,6 +19,8 @@ function TimePageContent() {
   const [serviceInfo, setServiceInfo] = useState(null)
   const [vendorInfo, setVendorInfo] = useState(null)
   const [assignedStaff, setAssignedStaff] = useState(null)
+  const [bookingBlocked, setBookingBlocked] = useState(false)
+  const [disabledUntil, setDisabledUntil] = useState(null)
 
   useEffect(() => {
     if (!service || !vendor) return
@@ -51,7 +53,13 @@ function TimePageContent() {
     fetch(`/api/availability?vendorId=${vendor}&serviceId=${service}&date=${dateStr}`)
       .then(res => res.json())
       .then(data => {
-        setAvailableSlots(data.availableSlots || [])
+        if (data.bookingDisabled) {
+          setBookingBlocked(true)
+          setDisabledUntil(data.disabledUntil || null)
+          setAvailableSlots([])
+        } else {
+          setAvailableSlots(data.availableSlots || [])
+        }
         setAssignedStaff(data.assignedStaff || null)
         setLoading(false)
       })
@@ -61,7 +69,7 @@ function TimePageContent() {
       })
   }, [vendor, service, selectedDate])
 
-  if (!isBookingEnabled) return <BookingDisabled phone={vendorInfo?.phone} vendorName={vendorInfo?.name} />
+  if (!isBookingEnabled || bookingBlocked) return <BookingDisabled phone={vendorInfo?.phone} vendorName={vendorInfo?.name} disabledUntil={disabledUntil} />
 
   return (
     <main>

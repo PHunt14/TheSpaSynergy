@@ -19,6 +19,15 @@ export default function Appointments() {
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(20)
 
+  // Manual appointment
+  const [showManualForm, setShowManualForm] = useState(false)
+  const [manualForm, setManualForm] = useState({ customerName: '', customerPhone: '', customerEmail: '', notes: '', dateTime: '' })
+  const [manualLoading, setManualLoading] = useState(false)
+  const [services, setServices] = useState([])
+  const [staffList, setStaffList] = useState([])
+  const [manualServiceId, setManualServiceId] = useState('')
+  const [manualStaffId, setManualStaffId] = useState('')
+
   useEffect(() => {
     loadUserVendor()
   }, [])
@@ -92,6 +101,9 @@ export default function Appointments() {
   useEffect(() => {
     if (userVendorId) {
       loadAppointments()
+      // Load services and staff for manual appointment form
+      fetch(`/api/services?vendorId=${userVendorId}`).then(r => r.json()).then(d => setServices((d.services || []).filter(s => s.vendorId === userVendorId && s.isActive !== false)))
+      fetch(`/api/staff-schedules?vendorId=${userVendorId}`).then(r => r.json()).then(d => setStaffList((d.schedules || []).filter(s => s.isActive !== false)))
     }
   }, [userVendorId])
 
@@ -237,6 +249,40 @@ export default function Appointments() {
     }
   }
 
+  const handleAddManual = async () => {
+    if (!manualForm.dateTime) { alert('Please select a date and time'); return }
+    setManualLoading(true)
+    try {
+      const res = await fetch('/api/appointments/manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vendorId: userVendorId,
+          serviceId: manualServiceId || undefined,
+          staffId: manualStaffId || undefined,
+          dateTime: manualForm.dateTime,
+          customerName: manualForm.customerName,
+          customerPhone: manualForm.customerPhone,
+          customerEmail: manualForm.customerEmail,
+          notes: manualForm.notes,
+        })
+      })
+      if (res.ok) {
+        alert('Appointment added!')
+        setShowManualForm(false)
+        setManualForm({ customerName: '', customerPhone: '', customerEmail: '', notes: '', dateTime: '' })
+        setManualServiceId('')
+        setManualStaffId('')
+        loadAppointments()
+      } else {
+        const data = await res.json()
+        alert('Failed: ' + (data.error || 'Unknown error'))
+      }
+    } catch (error) {
+      alert('Error adding appointment')
+    } finally { setManualLoading(false) }
+  }
+
   // Pagination logic
   const indexOfLastItem = currentPage * itemsPerPage
   const indexOfFirstItem = indexOfLastItem - itemsPerPage
@@ -249,6 +295,10 @@ export default function Appointments() {
       <p style={{ color: 'var(--color-text-light)', marginBottom: '2rem' }}>
         View and manage your bookings.
       </p>
+
+      <button onClick={() => setShowManualForm(true)} className="cta" style={{ marginBottom: '2rem' }}>
+        + Add Appointment
+      </button>
 
       {userRole === 'admin' && vendors.length > 0 && (
         <div style={{ marginBottom: '2rem' }}>
@@ -550,6 +600,83 @@ export default function Appointments() {
                   cursor: 'pointer'
                 }}
               >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Manual Appointment Modal */}
+      {showManualForm && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
+        }}>
+          <div style={{
+            background: 'white', padding: '2rem', borderRadius: '8px',
+            maxWidth: '480px', width: '90%', maxHeight: '90vh', overflowY: 'auto'
+          }}>
+            <h3>Add Manual Appointment</h3>
+            <p style={{ marginBottom: '1rem', color: 'var(--color-text-light)' }}>
+              Block time on the calendar or record an external booking.
+            </p>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Date & Time *</label>
+              <input type="datetime-local" value={manualForm.dateTime}
+                onChange={(e) => setManualForm({ ...manualForm, dateTime: e.target.value })}
+                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Service</label>
+              <select value={manualServiceId} onChange={(e) => setManualServiceId(e.target.value)}
+                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }}>
+                <option value="">None (time block)</option>
+                {services.map(s => <option key={s.serviceId} value={s.serviceId}>{s.name} ({s.duration} min - ${s.price})</option>)}
+              </select>
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Staff Member</label>
+              <select value={manualStaffId} onChange={(e) => setManualStaffId(e.target.value)}
+                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }}>
+                <option value="">None</option>
+                {staffList.map(s => <option key={s.visibleId} value={s.visibleId}>{s.staffName}</option>)}
+              </select>
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Customer Name</label>
+              <input type="text" value={manualForm.customerName}
+                onChange={(e) => setManualForm({ ...manualForm, customerName: e.target.value })}
+                placeholder="e.g. Vagaro booking, Walk-in"
+                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Phone</label>
+              <input type="tel" value={manualForm.customerPhone}
+                onChange={(e) => setManualForm({ ...manualForm, customerPhone: e.target.value })}
+                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Notes</label>
+              <textarea value={manualForm.notes}
+                onChange={(e) => setManualForm({ ...manualForm, notes: e.target.value })}
+                placeholder="e.g. Booked via Vagaro, walk-in client"
+                rows="2"
+                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem', resize: 'vertical' }} />
+            </div>
+
+            <div style={{ display: 'flex', gap: '1rem' }}>
+              <button onClick={handleAddManual} disabled={manualLoading} className="cta" style={{ flex: 1 }}>
+                {manualLoading ? 'Adding...' : 'Add Appointment'}
+              </button>
+              <button onClick={() => setShowManualForm(false)}
+                style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', background: 'white', cursor: 'pointer' }}>
                 Cancel
               </button>
             </div>
