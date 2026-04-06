@@ -6,6 +6,7 @@ import { getVendor, getStaff, listVendors, updateVendor, updateStaff, findAppoin
 import { verifyWebhookSignature, squareEnv } from './square-core.js'
 
 const app = express()
+app.disable('x-powered-by')
 
 app.use(cors({ origin: (process.env.CORS_ORIGINS || '').split(',').map(s => s.trim()) }))
 app.use('/webhooks/square', express.text({ type: '*/*' }))
