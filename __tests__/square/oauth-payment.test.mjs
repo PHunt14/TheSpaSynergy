@@ -16,7 +16,7 @@
  */
 
 import { jest } from '@jest/globals'
-import { createHmac } from 'crypto'
+import { createHmac } from 'node:crypto'
 
 import {
   buildOAuthUrl,

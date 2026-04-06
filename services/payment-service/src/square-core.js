@@ -1,4 +1,4 @@
-import { randomUUID, createHmac } from 'crypto'
+import { randomUUID, createHmac } from 'node:crypto'
 
 export function buildOAuthUrl(vendorId, staffId) {
   const appId = process.env.SQUARE_APPLICATION_ID

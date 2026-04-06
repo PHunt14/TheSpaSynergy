@@ -1,6 +1,6 @@
 import express from 'express'
 import cors from 'cors'
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 import { Client, Environment } from 'square'
 import { getVendor, getStaff, listVendors, updateVendor, updateStaff, findAppointmentByPaymentId, updateAppointment } from './db.js'
 import { verifyWebhookSignature, squareEnv } from './square-core.js'
