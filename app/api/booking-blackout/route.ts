@@ -42,7 +42,7 @@ export async function POST(request: Request) {
       if (existing) {
         await client.models.SiteSettings.update({ settingKey: 'globalBookingDisabledUntil', settingValue: disabledUntil || null } as any);
       } else if (disabledUntil) {
-        await client.models.SiteSettings.create({ settingKey: 'globalBookingDisabledUntil', settingValue: disabledUntil });
+        await client.models.SiteSettings.create({ settingKey: 'globalBookingDisabledUntil', settingValue: disabledUntil } as any);
       }
       return Response.json({ success: true });
     }
