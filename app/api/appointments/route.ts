@@ -107,7 +107,8 @@ export async function POST(request: Request) {
       }).catch(err => console.error('Customer email failed:', err)));
     }
 
-    notifications.push(fetch(`${request.headers.get('origin')}/api/send-sms`, {
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    notifications.push(fetch(`${appUrl}/api/send-sms`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ appointmentId, vendorId })
