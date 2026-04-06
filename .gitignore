@@ -10,3 +10,4 @@ ampx-reports/
 
 # Dev tools
 scripts/dev-tools/
+**/coverage/
