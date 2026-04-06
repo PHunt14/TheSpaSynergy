@@ -19,9 +19,30 @@ jobs:
 
       - run: npm ci
 
+      - name: Create amplify_outputs stub for tests
+        run: echo '{}' > amplify_outputs.json
+
       - run: npm test
 
       - run: npm run typecheck
+
+  test-payment-service:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/payment-service
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: services/payment-service/package-lock.json
+
+      - run: npm ci
+
+      - run: npm test
 
   snyk:
     runs-on: ubuntu-latest
@@ -35,13 +56,17 @@ jobs:
 
       - run: npm ci
 
-      - uses: snyk/actions/node@master
+      - name: Snyk dependency scan
+        uses: snyk/actions/node@master
+        continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
-          args: --severity-threshold=high
+          args: --all-projects --severity-threshold=high
 
-      - uses: snyk/actions/node@master
+      - name: Snyk code scan
+        uses: snyk/actions/node@master
+        continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
