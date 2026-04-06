@@ -1,31 +1,4 @@
-import { generateClient } from 'aws-amplify/data';
-import type { Schema } from '@/amplify/data/resource';
-import { Amplify } from 'aws-amplify';
-import config from '@/amplify_outputs.json';
-import { cookies } from 'next/headers';
-import { fetchAuthSession } from 'aws-amplify/auth/server';
-import { createServerRunner } from '@aws-amplify/adapter-nextjs';
-
-Amplify.configure(config, { ssr: true });
-const { runWithAmplifyServerContext } = createServerRunner({ config });
-const client = generateClient<Schema>();
-
-const getCurrentUser = async () => {
-  try {
-    return await runWithAmplifyServerContext({
-      nextServerContext: { cookies },
-      operation: async (contextSpec) => {
-        const session = await fetchAuthSession(contextSpec);
-        const idToken = session.tokens?.idToken;
-        if (!idToken) return null;
-        return {
-          role: idToken.payload['custom:role'] as string || 'staff',
-          vendorId: idToken.payload['custom:vendorId'] as string,
-        };
-      }
-    });
-  } catch { return null; }
-};
+import { client, getCurrentUser } from '@/lib/auth';
 
 export async function GET(request: Request) {
   try {
@@ -61,30 +34,19 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { vendorId, disabledUntil, scope } = body;
 
-    // Global blackout: admin only
     if (scope === 'global') {
       if (user.role !== 'admin') {
         return Response.json({ error: 'Only admins can set global blackout' }, { status: 403 });
       }
-      if (disabledUntil) {
-        // Upsert: try update first, create if not found
-        const { data: existing } = await client.models.SiteSettings.get({ settingKey: 'globalBookingDisabledUntil' });
-        if (existing) {
-          await client.models.SiteSettings.update({ settingKey: 'globalBookingDisabledUntil', settingValue: disabledUntil } as any);
-        } else {
-          await client.models.SiteSettings.create({ settingKey: 'globalBookingDisabledUntil', settingValue: disabledUntil });
-        }
-      } else {
-        // Clear: set to null
-        const { data: existing } = await client.models.SiteSettings.get({ settingKey: 'globalBookingDisabledUntil' });
-        if (existing) {
-          await client.models.SiteSettings.update({ settingKey: 'globalBookingDisabledUntil', settingValue: null } as any);
-        }
+      const { data: existing } = await client.models.SiteSettings.get({ settingKey: 'globalBookingDisabledUntil' });
+      if (existing) {
+        await client.models.SiteSettings.update({ settingKey: 'globalBookingDisabledUntil', settingValue: disabledUntil || null } as any);
+      } else if (disabledUntil) {
+        await client.models.SiteSettings.create({ settingKey: 'globalBookingDisabledUntil', settingValue: disabledUntil });
       }
       return Response.json({ success: true });
     }
 
-    // Vendor blackout
     if (!vendorId) return Response.json({ error: 'vendorId required' }, { status: 400 });
     if (user.role === 'vendor' && vendorId !== user.vendorId) {
       return Response.json({ error: 'Can only manage your own blackout' }, { status: 403 });

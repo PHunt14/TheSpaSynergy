@@ -1,32 +1,5 @@
-import { generateClient } from 'aws-amplify/data';
-import type { Schema } from '@/amplify/data/resource';
-import { Amplify } from 'aws-amplify';
-import config from '@/amplify_outputs.json';
-import { cookies } from 'next/headers';
-import { fetchAuthSession } from 'aws-amplify/auth/server';
-import { createServerRunner } from '@aws-amplify/adapter-nextjs';
+import { client, getCurrentUser } from '@/lib/auth';
 import { randomUUID } from 'crypto';
-
-Amplify.configure(config, { ssr: true });
-const { runWithAmplifyServerContext } = createServerRunner({ config });
-const client = generateClient<Schema>();
-
-const getCurrentUser = async () => {
-  try {
-    return await runWithAmplifyServerContext({
-      nextServerContext: { cookies },
-      operation: async (contextSpec) => {
-        const session = await fetchAuthSession(contextSpec);
-        const idToken = session.tokens?.idToken;
-        if (!idToken) return null;
-        return {
-          role: idToken.payload['custom:role'] as string || 'staff',
-          vendorId: idToken.payload['custom:vendorId'] as string,
-        };
-      }
-    });
-  } catch { return null; }
-};
 
 export async function POST(request: Request) {
   try {
@@ -40,14 +13,13 @@ export async function POST(request: Request) {
       return Response.json({ error: 'vendorId and dateTime are required' }, { status: 400 });
     }
 
-    // Vendor role can only add to their own calendar
     if (user.role === 'vendor' && vendorId !== user.vendorId) {
       return Response.json({ error: 'Can only add appointments to your own calendar' }, { status: 403 });
     }
 
     const appointmentId = randomUUID();
 
-    const { data, errors } = await client.models.Appointment.create({
+    const { errors } = await client.models.Appointment.create({
       appointmentId,
       vendorId,
       serviceId: serviceId || 'manual',

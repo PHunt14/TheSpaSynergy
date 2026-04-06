@@ -1,36 +1,4 @@
-import { generateClient } from 'aws-amplify/data'
-import type { Schema } from '@/amplify/data/resource'
-import { Amplify } from 'aws-amplify'
-import config from '@/amplify_outputs.json'
-import { cookies } from 'next/headers'
-import { fetchAuthSession } from 'aws-amplify/auth/server'
-import { createServerRunner } from '@aws-amplify/adapter-nextjs'
-
-Amplify.configure(config, { ssr: true })
-const { runWithAmplifyServerContext } = createServerRunner({ config })
-const client = generateClient<Schema>()
-
-// Get current user from session
-const getCurrentUserFromSession = async () => {
-  try {
-    return await runWithAmplifyServerContext({
-      nextServerContext: { cookies },
-      operation: async (contextSpec) => {
-        const session = await fetchAuthSession(contextSpec);
-        const idToken = session.tokens?.idToken;
-        if (!idToken) return null;
-        
-        return {
-          role: idToken.payload['custom:role'] as string || 'staff',
-          vendorId: idToken.payload['custom:vendorId'] as string
-        };
-      }
-    });
-  } catch (error) {
-    console.error('Error getting session:', error);
-    return null;
-  }
-};
+import { client, getCurrentUser } from '@/lib/auth';
 
 export async function GET(request: Request) {
   try {
@@ -77,7 +45,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const currentUser = await getCurrentUserFromSession();
+    const currentUser = await getCurrentUser();
     if (!currentUser || (currentUser.role !== 'admin')) {
       return Response.json({ error: 'Unauthorized: Only admins can create vendors' }, { status: 403 });
     }
@@ -121,8 +89,7 @@ export async function PATCH(request: Request) {
       return Response.json({ error: 'vendorId required' }, { status: 400 });
     }
 
-    const currentUser = await getCurrentUserFromSession();
-    // Vendor/owner can only update their own vendor
+    const currentUser = await getCurrentUser();
     if ((currentUser?.role === 'vendor' || currentUser?.role === 'owner') && vendorId !== currentUser.vendorId) {
       return Response.json({ error: 'Unauthorized: Can only update your own vendor' }, { status: 403 });
     }
@@ -143,7 +110,7 @@ export async function PATCH(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    const currentUser = await getCurrentUserFromSession();
+    const currentUser = await getCurrentUser();
     if (!currentUser || (currentUser.role !== 'admin')) {
       return Response.json({ error: 'Unauthorized: Only admins can delete vendors' }, { status: 403 });
     }
