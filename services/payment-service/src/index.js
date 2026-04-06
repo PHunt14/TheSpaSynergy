@@ -253,9 +253,26 @@ app.post('/square/disconnect', async (req, res) => {
 
 // ── POST /webhooks/square ─────────────────────────────────────
 
+function buildPaymentUpdate(appt, payment) {
+  if (appt.paymentStatus === payment.status) return null
+  const update = { paymentStatus: payment.status, paymentRaw: JSON.stringify(payment) }
+  if (payment.amountMoney) update.paymentAmount = payment.amountMoney.amount / 100
+  if (payment.status === 'COMPLETED' && appt.status !== 'confirmed') update.status = 'confirmed'
+  return update
+}
+
+async function handlePaymentEvent(event) {
+  const paymentId = event.data?.object?.payment?.id
+  if (!paymentId) return
+  const appt = await findAppointmentByPaymentId(paymentId)
+  if (!appt) return
+  const update = buildPaymentUpdate(appt, event.data.object.payment)
+  if (update) await updateAppointment(appt.appointmentId, update)
+}
+
 app.post('/webhooks/square', async (req, res) => {
   try {
-    const body = req.body // raw text
+    const body = req.body
     const signature = req.headers['x-square-hmacsha256-signature']
     const webhookUrl = `${process.env.APP_URL}/webhooks/square`
     const sigKey = process.env.SQUARE_WEBHOOK_SIGNATURE_KEY || ''
@@ -266,20 +283,7 @@ app.post('/webhooks/square', async (req, res) => {
 
     const event = JSON.parse(body)
     if (event.type === 'payment.updated' || event.type === 'payment.completed') {
-      const paymentId = event.data?.object?.payment?.id
-      if (paymentId) {
-        const appt = await findAppointmentByPaymentId(paymentId)
-        if (appt) {
-          const payment = event.data.object.payment
-          if (appt.paymentStatus !== payment.status) {
-            const update = { paymentStatus: payment.status }
-            if (payment.amountMoney) update.paymentAmount = payment.amountMoney.amount / 100
-            update.paymentRaw = JSON.stringify(payment)
-            if (payment.status === 'COMPLETED' && appt.status !== 'confirmed') update.status = 'confirmed'
-            await updateAppointment(appt.appointmentId, update)
-          }
-        }
-      }
+      await handlePaymentEvent(event)
     }
     res.json({ ok: true })
   } catch (err) {
