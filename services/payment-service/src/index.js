@@ -141,100 +141,109 @@ app.get('/square/connect', (req, res) => {
 
 // ── GET /square/callback ──────────────────────────────────────
 
+function parseCallbackState(state) {
+  try {
+    const decoded = JSON.parse(Buffer.from(state, 'base64url').toString())
+    return { vendorId: decoded.vendorId, staffId: decoded.staffId || null }
+  } catch { return null }
+}
+
+async function fetchPrimaryLocationId(accessToken) {
+  try {
+    const client = new Client({ accessToken, environment: env() })
+    const { result } = await client.locationsApi.listLocations()
+    const active = result.locations?.find(l => l.status === 'ACTIVE')
+    return active?.id || result.locations?.[0]?.id || null
+  } catch (e) {
+    console.error('Error fetching locations:', e)
+    return null
+  }
+}
+
+function buildTokenFields(result, locationId) {
+  return {
+    squareAccessToken: result.accessToken,
+    squareRefreshToken: result.refreshToken || null,
+    squareMerchantId: result.merchantId || null,
+    squareLocationId: locationId,
+    squareOAuthStatus: 'connected',
+    squareTokenExpiresAt: result.expiresAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    squareConnectedAt: new Date().toISOString(),
+  }
+}
+
 app.get('/square/callback', async (req, res) => {
   const baseUrl = process.env.APP_URL
+  const settingsUrl = `${baseUrl}/dashboard/settings`
   try {
     const { code, state, error } = req.query
-    if (error) return res.redirect(`${baseUrl}/dashboard/settings?error=oauth_failed&details=${encodeURIComponent(error)}`)
-    if (!code || !state) return res.redirect(`${baseUrl}/dashboard/settings?error=oauth_failed&details=missing_code_or_state`)
+    if (error) return res.redirect(`${settingsUrl}?error=oauth_failed&details=${encodeURIComponent(error)}`)
+    if (!code || !state) return res.redirect(`${settingsUrl}?error=oauth_failed&details=missing_code_or_state`)
 
-    let vendorId, staffId
-    try {
-      const decoded = JSON.parse(Buffer.from(state, 'base64url').toString())
-      vendorId = decoded.vendorId
-      staffId = decoded.staffId || null
-    } catch {
-      return res.redirect(`${baseUrl}/dashboard/settings?error=oauth_failed&details=invalid_state`)
-    }
+    const parsed = parseCallbackState(state)
+    if (!parsed) return res.redirect(`${settingsUrl}?error=oauth_failed&details=invalid_state`)
 
     const appId = process.env.SQUARE_APPLICATION_ID
     const appSecret = process.env.SQUARE_APPLICATION_SECRET
-    if (!appId || !appSecret) return res.redirect(`${baseUrl}/dashboard/settings?error=missing_credentials`)
+    if (!appId || !appSecret) return res.redirect(`${settingsUrl}?error=missing_credentials`)
 
     const squareClient = new Client({ environment: env() })
     const { result } = await squareClient.oAuthApi.obtainToken({
       clientId: appId, clientSecret: appSecret, grantType: 'authorization_code',
       code, redirectUri: `${baseUrl}/api/square/callback`,
     })
-    if (!result.accessToken) return res.redirect(`${baseUrl}/dashboard/settings?error=oauth_failed&details=no_access_token`)
+    if (!result.accessToken) return res.redirect(`${settingsUrl}?error=oauth_failed&details=no_access_token`)
 
-    const merchantClient = new Client({ accessToken: result.accessToken, environment: env() })
-    let locationId = null
-    try {
-      const { result: locResult } = await merchantClient.locationsApi.listLocations()
-      const active = locResult.locations?.find(l => l.status === 'ACTIVE')
-      locationId = active?.id || locResult.locations?.[0]?.id || null
-    } catch (e) { console.error('Error fetching locations:', e) }
-    if (!locationId) return res.redirect(`${baseUrl}/dashboard/settings?error=no_locations`)
+    const locationId = await fetchPrimaryLocationId(result.accessToken)
+    if (!locationId) return res.redirect(`${settingsUrl}?error=no_locations`)
 
-    const tokenFields = {
-      squareAccessToken: result.accessToken,
-      squareRefreshToken: result.refreshToken || null,
-      squareMerchantId: result.merchantId || null,
-      squareLocationId: locationId,
-      squareOAuthStatus: 'connected',
-      squareTokenExpiresAt: result.expiresAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-      squareConnectedAt: new Date().toISOString(),
+    const tokenFields = buildTokenFields(result, locationId)
+    if (parsed.staffId) {
+      await updateStaff(parsed.staffId, tokenFields)
+      return res.redirect(`${settingsUrl}?success=square_connected&staffId=${parsed.staffId}`)
     }
-
-    if (staffId) {
-      await updateStaff(staffId, tokenFields)
-      return res.redirect(`${baseUrl}/dashboard/settings?success=square_connected&staffId=${staffId}`)
-    }
-    await updateVendor(vendorId, { squareApplicationId: appId, ...tokenFields })
-    res.redirect(`${baseUrl}/dashboard/settings?success=square_connected`)
+    await updateVendor(parsed.vendorId, { squareApplicationId: appId, ...tokenFields })
+    res.redirect(`${settingsUrl}?success=square_connected`)
   } catch (err) {
     console.error('Square callback error:', err)
-    res.redirect(`${baseUrl}/dashboard/settings?error=oauth_failed&details=${encodeURIComponent(err.message || 'unknown')}`)
+    res.redirect(`${settingsUrl}?error=oauth_failed&details=${encodeURIComponent(err.message || 'unknown')}`)
   }
 })
 
 // ── POST /square/disconnect ───────────────────────────────────
+
+const CLEAR_SQUARE_FIELDS = {
+  squareAccessToken: null, squareRefreshToken: null, squareMerchantId: null,
+  squareLocationId: null, squareOAuthStatus: 'disconnected',
+  squareTokenExpiresAt: null, squareConnectedAt: null,
+}
+
+async function tryRevokeToken(accessToken) {
+  const appId = process.env.SQUARE_APPLICATION_ID
+  const appSecret = process.env.SQUARE_APPLICATION_SECRET
+  if (!accessToken || !appId || !appSecret) return
+  try {
+    const sq = new Client({ environment: env() })
+    await sq.oAuthApi.revokeToken({ clientId: appId, accessToken }, `Client ${appSecret}`)
+  } catch (e) { console.error('Token revocation failed:', e) }
+}
 
 app.post('/square/disconnect', async (req, res) => {
   try {
     const { vendorId, staffId } = req.body
     if (!vendorId && !staffId) return res.status(400).json({ error: 'vendorId or staffId required' })
 
-    const appId = process.env.SQUARE_APPLICATION_ID
-    const appSecret = process.env.SQUARE_APPLICATION_SECRET
-    const clearFields = {
-      squareAccessToken: null, squareRefreshToken: null, squareMerchantId: null,
-      squareLocationId: null, squareOAuthStatus: 'disconnected',
-      squareTokenExpiresAt: null, squareConnectedAt: null,
-    }
-
     if (staffId) {
       const staff = await getStaff(staffId)
       if (!staff) return res.status(404).json({ error: 'Staff not found' })
-      if (staff.squareAccessToken && appId && appSecret) {
-        try {
-          const sq = new Client({ environment: env() })
-          await sq.oAuthApi.revokeToken({ clientId: appId, accessToken: staff.squareAccessToken }, `Client ${appSecret}`)
-        } catch (e) { console.error('Staff token revocation failed:', e) }
-      }
-      await updateStaff(staffId, clearFields)
+      await tryRevokeToken(staff.squareAccessToken)
+      await updateStaff(staffId, CLEAR_SQUARE_FIELDS)
       return res.json({ success: true })
     }
 
     const vendor = await getVendor(vendorId)
-    if (vendor?.squareAccessToken && appId && appSecret) {
-      try {
-        const sq = new Client({ environment: env() })
-        await sq.oAuthApi.revokeToken({ clientId: appId, accessToken: vendor.squareAccessToken }, `Client ${appSecret}`)
-      } catch (e) { console.error('Token revocation failed:', e) }
-    }
-    await updateVendor(vendorId, { ...clearFields, squareApplicationId: null })
+    await tryRevokeToken(vendor?.squareAccessToken)
+    await updateVendor(vendorId, { ...CLEAR_SQUARE_FIELDS, squareApplicationId: null })
     res.json({ success: true })
   } catch (err) {
     console.error('Disconnect error:', err)
