@@ -2,7 +2,7 @@
 // Usage: node scripts/make-admin.js YOUR_EMAIL@example.com
 
 import { CognitoIdentityProviderClient, AdminUpdateUserAttributesCommand } from '@aws-sdk/client-cognito-identity-provider';
-import config from '../amplify_outputs.json' assert { type: 'json' };
+import config from '../amplify_outputs.json' with { type: 'json' };
 
 const client = new CognitoIdentityProviderClient({ region: config.auth.aws_region });
 const userPoolId = config.auth.user_pool_id;
