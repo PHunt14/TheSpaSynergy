@@ -87,7 +87,9 @@ function ConfirmPageContent() {
     const loadSquare = async () => {
       if (!window.Square) {
         const script = document.createElement('script')
-        script.src = 'https://sandbox.web.squarecdn.com/v1/square.js'
+        script.src = process.env.NEXT_PUBLIC_SQUARE_ENVIRONMENT === 'production'
+          ? 'https://web.squarecdn.com/v1/square.js'
+          : 'https://sandbox.web.squarecdn.com/v1/square.js'
         script.async = true
         script.onload = () => { if (isMounted) initializeSquare() }
         document.body.appendChild(script)
