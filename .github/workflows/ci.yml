@@ -26,6 +26,34 @@ jobs:
 
       - run: npm run typecheck
 
+  test-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Create amplify_outputs stub
+        run: echo '{"auth":{"user_pool_id":"stub","aws_region":"us-east-1","user_pool_client_id":"stub","identity_pool_id":"stub","username_attributes":["email"],"standard_required_attributes":["email"],"user_verification_types":["email"],"unauthenticated_identities_enabled":true,"password_policy":{"min_length":8,"require_lowercase":true,"require_numbers":true,"require_symbols":true,"require_uppercase":true}},"data":{"url":"https://stub.appsync-api.us-east-1.amazonaws.com/graphql","aws_region":"us-east-1","api_key":"stub","default_authorization_type":"API_KEY","authorization_types":[]}}' > amplify_outputs.json
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E tests
+        run: npm run test:e2e
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
   test-payment-service:
     runs-on: ubuntu-latest
     defaults:

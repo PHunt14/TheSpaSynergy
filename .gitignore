@@ -10,3 +10,8 @@ ampx-reports/
 # Dev tools
 scripts/dev-tools/
 **/coverage/
+
+
+# Playwright
+test-results/
+playwright-report/

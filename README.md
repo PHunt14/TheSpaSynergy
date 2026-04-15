@@ -101,6 +101,7 @@ Deployed via AWS Amplify with automatic CI/CD from Git. See `AMPLIFY_SETUP.md`.
 | `docs/PRODUCTION_CHECKLIST.md` | Step-by-step checklist for launching the `main` branch to production |
 | `docs/SMS_PHONE_NUMBER.md` | Toll-free number registration, AWS verification form values, approval tips |
 | `docs/KIOSK_CHECKOUT.md` | Tablet point-of-sale for in-person payments, kiosk auth, Square Terminal upgrade path |
+| `docs/TESTING.md` | Testing strategy, running tests, what's covered, and roadmap for future test coverage |
 
 ---
 
