@@ -100,6 +100,7 @@ Deployed via AWS Amplify with automatic CI/CD from Git. See `AMPLIFY_SETUP.md`.
 | `docs/BOOKING_BLACKOUT_MANUAL_APPOINTMENTS.md` | Booking blackout system and manual appointment entry |
 | `docs/PRODUCTION_CHECKLIST.md` | Step-by-step checklist for launching the `main` branch to production |
 | `docs/SMS_PHONE_NUMBER.md` | Toll-free number registration, AWS verification form values, approval tips |
+| `docs/KIOSK_CHECKOUT.md` | Tablet point-of-sale for in-person payments, kiosk auth, Square Terminal upgrade path |
 
 ---
 
@@ -191,4 +192,5 @@ The following bounded contexts are candidates for extraction from the Next.js mo
 - [ ] **Calendar sync**: Google/Apple calendar integration
 - [ ] **Auto rent payment**: automated rent collection from subletting vendors
 - [ ] **Square Integration service**: aplit as a backend microservice that can be duplicated and/or used separately
+- [ ] **Kiosk checkout (tablet POS)**: tablet at checkout counter for in-person payments — see `docs/KIOSK_CHECKOUT.md`
 

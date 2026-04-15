@@ -11,6 +11,34 @@ const client = generateServerClientUsingCookies<Schema>({
   cookies,
 });
 
+export async function PATCH(request: Request) {
+  try {
+    const { appointmentId, paymentId, paymentStatus, paymentAmount, status } = await request.json();
+
+    if (!appointmentId) {
+      return Response.json({ error: 'appointmentId required' }, { status: 400 });
+    }
+
+    const updateFields: any = { appointmentId };
+    if (paymentId !== undefined) updateFields.paymentId = paymentId;
+    if (paymentStatus !== undefined) updateFields.paymentStatus = paymentStatus;
+    if (paymentAmount !== undefined) updateFields.paymentAmount = paymentAmount;
+    if (status !== undefined) updateFields.status = status;
+
+    const { errors } = await client.models.Appointment.update(updateFields);
+
+    if (errors) {
+      console.error('Error updating appointment:', errors);
+      return Response.json({ error: 'Failed to update appointment' }, { status: 500 });
+    }
+
+    return Response.json({ success: true });
+  } catch (error) {
+    console.error('Error updating appointment:', error);
+    return Response.json({ error: 'Failed to update appointment' }, { status: 500 });
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
