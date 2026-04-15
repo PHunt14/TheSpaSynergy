@@ -98,6 +98,8 @@ Deployed via AWS Amplify with automatic CI/CD from Git. See `AMPLIFY_SETUP.md`.
 | `docs/REFUND_STRATEGY.md` | Refund logic, house fee reversal, vendor ledger design, phased build plan |
 | `docs/CHERRY_BLOSSOM_USAGE.md` | Cherry blossom decorative component usage guide |
 | `docs/BOOKING_BLACKOUT_MANUAL_APPOINTMENTS.md` | Booking blackout system and manual appointment entry |
+| `docs/PRODUCTION_CHECKLIST.md` | Step-by-step checklist for launching the `main` branch to production |
+| `docs/SMS_PHONE_NUMBER.md` | Toll-free number registration, AWS verification form values, approval tips |
 
 ---
 
