@@ -48,7 +48,7 @@
     "react-date-picker": "^12.0.1",
     "react-datepicker": "^9.1.0",
     "react-dom": "^19.2.3",
-    "square": "^39.0.0"
+    "square": "^44.0.1"
   },
   "devDependencies": {
     "@aws-amplify/backend": "^1.0.0",
