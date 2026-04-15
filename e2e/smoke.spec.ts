@@ -4,8 +4,7 @@ test.describe('Public pages smoke tests', () => {
   test('homepage loads with business name and CTA', async ({ page }) => {
     await page.goto('/')
     await expect(page).toHaveTitle(/Spa Synergy/i)
-    await expect(page.locator('text=The Spa Synergy')).toBeVisible()
-    // Booking CTA should be accessible from homepage
+    await expect(page.locator('.nav-logo')).toBeVisible()
     await expect(page.locator('a[href="/booking"]').first()).toBeVisible()
   })
 
