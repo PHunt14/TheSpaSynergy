@@ -41,6 +41,7 @@ export default function Settings() {
   const [socialInstagram, setSocialInstagram] = useState('')
   const [socialTiktok, setSocialTiktok] = useState('')
   const [socialWebsite, setSocialWebsite] = useState('')
+  const [googlePlaceId, setGooglePlaceId] = useState('')
 
   // Booking blackout
   const [vendorBlackoutDate, setVendorBlackoutDate] = useState('')
@@ -185,6 +186,7 @@ export default function Settings() {
         setSocialInstagram(v.socialInstagram || '')
         setSocialTiktok(v.socialTiktok || '')
         setSocialWebsite(v.socialWebsite || '')
+        setGooglePlaceId(v.googlePlaceId || '')
       }
     } catch (error) {
       console.error('Error loading settings:', error)
@@ -251,7 +253,7 @@ export default function Settings() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           vendorId: selectedVendorId,
-          socialFacebook, socialInstagram, socialTiktok, socialWebsite,
+          socialFacebook, socialInstagram, socialTiktok, socialWebsite, googlePlaceId,
         })
       })
       if (!response.ok) { setMessage('Error saving social links'); setSaving(false); return }
@@ -415,6 +417,10 @@ export default function Settings() {
         <div style={{ marginBottom: '1rem' }}>
           <label style={labelStyle}>Website URL</label>
           <input type="url" value={socialWebsite} onChange={(e) => setSocialWebsite(e.target.value)} placeholder="https://yourbusiness.com" style={inputStyle} />
+        </div>
+        <div style={{ marginBottom: '1rem' }}>
+          <label style={labelStyle}>Google Place ID<Tooltip text="Your Google Place ID enables a 'Review us on Google' link on your public page. Find it at: https://developers.google.com/maps/documentation/places/web-service/place-id-finder" /></label>
+          <input type="text" value={googlePlaceId} onChange={(e) => setGooglePlaceId(e.target.value)} placeholder="ChIJ..." style={inputStyle} />
         </div>
         <button onClick={handleSaveSocial} disabled={saving} className="cta">
           {saving ? 'Saving...' : 'Save Social Links'}

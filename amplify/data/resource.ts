@@ -28,6 +28,7 @@ const schema = a.schema({
       socialInstagram: a.string(),
       socialTiktok: a.string(),
       socialWebsite: a.string(),
+      googlePlaceId: a.string(),
       bookingDisabledUntil: a.string(),
     })
     .identifier(['vendorId'])

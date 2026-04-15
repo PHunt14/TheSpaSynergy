@@ -262,8 +262,12 @@ export default function VendorDetailPage() {
               <a href={`mailto:${vendor.email}`} style={{ color: 'var(--color-primary-dark)', textDecoration: 'none' }}>{vendor.email}</a>
             </p>
           )}
-          {(vendor.socialFacebook || vendor.socialInstagram || vendor.socialTiktok || vendor.socialWebsite) && (
-            <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', flexWrap: 'wrap' }}>
+          {(vendor.socialFacebook || vendor.socialInstagram || vendor.socialTiktok || vendor.socialWebsite || vendor.googlePlaceId) && (
+            <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+              {vendor.googlePlaceId && (
+                <a href={`https://search.google.com/local/writereview?placeid=${vendor.googlePlaceId}`} target="_blank" rel="noopener noreferrer"
+                  style={{ color: 'white', background: 'var(--color-primary)', textDecoration: 'none', fontSize: '0.9rem', padding: '0.5rem 1rem', borderRadius: '8px', fontWeight: '500' }}>⭐ Review us on Google</a>
+              )}
               {vendor.socialFacebook && (
                 <a href={vendor.socialFacebook} target="_blank" rel="noopener noreferrer"
                   style={{ color: 'var(--color-primary-dark)', textDecoration: 'none', fontSize: '1rem' }}>Facebook</a>
