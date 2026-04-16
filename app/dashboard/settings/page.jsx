@@ -3,76 +3,41 @@
 import { useState, useEffect } from 'react'
 import { generateClient } from 'aws-amplify/data'
 import { fetchAuthSession } from 'aws-amplify/auth'
-import Tooltip from '../../components/Tooltip'
+import MySettings from './MySettings'
+import VendorSettings from './VendorSettings'
+import BuildingSettings from './BuildingSettings'
 
 const client = generateClient()
 
+const TABS = {
+  MY: 'my',
+  VENDOR: 'vendor',
+  BUILDING: 'building',
+}
+
 export default function Settings() {
+  const [activeTab, setActiveTab] = useState(TABS.MY)
+  const [loading, setLoading] = useState(true)
   const [vendors, setVendors] = useState([])
   const [selectedVendorId, setSelectedVendorId] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [smsAlertPhone, setSmsAlertPhone] = useState('')
-  const [smsAlertsEnabled, setSmsAlertsEnabled] = useState(false)
-  const [squareConnected, setSquareConnected] = useState(false)
-  const [squareConnectedAt, setSquareConnectedAt] = useState(null)
-  const [connectingSquare, setConnectingSquare] = useState(false)
-  const [squareOAuthStatus, setSquareOAuthStatus] = useState('disconnected')
+  const [currentUser, setCurrentUser] = useState({ role: null, vendorId: null, email: null })
   const [message, setMessage] = useState('')
-  const [currentUserRole, setCurrentUserRole] = useState(null)
-  const [currentUserVendorId, setCurrentUserVendorId] = useState(null)
-  const [currentUserEmail, setCurrentUserEmail] = useState(null)
-
-  // Staff Square
-  const [myStaffSchedule, setMyStaffSchedule] = useState(null)
-  const [staffSquareConnected, setStaffSquareConnected] = useState(false)
-  const [staffSquareConnectedAt, setStaffSquareConnectedAt] = useState(null)
-  const [staffSquareStatus, setStaffSquareStatus] = useState('disconnected')
-  const [connectingStaffSquare, setConnectingStaffSquare] = useState(false)
-
-  // Contact info
-  const [vendorName, setVendorName] = useState('')
-  const [vendorEmail, setVendorEmail] = useState('')
-  const [vendorPhone, setVendorPhone] = useState('')
-  const [vendorDescription, setVendorDescription] = useState('')
-
-  // Social media
-  const [socialFacebook, setSocialFacebook] = useState('')
-  const [socialInstagram, setSocialInstagram] = useState('')
-  const [socialTiktok, setSocialTiktok] = useState('')
-  const [socialWebsite, setSocialWebsite] = useState('')
-  const [googlePlaceId, setGooglePlaceId] = useState('')
-
-  // Booking blackout
-  const [vendorBlackoutDate, setVendorBlackoutDate] = useState('')
-  const [globalBlackoutDate, setGlobalBlackoutDate] = useState('')
-  const [blackoutLoading, setBlackoutLoading] = useState(false)
-
-  // Kiosk PIN
-  const [kioskPin, setKioskPin] = useState('')
-  const [kioskPinSaving, setKioskPinSaving] = useState(false)
-  const [kioskPinSet, setKioskPinSet] = useState(false)
 
   useEffect(() => {
     initSettings()
-
-    loadKioskPin()
     const params = new URLSearchParams(window.location.search)
     if (params.get('success') === 'square_connected') {
       setMessage('Square account connected successfully!')
       const connectedStaffId = params.get('staffId')
-      setTimeout(() => {
-        setMessage('')
-        if (connectedStaffId) loadMyStaffSchedule()
-        else loadVendorSettings(selectedVendorId)
-      }, 3000)
+      if (connectedStaffId) setActiveTab(TABS.MY)
+      setTimeout(() => setMessage(''), 3000)
       window.history.replaceState({}, '', '/dashboard/settings')
     }
     if (params.get('error')) {
       const errorType = params.get('error')
       const details = params.get('details')
       let errorMsg = 'Error connecting Square account: '
-      switch(errorType) {
+      switch (errorType) {
         case 'missing_credentials': errorMsg += 'Square credentials not configured. Contact administrator.'; break
         case 'no_locations': errorMsg += 'No locations found in your Square account.'; break
         case 'oauth_failed': errorMsg += details || 'OAuth authorization failed.'; break
@@ -90,9 +55,7 @@ export default function Settings() {
       const vendorId = session.tokens?.idToken?.payload['custom:vendorId']
       const role = session.tokens?.idToken?.payload['custom:role'] || 'vendor'
       const email = session.tokens?.idToken?.payload['email']
-      setCurrentUserRole(role)
-      setCurrentUserVendorId(vendorId)
-      setCurrentUserEmail(email)
+      setCurrentUser({ role, vendorId, email })
 
       const { data: vendorList } = await client.models.Vendor.list()
       setVendors(vendorList || [])
@@ -102,289 +65,36 @@ export default function Settings() {
       } else if (vendorId) {
         setSelectedVendorId(vendorId)
       }
-      setLoading(false)
-
-      // Load staff schedule for current user's email
-      if (email && vendorId) {
-        loadMyStaffScheduleByEmail(email, vendorId)
-      }
     } catch (error) {
       console.error('Error initializing settings:', error)
+    } finally {
       setLoading(false)
     }
   }
 
-  const loadMyStaffScheduleByEmail = async (email, vendorId) => {
-    try {
-      const res = await fetch(`/api/staff-schedules?vendorId=${vendorId}`)
-      const data = await res.json()
-      const mine = (data.schedules || []).find(s => s.staffEmail === email)
-      if (mine) {
-        setMyStaffSchedule(mine)
-        setStaffSquareConnected(!!mine.squareAccessToken)
-        setStaffSquareConnectedAt(mine.squareConnectedAt)
-        setStaffSquareStatus(mine.squareOAuthStatus || 'disconnected')
-      }
-    } catch (error) {
-      console.error('Error loading staff schedule:', error)
-    }
-  }
-
-  const loadMyStaffSchedule = async () => {
-    if (currentUserEmail && currentUserVendorId) {
-      await loadMyStaffScheduleByEmail(currentUserEmail, currentUserVendorId)
-    }
-  }
-
-  const handleConnectStaffSquare = () => {
-    if (!myStaffSchedule) return
-    window.location.href = `/api/square/connect?vendorId=${myStaffSchedule.vendorId}&staffId=${myStaffSchedule.visibleId}`
-  }
-
-  const handleDisconnectStaffSquare = async () => {
-    if (!myStaffSchedule) return
-    if (!confirm('Disconnect your Square account? Customers will need to pay in-person for your services.')) return
-    setConnectingStaffSquare(true)
-    try {
-      const res = await fetch('/api/square/disconnect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ staffId: myStaffSchedule.visibleId })
-      })
-      if (!res.ok) {
-        const data = await res.json()
-        setMessage('Error disconnecting Square: ' + (data.error || 'Unknown error'))
-      } else {
-        setStaffSquareConnected(false)
-        setStaffSquareConnectedAt(null)
-        setStaffSquareStatus('disconnected')
-        setMessage('Your Square account has been disconnected')
-        setTimeout(() => setMessage(''), 3000)
-      }
-    } catch (error) {
-      setMessage('Error disconnecting Square account')
-    } finally {
-      setConnectingStaffSquare(false)
-    }
-  }
-
-  useEffect(() => {
-    if (selectedVendorId) {
-      loadVendorSettings(selectedVendorId)
-      loadBlackoutSettings(selectedVendorId)
-    }
-  }, [selectedVendorId])
-
-  const loadVendorSettings = async (vendorId) => {
-    try {
-      const { data: v } = await client.models.Vendor.get({ vendorId })
-      if (v) {
-        setSmsAlertPhone(v.smsAlertPhone || '')
-        setSmsAlertsEnabled(v.smsAlertsEnabled || false)
-        setSquareConnected(!!v.squareAccessToken)
-        setSquareConnectedAt(v.squareConnectedAt)
-        setSquareOAuthStatus(v.squareOAuthStatus || (v.squareAccessToken ? 'connected' : 'disconnected'))
-        setVendorName(v.name || '')
-        setVendorEmail(v.email || '')
-        setVendorPhone(v.phone || '')
-        setVendorDescription(v.description || '')
-        setSocialFacebook(v.socialFacebook || '')
-        setSocialInstagram(v.socialInstagram || '')
-        setSocialTiktok(v.socialTiktok || '')
-        setSocialWebsite(v.socialWebsite || '')
-        setGooglePlaceId(v.googlePlaceId || '')
-      }
-    } catch (error) {
-      console.error('Error loading settings:', error)
-    }
-  }
-
-  const handleConnectSquare = () => {
-    window.location.href = `/api/square/connect?vendorId=${selectedVendorId}`
-  }
-
-  const handleDisconnectSquare = async () => {
-    if (!confirm('Disconnect your Square account? Customers will not be able to pay online until you reconnect.')) return
-    setConnectingSquare(true)
-    try {
-      const res = await fetch('/api/square/disconnect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ vendorId: selectedVendorId })
-      })
-      if (!res.ok) {
-        const data = await res.json()
-        setMessage('Error disconnecting Square: ' + (data.error || 'Unknown error'))
-      } else {
-        setSquareConnected(false)
-        setSquareConnectedAt(null)
-        setSquareOAuthStatus('disconnected')
-        setMessage('Square account disconnected successfully')
-        setTimeout(() => setMessage(''), 3000)
-      }
-    } catch (error) {
-      setMessage('Error disconnecting Square account')
-    } finally {
-      setConnectingSquare(false)
-    }
-  }
-
-  const handleSaveContact = async () => {
-    setSaving(true); setMessage('')
-    try {
-      const response = await fetch('/api/vendors', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          vendorId: selectedVendorId,
-          name: vendorName,
-          email: vendorEmail,
-          phone: vendorPhone,
-          description: vendorDescription,
-        })
-      })
-      if (!response.ok) { setMessage('Error saving contact info'); setSaving(false); return }
-      setMessage('Contact info saved!')
-      setTimeout(() => setMessage(''), 3000)
-    } catch (error) {
-      setMessage('Error saving contact info: ' + error.message)
-    } finally { setSaving(false) }
-  }
-
-  const handleSaveSocial = async () => {
-    setSaving(true); setMessage('')
-    try {
-      const response = await fetch('/api/vendors', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          vendorId: selectedVendorId,
-          socialFacebook, socialInstagram, socialTiktok, socialWebsite, googlePlaceId,
-        })
-      })
-      if (!response.ok) { setMessage('Error saving social links'); setSaving(false); return }
-      setMessage('Social links saved!')
-      setTimeout(() => setMessage(''), 3000)
-    } catch (error) {
-      setMessage('Error saving social links: ' + error.message)
-    } finally { setSaving(false) }
-  }
-
-  const handleSaveSms = async () => {
-    setSaving(true); setMessage('')
-    try {
-      const formattedPhone = smsAlertPhone.replace(/\D/g, '')
-      if (smsAlertsEnabled && formattedPhone.length !== 10) {
-        setMessage('Please enter a valid 10-digit phone number'); setSaving(false); return
-      }
-      const response = await fetch('/api/vendors', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ vendorId: selectedVendorId, smsAlertPhone: formattedPhone, smsAlertsEnabled })
-      })
-      if (!response.ok) { setMessage('Error saving SMS settings'); setSaving(false); return }
-      setMessage('SMS settings saved!')
-      setTimeout(() => setMessage(''), 3000)
-    } catch (error) {
-      setMessage('Error saving settings: ' + error.message)
-    } finally { setSaving(false) }
-  }
-
-  const loadBlackoutSettings = async (vendorId) => {
-    try {
-      const res = await fetch(`/api/booking-blackout?vendorId=${vendorId}`)
-      const data = await res.json()
-      setVendorBlackoutDate(data.vendorDisabledUntil ? data.vendorDisabledUntil.split('T')[0] : '')
-      setGlobalBlackoutDate(data.globalDisabledUntil ? data.globalDisabledUntil.split('T')[0] : '')
-    } catch (error) {
-      console.error('Error loading blackout settings:', error)
-    }
-  }
-
-  const handleSaveVendorBlackout = async () => {
-    setBlackoutLoading(true); setMessage('')
-    try {
-      const res = await fetch('/api/booking-blackout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          vendorId: selectedVendorId,
-          scope: 'vendor',
-          disabledUntil: vendorBlackoutDate ? new Date(vendorBlackoutDate + 'T23:59:59').toISOString() : null,
-        })
-      })
-      if (!res.ok) { setMessage('Error saving blackout'); return }
-      setMessage(vendorBlackoutDate ? 'Vendor booking disabled until ' + vendorBlackoutDate : 'Vendor booking re-enabled!')
-      setTimeout(() => setMessage(''), 3000)
-    } catch (error) {
-      setMessage('Error saving blackout: ' + error.message)
-    } finally { setBlackoutLoading(false) }
-  }
-
-  const handleSaveGlobalBlackout = async () => {
-    setBlackoutLoading(true); setMessage('')
-    try {
-      const res = await fetch('/api/booking-blackout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          scope: 'global',
-          disabledUntil: globalBlackoutDate ? new Date(globalBlackoutDate + 'T23:59:59').toISOString() : null,
-        })
-      })
-      if (!res.ok) { setMessage('Error saving global blackout'); return }
-      setMessage(globalBlackoutDate ? 'All booking disabled until ' + globalBlackoutDate : 'Global booking re-enabled!')
-      setTimeout(() => setMessage(''), 3000)
-    } catch (error) {
-      setMessage('Error saving global blackout: ' + error.message)
-    } finally { setBlackoutLoading(false) }
-  }
-
-  const loadKioskPin = async () => {
-    try {
-      const { data: setting } = await client.models.SiteSettings.get({ settingKey: 'kioskPin' })
-      setKioskPinSet(!!setting?.settingValue)
-    } catch (error) {
-      console.error('Error loading kiosk PIN:', error)
-    }
-  }
-
-  const handleSaveKioskPin = async () => {
-    if (kioskPin.length < 4) return
-    setKioskPinSaving(true); setMessage('')
-    try {
-      // Upsert into SiteSettings
-      const { data: existing } = await client.models.SiteSettings.get({ settingKey: 'kioskPin' })
-      if (existing) {
-        await client.models.SiteSettings.update({ settingKey: 'kioskPin', settingValue: kioskPin })
-      } else {
-        await client.models.SiteSettings.create({ settingKey: 'kioskPin', settingValue: kioskPin })
-      }
-      setKioskPinSet(true)
-      setKioskPin('')
-      setMessage('Kiosk PIN saved! Any active kiosk sessions will need to re-enter the new PIN.')
-      setTimeout(() => setMessage(''), 5000)
-    } catch (error) {
-      setMessage('Error saving kiosk PIN: ' + error.message)
-    } finally { setKioskPinSaving(false) }
+  const showMessage = (msg, duration = 3000) => {
+    setMessage(msg)
+    setTimeout(() => setMessage(''), duration)
   }
 
   if (loading) return <div>Loading...</div>
 
-  const sectionStyle = {
-    background: 'var(--color-accent)', borderRadius: '12px', padding: '2rem', maxWidth: '600px', marginBottom: '2rem'
-  }
-  const inputStyle = {
-    width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem'
-  }
-  const labelStyle = { display: 'block', marginBottom: '0.5rem', fontWeight: '500' }
+  const isPrivileged = currentUser.role === 'owner' || currentUser.role === 'admin'
+
+  const tabStyle = (tab) => ({
+    padding: '0.75rem 1.5rem',
+    border: 'none',
+    borderBottom: activeTab === tab ? '3px solid var(--color-primary)' : '3px solid transparent',
+    background: 'none',
+    cursor: 'pointer',
+    fontSize: '1rem',
+    fontWeight: activeTab === tab ? '600' : '400',
+    color: activeTab === tab ? 'var(--color-primary)' : 'var(--color-text-light)',
+  })
 
   return (
     <div>
       <h1>Settings</h1>
-      <p style={{ color: 'var(--color-text-light)', marginBottom: '2rem' }}>
-        Manage vendor information, payment integration, and notification preferences.
-      </p>
 
       {message && (
         <div style={{
@@ -398,271 +108,34 @@ export default function Settings() {
         </div>
       )}
 
-      {/* Vendor Selector (admin only) */}
-      {(currentUserRole === 'admin') && (
-        <div style={{ marginBottom: '2rem', maxWidth: '600px' }}>
-          <label style={labelStyle}>Select Vendor</label>
-          <select value={selectedVendorId} onChange={(e) => setSelectedVendorId(e.target.value)}
-            style={inputStyle}>
-            {vendors.map(v => <option key={v.vendorId} value={v.vendorId}>{v.name}</option>)}
-          </select>
-        </div>
-      )}
-
-      {/* Contact Information */}
-      <div style={sectionStyle}>
-        <h2 style={{ marginTop: 0, marginBottom: '1.5rem' }}>Contact Information<Tooltip text="This info appears on your public vendor page and the contact page." /></h2>
-        <div style={{ marginBottom: '1rem' }}>
-          <label style={labelStyle}>Business Name</label>
-          <input type="text" value={vendorName} onChange={(e) => setVendorName(e.target.value)} style={inputStyle} />
-        </div>
-        <div style={{ marginBottom: '1rem' }}>
-          <label style={labelStyle}>Email</label>
-          <input type="email" value={vendorEmail} onChange={(e) => setVendorEmail(e.target.value)} style={inputStyle} />
-        </div>
-        <div style={{ marginBottom: '1rem' }}>
-          <label style={labelStyle}>Phone</label>
-          <input type="tel" value={vendorPhone} onChange={(e) => setVendorPhone(e.target.value)} placeholder="(240) 367-0395" style={inputStyle} />
-        </div>
-        <div style={{ marginBottom: '1rem' }}>
-          <label style={labelStyle}>Description<Tooltip text="A short summary shown on your public profile. Describe what makes your services unique." /></label>
-          <textarea value={vendorDescription} onChange={(e) => setVendorDescription(e.target.value)} rows="3"
-            style={{ ...inputStyle, resize: 'vertical' }} />
-        </div>
-        <button onClick={handleSaveContact} disabled={saving} className="cta">
-          {saving ? 'Saving...' : 'Save Contact Info'}
-        </button>
-      </div>
-
-      {/* Social Media Links */}
-      <div style={sectionStyle}>
-        <h2 style={{ marginTop: 0, marginBottom: '1.5rem' }}>Social Media<Tooltip text="These links appear on your public vendor page so customers can find you online." /></h2>
-        <div style={{ marginBottom: '1rem' }}>
-          <label style={labelStyle}>Facebook URL</label>
-          <input type="url" value={socialFacebook} onChange={(e) => setSocialFacebook(e.target.value)} placeholder="https://facebook.com/yourbusiness" style={inputStyle} />
-        </div>
-        <div style={{ marginBottom: '1rem' }}>
-          <label style={labelStyle}>Instagram URL</label>
-          <input type="url" value={socialInstagram} onChange={(e) => setSocialInstagram(e.target.value)} placeholder="https://instagram.com/yourbusiness" style={inputStyle} />
-        </div>
-        <div style={{ marginBottom: '1rem' }}>
-          <label style={labelStyle}>TikTok URL</label>
-          <input type="url" value={socialTiktok} onChange={(e) => setSocialTiktok(e.target.value)} placeholder="https://tiktok.com/@yourbusiness" style={inputStyle} />
-        </div>
-        <div style={{ marginBottom: '1rem' }}>
-          <label style={labelStyle}>Website URL</label>
-          <input type="url" value={socialWebsite} onChange={(e) => setSocialWebsite(e.target.value)} placeholder="https://yourbusiness.com" style={inputStyle} />
-        </div>
-        <div style={{ marginBottom: '1rem' }}>
-          <label style={labelStyle}>Google Place ID<Tooltip text="Your Google Place ID enables a 'Review us on Google' link on your public page. Find it at: https://developers.google.com/maps/documentation/places/web-service/place-id-finder" /></label>
-          <input type="text" value={googlePlaceId} onChange={(e) => setGooglePlaceId(e.target.value)} placeholder="ChIJ..." style={inputStyle} />
-        </div>
-        <button onClick={handleSaveSocial} disabled={saving} className="cta">
-          {saving ? 'Saving...' : 'Save Social Links'}
-        </button>
-      </div>
-
-      {/* Square Payment Integration */}
-      {(currentUserRole === 'owner' || currentUserRole === 'admin') && (
-        <div style={sectionStyle}>
-          <h2 style={{ marginTop: 0, marginBottom: '1.5rem' }}>Square Payment Integration<Tooltip text="Connect your Square account so customers can pay online at checkout. Payments are deposited directly to your Square account." /></h2>
-
-          {squareConnected ? (
-            <div>
-              <div style={{ padding: '1rem', background: squareOAuthStatus === 'error' ? '#f8d7da' : '#d4edda', border: `1px solid ${squareOAuthStatus === 'error' ? '#f5c6cb' : '#c3e6cb'}`, borderRadius: '8px', marginBottom: '1rem' }}>
-                {squareOAuthStatus === 'error' ? (
-                  <div>
-                    <div style={{ fontWeight: '500', color: '#721c24', marginBottom: '0.5rem' }}>⚠ Square Connection Error</div>
-                    <p style={{ fontSize: '0.85rem', color: '#721c24', margin: 0 }}>Your Square connection needs to be refreshed. Please reconnect.</p>
-                  </div>
-                ) : (
-                  <div>
-                    <div style={{ fontWeight: '500', color: '#155724', marginBottom: '0.5rem' }}>✓ Square Account Connected</div>
-                    {squareConnectedAt && (
-                      <div style={{ fontSize: '0.85rem', color: '#155724' }}>
-                        Connected on {new Date(squareConnectedAt).toLocaleDateString()}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-              <div style={{ display: 'flex', gap: '1rem' }}>
-                {squareOAuthStatus === 'error' && (
-                  <button onClick={handleConnectSquare} className="cta">Reconnect Square</button>
-                )}
-                <button onClick={handleDisconnectSquare} disabled={connectingSquare} style={{
-                  padding: '0.75rem 1.5rem', background: '#dc3545', color: 'white', border: 'none',
-                  borderRadius: '8px', cursor: 'pointer', fontSize: '1rem', fontWeight: '500'
-                }}>
-                  {connectingSquare ? 'Disconnecting...' : 'Disconnect Square'}
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div>
-              <p style={{ fontSize: '0.9rem', color: 'var(--color-text-light)', marginBottom: '1rem' }}>
-                Connect your Square account to receive payments directly. You'll be redirected to Square to authorize access.
-              </p>
-              <button onClick={handleConnectSquare} className="cta">Connect with Square</button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Staff Square Payment Integration */}
-      {myStaffSchedule && (
-        <div style={sectionStyle}>
-          <h2 style={{ marginTop: 0, marginBottom: '1.5rem' }}>Your Payment Account<Tooltip text="Connect your own Square account to receive payments directly for services you perform. If not connected, customers will pay in-person." /></h2>
-          <p style={{ fontSize: '0.9rem', color: 'var(--color-text-light)', marginBottom: '1rem' }}>
-            Staff member: <strong>{myStaffSchedule.staffName}</strong>
-          </p>
-
-          {staffSquareConnected ? (
-            <div>
-              <div style={{ padding: '1rem', background: staffSquareStatus === 'error' ? '#f8d7da' : '#d4edda', border: `1px solid ${staffSquareStatus === 'error' ? '#f5c6cb' : '#c3e6cb'}`, borderRadius: '8px', marginBottom: '1rem' }}>
-                {staffSquareStatus === 'error' ? (
-                  <div>
-                    <div style={{ fontWeight: '500', color: '#721c24', marginBottom: '0.5rem' }}>⚠ Square Connection Error</div>
-                    <p style={{ fontSize: '0.85rem', color: '#721c24', margin: 0 }}>Your Square connection needs to be refreshed. Please reconnect.</p>
-                  </div>
-                ) : (
-                  <div>
-                    <div style={{ fontWeight: '500', color: '#155724', marginBottom: '0.5rem' }}>✓ Your Square Account Connected</div>
-                    {staffSquareConnectedAt && (
-                      <div style={{ fontSize: '0.85rem', color: '#155724' }}>
-                        Connected on {new Date(staffSquareConnectedAt).toLocaleDateString()}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-              <div style={{ display: 'flex', gap: '1rem' }}>
-                {staffSquareStatus === 'error' && (
-                  <button onClick={handleConnectStaffSquare} className="cta">Reconnect Square</button>
-                )}
-                <button onClick={handleDisconnectStaffSquare} disabled={connectingStaffSquare} style={{
-                  padding: '0.75rem 1.5rem', background: '#dc3545', color: 'white', border: 'none',
-                  borderRadius: '8px', cursor: 'pointer', fontSize: '1rem', fontWeight: '500'
-                }}>
-                  {connectingStaffSquare ? 'Disconnecting...' : 'Disconnect Square'}
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div>
-              <p style={{ fontSize: '0.9rem', color: 'var(--color-text-light)', marginBottom: '1rem' }}>
-                Connect your Square account so customers can pay you directly online. Without this, customers will pay in-person.
-              </p>
-              <button onClick={handleConnectStaffSquare} className="cta">Connect with Square</button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Booking Blackout */}
-      <div style={sectionStyle}>
-        <h2 style={{ marginTop: 0, marginBottom: '1.5rem' }}>Booking Blackout<Tooltip text="Temporarily disable online booking for this vendor. Useful when syncing with external calendars like Vagaro. Customers will see a message to call instead." /></h2>
-        <div style={{ marginBottom: '1rem' }}>
-          <label style={labelStyle}>Disable booking until</label>
-          <input type="date" value={vendorBlackoutDate} onChange={(e) => setVendorBlackoutDate(e.target.value)}
-            min={new Date().toISOString().split('T')[0]} style={inputStyle} />
-          <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.5rem' }}>
-            {vendorBlackoutDate ? `Booking disabled until end of ${vendorBlackoutDate}` : 'No blackout set — booking is active'}
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: '1rem' }}>
-          <button onClick={handleSaveVendorBlackout} disabled={blackoutLoading} className="cta">
-            {blackoutLoading ? 'Saving...' : 'Save'}
-          </button>
-          {vendorBlackoutDate && (
-            <button onClick={() => { setVendorBlackoutDate(''); handleSaveVendorBlackout() }}
-              disabled={blackoutLoading}
-              style={{ padding: '0.75rem 1.5rem', background: '#dc3545', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '1rem', fontWeight: '500' }}>
-              Re-enable Booking
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Global Booking Blackout (admin only) */}
-      {currentUserRole === 'admin' && (
-        <div style={{ ...sectionStyle, border: '2px solid #dc3545' }}>
-          <h2 style={{ marginTop: 0, marginBottom: '1.5rem', color: '#dc3545' }}>Global Booking Blackout<Tooltip text="Disable online booking for ALL vendors site-wide. Use this during Vagaro calendar sync or maintenance windows." /></h2>
-          <div style={{ marginBottom: '1rem' }}>
-            <label style={labelStyle}>Disable all booking until</label>
-            <input type="date" value={globalBlackoutDate} onChange={(e) => setGlobalBlackoutDate(e.target.value)}
-              min={new Date().toISOString().split('T')[0]} style={inputStyle} />
-            <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.5rem' }}>
-              {globalBlackoutDate ? `ALL booking disabled until end of ${globalBlackoutDate}` : 'No global blackout — booking is active for all vendors'}
-            </p>
-          </div>
-          <div style={{ display: 'flex', gap: '1rem' }}>
-            <button onClick={handleSaveGlobalBlackout} disabled={blackoutLoading} className="cta">
-              {blackoutLoading ? 'Saving...' : 'Save Global Blackout'}
-            </button>
-            {globalBlackoutDate && (
-              <button onClick={() => { setGlobalBlackoutDate(''); handleSaveGlobalBlackout() }}
-                disabled={blackoutLoading}
-                style={{ padding: '0.75rem 1.5rem', background: '#dc3545', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '1rem', fontWeight: '500' }}>
-                Re-enable All Booking
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Kiosk PIN (admin only) */}
-      {currentUserRole === 'admin' && (
-        <div style={sectionStyle}>
-          <h2 style={{ marginTop: 0, marginBottom: '1.5rem' }}>Kiosk PIN<Tooltip text="Set a numeric PIN for the checkout kiosk tablet. Staff enter this PIN to access the kiosk — no Cognito account needed." /></h2>
-          <div style={{ marginBottom: '1rem' }}>
-            <label style={labelStyle}>PIN Code</label>
-            <input
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              value={kioskPin}
-              onChange={(e) => setKioskPin(e.target.value.replace(/\D/g, ''))}
-              placeholder="Enter 4-8 digit PIN"
-              maxLength={8}
-              style={inputStyle}
-            />
-            <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.5rem' }}>
-              {kioskPinSet ? 'A kiosk PIN is currently set.' : 'No kiosk PIN set — kiosk is inaccessible.'}
-              {' '}Changing the PIN will sign out any active kiosk sessions.
-            </p>
-          </div>
-          <button onClick={handleSaveKioskPin} disabled={kioskPinSaving || kioskPin.length < 4} className="cta"
-            style={{ opacity: (kioskPinSaving || kioskPin.length < 4) ? 0.6 : 1 }}>
-            {kioskPinSaving ? 'Saving...' : 'Save Kiosk PIN'}
-          </button>
-        </div>
-      )}
-
-      {/* SMS Notifications */}
-      <div style={sectionStyle}>
-        <h2 style={{ marginTop: 0, marginBottom: '1.5rem' }}>SMS Notifications<Tooltip text="When enabled, you'll receive a text message each time a customer books an appointment with you." /></h2>
-        <div style={{ marginBottom: '1.5rem' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}>
-            <input type="checkbox" checked={smsAlertsEnabled} onChange={(e) => setSmsAlertsEnabled(e.target.checked)}
-              style={{ width: '20px', height: '20px', cursor: 'pointer' }} />
-            <span style={{ fontSize: '1.1rem', fontWeight: '500' }}>Enable SMS alerts for new bookings<Tooltip text="You'll get a text for each new booking, confirmation, and cancellation." /></span>
-          </label>
-        </div>
-        {smsAlertsEnabled && (
-          <div style={{ marginBottom: '1.5rem' }}>
-            <label style={labelStyle}>Phone Number for Alerts</label>
-            <input type="tel" value={smsAlertPhone} onChange={(e) => setSmsAlertPhone(e.target.value)}
-              placeholder="2403670395" style={inputStyle} />
-            <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.5rem' }}>
-              Enter 10-digit phone number (no dashes or spaces)
-            </p>
-          </div>
+      <div style={{ borderBottom: '1px solid var(--color-border)', marginBottom: '2rem', maxWidth: '600px' }}>
+        <button style={tabStyle(TABS.MY)} onClick={() => setActiveTab(TABS.MY)}>My Settings</button>
+        {isPrivileged && (
+          <>
+            <button style={tabStyle(TABS.VENDOR)} onClick={() => setActiveTab(TABS.VENDOR)}>Vendor Settings</button>
+            <button style={tabStyle(TABS.BUILDING)} onClick={() => setActiveTab(TABS.BUILDING)}>Building Settings</button>
+          </>
         )}
-        <button onClick={handleSaveSms} disabled={saving} className="cta">
-          {saving ? 'Saving...' : 'Save SMS Settings'}
-        </button>
       </div>
+
+      {activeTab === TABS.MY && (
+        <MySettings currentUser={currentUser} showMessage={showMessage} />
+      )}
+      {activeTab === TABS.VENDOR && isPrivileged && (
+        <VendorSettings
+          currentUser={currentUser}
+          vendors={vendors}
+          selectedVendorId={selectedVendorId}
+          setSelectedVendorId={setSelectedVendorId}
+          showMessage={showMessage}
+        />
+      )}
+      {activeTab === TABS.BUILDING && isPrivileged && (
+        <BuildingSettings
+          currentUser={currentUser}
+          showMessage={showMessage}
+        />
+      )}
     </div>
   )
 }
