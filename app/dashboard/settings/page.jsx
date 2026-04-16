@@ -48,9 +48,15 @@ export default function Settings() {
   const [globalBlackoutDate, setGlobalBlackoutDate] = useState('')
   const [blackoutLoading, setBlackoutLoading] = useState(false)
 
+  // Kiosk PIN
+  const [kioskPin, setKioskPin] = useState('')
+  const [kioskPinSaving, setKioskPinSaving] = useState(false)
+  const [kioskPinSet, setKioskPinSet] = useState(false)
+
   useEffect(() => {
     initSettings()
 
+    loadKioskPin()
     const params = new URLSearchParams(window.location.search)
     if (params.get('success') === 'square_connected') {
       setMessage('Square account connected successfully!')
@@ -334,6 +340,35 @@ export default function Settings() {
     } finally { setBlackoutLoading(false) }
   }
 
+  const loadKioskPin = async () => {
+    try {
+      const { data: setting } = await client.models.SiteSettings.get({ settingKey: 'kioskPin' })
+      setKioskPinSet(!!setting?.settingValue)
+    } catch (error) {
+      console.error('Error loading kiosk PIN:', error)
+    }
+  }
+
+  const handleSaveKioskPin = async () => {
+    if (kioskPin.length < 4) return
+    setKioskPinSaving(true); setMessage('')
+    try {
+      // Upsert into SiteSettings
+      const { data: existing } = await client.models.SiteSettings.get({ settingKey: 'kioskPin' })
+      if (existing) {
+        await client.models.SiteSettings.update({ settingKey: 'kioskPin', settingValue: kioskPin })
+      } else {
+        await client.models.SiteSettings.create({ settingKey: 'kioskPin', settingValue: kioskPin })
+      }
+      setKioskPinSet(true)
+      setKioskPin('')
+      setMessage('Kiosk PIN saved! Any active kiosk sessions will need to re-enter the new PIN.')
+      setTimeout(() => setMessage(''), 5000)
+    } catch (error) {
+      setMessage('Error saving kiosk PIN: ' + error.message)
+    } finally { setKioskPinSaving(false) }
+  }
+
   if (loading) return <div>Loading...</div>
 
   const sectionStyle = {
@@ -573,6 +608,34 @@ export default function Settings() {
               </button>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Kiosk PIN (admin only) */}
+      {currentUserRole === 'admin' && (
+        <div style={sectionStyle}>
+          <h2 style={{ marginTop: 0, marginBottom: '1.5rem' }}>Kiosk PIN<Tooltip text="Set a numeric PIN for the checkout kiosk tablet. Staff enter this PIN to access the kiosk — no Cognito account needed." /></h2>
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={labelStyle}>PIN Code</label>
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={kioskPin}
+              onChange={(e) => setKioskPin(e.target.value.replace(/\D/g, ''))}
+              placeholder="Enter 4-8 digit PIN"
+              maxLength={8}
+              style={inputStyle}
+            />
+            <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.5rem' }}>
+              {kioskPinSet ? 'A kiosk PIN is currently set.' : 'No kiosk PIN set — kiosk is inaccessible.'}
+              {' '}Changing the PIN will sign out any active kiosk sessions.
+            </p>
+          </div>
+          <button onClick={handleSaveKioskPin} disabled={kioskPinSaving || kioskPin.length < 4} className="cta"
+            style={{ opacity: (kioskPinSaving || kioskPin.length < 4) ? 0.6 : 1 }}>
+            {kioskPinSaving ? 'Saving...' : 'Save Kiosk PIN'}
+          </button>
         </div>
       )}
 

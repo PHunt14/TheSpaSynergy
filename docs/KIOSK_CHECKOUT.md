@@ -16,12 +16,15 @@ The kiosk is **cross-vendor** — it shows all unpaid appointments across all ve
 
 ## Authentication
 
-The kiosk uses the same Cognito authentication as the vendor dashboard, but **without the 1-hour inactivity timeout**. Staff signs in once at the start of the day and the session stays active until they explicitly sign out.
+The kiosk uses a **PIN-based authentication** system, completely separate from the Cognito-based vendor dashboard. This prevents kiosk users from accessing the dashboard.
 
-- Login page: `/kiosk` (redirects to Cognito sign-in if not authenticated)
-- No inactivity auto-logout
-- Sign out button in the kiosk header bar
-- Page is `noindex, nofollow` — not crawled by search engines
+- **PIN setup**: An admin sets the kiosk PIN in Dashboard → Settings → Kiosk PIN (4-8 digits)
+- **Login**: Staff enters the PIN at `/kiosk` — no Cognito account needed
+- **Session**: Stored as an httpOnly cookie scoped to `/kiosk`, valid for 24 hours
+- **Sign out**: Button in the kiosk header bar, or session expires after 24 hours
+- **PIN change**: Changing the PIN in dashboard settings invalidates all active kiosk sessions
+- **Security**: No shared session with the vendor dashboard — navigating to `/dashboard` requires separate Cognito login
+- **How it works**: On successful PIN entry, the server generates a random session token, stores it in SiteSettings, and sets it as an httpOnly cookie. The GET check compares the cookie against the stored token. Changing the PIN or re-authenticating generates a new token, invalidating previous sessions.
 
 ## Cross-Vendor Payment Routing
 
