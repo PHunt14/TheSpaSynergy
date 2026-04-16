@@ -20,8 +20,7 @@ Both support test overrides to route all messages to your personal phone/email d
 
 ### Notification Levels
 
-- **Vendor-level**: Configured in Dashboard → Settings. The vendor's SMS alert phone and email receive all bookings for that vendor.
-- **Staff-level**: Configured in Dashboard → Staff (schedule editor). Each staff member can set their own SMS phone number and email preferences. Staff notifications are sent to the assigned staff member for a given appointment, in addition to vendor-level notifications. Both the staff member and the owner/admin can manage these settings.
+- **Staff-level**: Each staff member configures their own SMS and email preferences in Dashboard → Settings → My Settings. Notifications are sent to the staff member assigned to the appointment. Owners and admins can also manage staff notification settings via the Staff schedule editor.
 
 ---
 
@@ -205,7 +204,7 @@ Emails will include a banner showing the original recipient.
 - Check `SMS_PROVIDER` value in `.env.local`
 - **SNS**: Verify originator is registered, account is out of sandbox
 - **Twilio**: Check credentials, verify trial number can send to recipient
-- Check vendor has `smsAlertsEnabled: true` and `smsAlertPhone` set in dashboard settings
+- Check the assigned staff member has `smsAlertsEnabled: true` and `smsAlertPhone` set in Dashboard → Settings → My Settings
 
 ### Email not received
 - Check `EMAIL_PROVIDER` value in `.env.local`

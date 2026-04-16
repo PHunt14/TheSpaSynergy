@@ -53,7 +53,7 @@ Deployed via AWS Amplify with automatic CI/CD from Git. See `AMPLIFY_SETUP.md`.
 - Customers who don't pay online will pay in-person at the appointment
 - On booking, both the customer and vendor receive:
   - An **email** notification with appointment details
-  - An **SMS** notification (customer must opt in; vendor must enable in settings)
+  - An **SMS** notification (customer must opt in; staff must enable in their personal settings)
 - Vendors can mark services as **"requires confirmation"** — the customer selects a preferred date/time, but the appointment stays pending until the vendor confirms. Both parties are notified on scheduling and again on confirmation
 - **House fees**: The house vendor (building owner) can take a configurable fee from services performed by vendors who sublet space. This is automatically handled during payment splitting
 
@@ -72,10 +72,15 @@ Deployed via AWS Amplify with automatic CI/CD from Git. See `AMPLIFY_SETUP.md`.
   - Assign which staff members can perform each service (based on staff logged in for that vendor, excluding admins)
   - Cancel, reschedule, and confirm appointments
   - Add and manage staff members
-  - Connect their Square account (Settings)
-  - Enable/disable SMS alerts and set their alert phone number (Settings)
-  - Add social media links (Facebook, Instagram, TikTok, website)
-  - Update contact information
+  - Connect their Square account (Settings → Vendor Settings)
+  - Add social media links (Settings → Vendor Settings)
+  - Update contact information (Settings → Vendor Settings)
+- Staff members can:
+  - Enable/disable SMS alerts and set their alert phone number (Settings → My Settings)
+  - Connect their personal Square account (Settings → My Settings)
+- Building-level settings (owner/admin only):
+  - Global booking blackout (Settings → Building Settings)
+  - Kiosk PIN management (Settings → Building Settings)
 
 ### Public Vendor Pages
 

@@ -30,14 +30,14 @@ Two features that work together to support the Vagaro-to-Spa-Synergy calendar tr
 
 ### Setting Blackout via Dashboard
 
-1. Go to **Dashboard → Settings**
+1. Go to **Dashboard → Settings → Vendor Settings** tab
 2. Scroll to **Booking Blackout** section
 3. Pick a date — booking is disabled through end of that day (11:59 PM)
 4. Click **Save**
 5. To re-enable early, click **Re-enable Booking** or clear the date and save
 
 For global blackout (admin only):
-1. Same page, scroll to **Global Booking Blackout** (red-bordered section)
+1. Go to **Dashboard → Settings → Building Settings** tab
 2. Same workflow — affects all vendors
 
 ### Setting Blackout via API

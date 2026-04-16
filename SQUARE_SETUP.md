@@ -2,7 +2,7 @@
 
 ## For Vendors: Connecting Your Square Account
 
-1. Log in to the Vendor Dashboard → Settings
+1. Log in to the Vendor Dashboard → Settings → Vendor Settings tab
 2. Click **"Connect with Square"**
 3. You'll be redirected to Square to authorize access
 4. After authorizing, you'll be redirected back to the dashboard
@@ -87,7 +87,7 @@ After deploying, visit `/api/square/debug` in your browser. It will show which v
 
 ## Disconnecting
 
-Vendors can disconnect via Settings → "Disconnect Square". This revokes the OAuth token and clears stored credentials.
+Vendors can disconnect via Settings → Vendor Settings tab → "Disconnect Square". This revokes the OAuth token and clears stored credentials.
 
 ## Testing
 
@@ -118,7 +118,7 @@ With production credentials, use any of these approaches:
    - Prod: `https://www.thespasynergy.com/api/square/callback`
 5. **Deploy** — env var changes require a new build
 6. Verify at `/api/square/debug` that all vars show as "set"
-7. Test the OAuth flow: Dashboard → Settings → Connect with Square
+7. Test the OAuth flow: Dashboard → Settings → Vendor Settings tab → Connect with Square
 
 ### Test Card (Sandbox Only)
 

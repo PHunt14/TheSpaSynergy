@@ -107,7 +107,7 @@ After the `main` branch deploys and the prod backend is created:
 - [ ] In Square Developer Dashboard → Webhooks, add endpoint: `https://www.thespasynergy.com/api/webhooks/square`
   - Subscribe to: `payment.updated`, `payment.completed`
   - Copy the signature key to `SQUARE_WEBHOOK_SIGNATURE_KEY` env var
-- [ ] Each vendor connects their Square account: Dashboard → Settings → "Connect with Square"
+- [ ] Each vendor connects their Square account: Dashboard → Settings → Vendor Settings tab → "Connect with Square"
 - [ ] Test a payment (use a $0 service or refund a small test payment)
 - [ ] **Delete `/api/square/debug` endpoint** before going live with real customers
 
