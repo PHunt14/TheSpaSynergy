@@ -18,7 +18,7 @@ The kiosk is **cross-vendor** — it shows all unpaid appointments across all ve
 
 The kiosk uses a **PIN-based authentication** system, completely separate from the Cognito-based vendor dashboard. This prevents kiosk users from accessing the dashboard.
 
-- **PIN setup**: An admin sets the kiosk PIN in Dashboard → Settings → Kiosk PIN (4-8 digits)
+- **PIN setup**: An admin sets the kiosk PIN in Dashboard → Settings → Building Settings tab → Kiosk PIN (4-8 digits)
 - **Login**: Staff enters the PIN at `/kiosk` — no Cognito account needed
 - **Session**: Stored as an httpOnly cookie scoped to `/kiosk`, valid for 24 hours
 - **Sign out**: Button in the kiosk header bar, or session expires after 24 hours
