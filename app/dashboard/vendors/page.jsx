@@ -30,10 +30,10 @@ export default function Vendors() {
   })
 
   useEffect(() => {
-    initVendors()
+    loadVendors()
   }, [])
 
-  const initVendors = async () => {
+  const loadVendors = async () => {
     try {
       const session = await fetchAuthSession()
       const role = session.tokens?.idToken?.payload['custom:role'] || 'vendor'
@@ -220,7 +220,7 @@ export default function Vendors() {
         Manage vendor accounts and information.
       </p>
 
-      {showAddForm && editingVendor && (
+      {showAddForm && (
         <form ref={formRef} onSubmit={handleAddVendor} style={{
           background: 'var(--color-accent)',
           padding: '1.5rem',
