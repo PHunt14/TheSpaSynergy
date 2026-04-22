@@ -107,7 +107,7 @@ Deployed via AWS Amplify with automatic CI/CD from Git. See `AMPLIFY_SETUP.md`.
 | `docs/SMS_PHONE_NUMBER.md` | Toll-free number registration, AWS verification form values, approval tips |
 | `docs/KIOSK_CHECKOUT.md` | Tablet point-of-sale for in-person payments, kiosk auth, Square Terminal upgrade path |
 | `docs/TESTING.md` | Testing strategy, running tests, what's covered, and roadmap for future test coverage |
-| `docs/CUSTOMER_FEEDBACK_JUNE_2025.md` | June 2025 customer feedback: schedules, auto-routing, add-ons, sauna separation |
+| `docs/CUSTOMER_FEEDBACK_MARCH_2025.md` | March 2025 customer feedback: schedules, auto-routing, add-ons, sauna separation |
 | `docs/VISIT_NOTES_APRIL_2025.md` | April 2025 on-site visit notes: group bookings, intake forms, CRM, calendar invites |
 
 ---
