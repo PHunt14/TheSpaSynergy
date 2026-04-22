@@ -134,6 +134,33 @@ export async function POST(request: Request) {
       );
     }
 
+    // Staff email
+    try {
+      let assignedStaff = null;
+      if (appointment.staffId) {
+        const { data: staffRec } = await client.models.StaffSchedule.get({ visibleId: appointment.staffId });
+        assignedStaff = staffRec;
+      }
+      if (assignedStaff?.emailAlertsEnabled && assignedStaff?.staffEmail) {
+        notifications.push(
+          sendEmail(
+            assignedStaff.staffEmail,
+            'Appointment Rescheduled - The Spa Synergy',
+            emailWrapper(`
+              <h2 style="color: #8B4789;">Appointment Rescheduled</h2>
+              <p>The following appointment has been rescheduled:</p>
+              <div style="background: #f9f9f9; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <p><strong>Service:</strong> ${serviceName}</p>
+                <p><strong>New Date &amp; Time:</strong> ${formatDateTime(newDateTime)}</p>
+                <p style="color: #999; font-size: 0.9em;"><strong>Previously:</strong> ${formatDateTime(oldDateTime || '')}</p>
+                <p><strong>Customer:</strong> ${customer?.name}</p>
+                <p><strong>Phone:</strong> ${customer?.phone}</p>
+              </div>`)
+          ).catch(err => console.error('Staff reschedule email failed:', err))
+        );
+      }
+    } catch (e) { console.error('Staff email lookup failed:', e); }
+
     await Promise.all(notifications);
 
     return Response.json({ success: true });

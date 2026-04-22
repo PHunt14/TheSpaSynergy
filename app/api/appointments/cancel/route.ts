@@ -88,6 +88,32 @@ async function sendCancellationNotifications(appointment: any, serviceName: stri
     );
   }
 
+  // Staff email
+  try {
+    let assignedStaff = null;
+    if (appointment.staffId) {
+      const { data: staffRec } = await client.models.StaffSchedule.get({ visibleId: appointment.staffId });
+      assignedStaff = staffRec;
+    }
+    if (assignedStaff?.emailAlertsEnabled && assignedStaff?.staffEmail) {
+      notifications.push(
+        sendEmail(
+          assignedStaff.staffEmail,
+          'Appointment Cancelled - The Spa Synergy',
+          emailWrapper(`
+            <h2 style="color: #8B4789;">Appointment Cancelled</h2>
+            <p>The following appointment has been cancelled:</p>
+            <div style="background: #f9f9f9; padding: 20px; border-radius: 8px; margin: 20px 0;">
+              <p><strong>Service:</strong> ${serviceName}</p>
+              <p><strong>Date &amp; Time:</strong> ${formatDateTime(appointment.dateTime || '')}</p>
+              <p><strong>Customer:</strong> ${customer?.name}</p>
+              <p><strong>Phone:</strong> ${customer?.phone}</p>
+            </div>`)
+        ).catch(err => console.error('Staff cancel email failed:', err))
+      );
+    }
+  } catch (e) { console.error('Staff email lookup failed:', e); }
+
   await Promise.all(notifications);
 }
 
