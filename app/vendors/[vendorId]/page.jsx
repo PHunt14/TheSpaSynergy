@@ -227,7 +227,7 @@ export default function VendorDetailPage() {
                   src={member.photo}
                   alt={member.alt}
                   onClick={() => setSelectedProfile(member)}
-                  style={{ width: '100%', maxWidth: '300px', height: 'auto', borderRadius: '12px', border: '3px solid var(--color-primary)', cursor: 'pointer' }}
+                  style={{ width: '300px', height: '300px', objectFit: 'cover', borderRadius: '12px', border: '3px solid var(--color-primary)', cursor: 'pointer' }}
                 />
                 <div style={{ width: '3px', height: '20px', background: 'var(--color-primary)' }} />
                 <div style={{ border: '3px solid var(--color-primary)', borderRadius: '12px', padding: '1.5rem', maxWidth: '600px' }}>

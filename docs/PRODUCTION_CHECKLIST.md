@@ -113,6 +113,16 @@ After the `main` branch deploys and the prod backend is created:
 
 > Online payments are not required for launch. Vendors without a connected Square account will only offer in-person payment at checkout.
 
+## 10. Apple Pay (Optional)
+
+- [ ] In Square Developer Dashboard → your app → **Apple Pay** tab, register `www.thespasynergy.com`
+- [ ] Download the domain verification file from Square
+- [ ] Place it at `public/.well-known/apple-developer-merchantid-domain-association`
+- [ ] Deploy and click **Verify** in the Square dashboard
+- [ ] Test on Safari (iPhone or Mac with Touch ID) — the  Pay button should appear at checkout
+
+> Apple Pay is optional. Google Pay works with no additional setup. See `SQUARE_SETUP.md` for details.
+
 ---
 
 ## Post-Launch

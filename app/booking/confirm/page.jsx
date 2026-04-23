@@ -25,6 +25,8 @@ function ConfirmPageContent() {
   const [formData, setFormData] = useState({ name: '', email: '', phone: '', smsOptIn: false })
   const [loading, setLoading] = useState(false)
   const [card, setCard] = useState(null)
+  const [applePay, setApplePay] = useState(null)
+  const [googlePay, setGooglePay] = useState(null)
   const [allServiceDetails, setAllServiceDetails] = useState([])
   const [vendorDetails, setVendorDetails] = useState(null)
   const [staffSquareConnected, setStaffSquareConnected] = useState(null) // null=loading, true/false
@@ -111,9 +113,30 @@ function ConfirmPageContent() {
       const locationId = vendorDetails?.squareLocationId
       if (!appId || !locationId) return
       const payments = await window.Square.payments(appId, locationId)
+
+      // Card form
       const cardInstance = await payments.card()
       await cardInstance.attach('#card-container')
       setCard(cardInstance)
+
+      const walletPaymentRequest = payments.paymentRequest({
+        countryCode: 'US',
+        currencyCode: 'USD',
+        total: { amount: totalPrice.toFixed(2), label: 'The Spa Synergy' }
+      })
+
+      // Apple Pay
+      try {
+        const applePayInstance = await payments.applePay(walletPaymentRequest)
+        setApplePay(applePayInstance)
+      } catch { /* Apple Pay not available on this device/browser */ }
+
+      // Google Pay
+      try {
+        const googlePayInstance = await payments.googlePay(walletPaymentRequest)
+        await googlePayInstance.attach('#google-pay-container')
+        setGooglePay(googlePayInstance)
+      } catch { /* Google Pay not available on this device/browser */ }
     } catch (error) {
       console.error('Square initialization error:', error)
     }
@@ -130,6 +153,103 @@ function ConfirmPageContent() {
     return `${dateOnly}T${hour24.toString().padStart(2, '0')}:${minutes}:00`
   }
 
+  const processPaymentWithToken = async (token) => {
+    const paymentResponse = await fetch('/api/payment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sourceId: token,
+        amount: totalPrice,
+        vendorId: vendor || allServiceDetails[0]?.vendorId,
+        staffId: staffId || undefined
+      })
+    })
+    const paymentData = await paymentResponse.json()
+    if (!paymentData.success) throw new Error(paymentData.error || 'Payment failed')
+    return paymentData.paymentId
+  }
+
+  const createAppointments = async (paymentId, pMethod) => {
+    const dateTimeISO = buildDateTimeISO()
+    const status = (bundleId || hasConsultation) ? 'pending-confirmation' : (pMethod === 'card' ? 'confirmed' : 'pending')
+
+    const results = await Promise.all(
+      allServiceDetails.map(svc =>
+        fetch('/api/appointments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            vendorId: svc.vendorId,
+            serviceId: svc.serviceId,
+            staffId: staffId || undefined,
+            bundleId: bundleId || undefined,
+            dateTime: dateTimeISO,
+            customer: formData,
+            status,
+            paymentId,
+            ...(people ? { people } : {})
+          })
+        }).then(r => r.json())
+      )
+    )
+
+    if (bundleId) {
+      const appointmentIds = results.filter(r => r.appointmentId).map(r => r.appointmentId)
+      const uniqueVendorIds = [...new Set(allServiceDetails.map(s => s.vendorId))]
+      const confirmations = {}
+      uniqueVendorIds.forEach(v => { confirmations[v] = 'pending' })
+
+      await fetch('/api/bundles', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bundleId,
+          status: 'pending-confirmation',
+          vendorConfirmations: confirmations,
+          appointmentIds,
+          customer: formData,
+          dateTime: dateTimeISO
+        })
+      })
+    }
+
+    const firstSuccess = results.find(r => r.appointmentId)
+    if (firstSuccess) {
+      const successUrl = new URLSearchParams({
+        id: firstSuccess.appointmentId,
+        dateTime: dateTimeISO,
+        service: allServiceDetails.map(s => s.name).join(', '),
+        payment: pMethod
+      })
+      if (bundleId || hasConsultation) successUrl.set('confirmation', 'required')
+      if (staffName) successUrl.set('staffName', staffName)
+      if (people) successUrl.set('people', people)
+      window.location.href = `/booking/success?${successUrl}`
+    } else {
+      alert('Appointment creation failed')
+    }
+  }
+
+  const handleWalletPay = (type) => async () => {
+    if (!formData.name || !formData.email || !formData.phone) {
+      alert('Please fill in your contact information first')
+      return
+    }
+    setLoading(true)
+    try {
+      const instance = type === 'apple' ? applePay : googlePay
+      const result = await instance.tokenize()
+      if (result.status !== 'OK') { alert('Payment failed'); setLoading(false); return }
+      const paymentId = await processPaymentWithToken(result.token)
+      await createAppointments(paymentId, 'card')
+    } catch (error) {
+      console.error('Wallet payment error:', error)
+      alert('Payment failed: ' + error.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (allServiceDetails.length === 0) return
@@ -143,81 +263,10 @@ function ConfirmPageContent() {
         const result = await card.tokenize()
         if (result.status !== 'OK') { alert('Card tokenization failed'); setLoading(false); return }
 
-        const paymentResponse = await fetch('/api/payment', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sourceId: result.token,
-            amount: totalPrice,
-            vendorId: vendor || allServiceDetails[0]?.vendorId,
-            staffId: staffId || undefined
-          })
-        })
-        const paymentData = await paymentResponse.json()
-        if (!paymentData.success) { alert('Payment failed: ' + paymentData.error); setLoading(false); return }
-        paymentId = paymentData.paymentId
+        paymentId = await processPaymentWithToken(result.token)
       }
 
-      const dateTimeISO = buildDateTimeISO()
-      const status = (bundleId || hasConsultation) ? 'pending-confirmation' : (paymentMethod === 'card' ? 'confirmed' : 'pending')
-
-      // Create one appointment per service
-      const results = await Promise.all(
-        allServiceDetails.map(svc =>
-          fetch('/api/appointments', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              vendorId: svc.vendorId,
-              serviceId: svc.serviceId,
-              staffId: staffId || undefined,
-              bundleId: bundleId || undefined,
-              dateTime: dateTimeISO,
-              customer: formData,
-              status,
-              paymentId,
-              ...(people ? { people } : {})
-            })
-          }).then(r => r.json())
-        )
-      )
-
-      // Create bundle booking record
-      if (bundleId) {
-        const appointmentIds = results.filter(r => r.appointmentId).map(r => r.appointmentId)
-        const uniqueVendorIds = [...new Set(allServiceDetails.map(s => s.vendorId))]
-        const confirmations = {}
-        uniqueVendorIds.forEach(v => { confirmations[v] = 'pending' })
-
-        await fetch('/api/bundles', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            bundleId,
-            status: 'pending-confirmation',
-            vendorConfirmations: confirmations,
-            appointmentIds,
-            customer: formData,
-            dateTime: dateTimeISO
-          })
-        })
-      }
-
-      const firstSuccess = results.find(r => r.appointmentId)
-      if (firstSuccess) {
-        const successUrl = new URLSearchParams({
-          id: firstSuccess.appointmentId,
-          dateTime: dateTimeISO,
-          service: allServiceDetails.map(s => s.name).join(', '),
-          payment: paymentMethod
-        })
-        if (bundleId || hasConsultation) successUrl.set('confirmation', 'required')
-        if (staffName) successUrl.set('staffName', staffName)
-        if (people) successUrl.set('people', people)
-        window.location.href = `/booking/success?${successUrl}`
-      } else {
-        alert('Appointment creation failed')
-      }
+      await createAppointments(paymentId, paymentMethod)
     } catch (error) {
       console.error('Error:', error)
       alert('Error processing booking')
@@ -340,7 +389,26 @@ function ConfirmPageContent() {
 
         {paymentMethod === 'card' && (
           <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Payment Information *</label>
+            {(applePay || googlePay) && (
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.5rem' }}>Express Checkout</label>
+                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                  {applePay && (
+                    <button type="button" onClick={handleWalletPay('apple')} disabled={loading}
+                      style={{ flex: 1, minWidth: '140px', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', background: 'black', color: 'white', fontSize: '1rem', cursor: 'pointer', fontWeight: '500' }}>
+                       Pay
+                    </button>
+                  )}
+                  <div id="google-pay-container" style={{ flex: 1, minWidth: '140px' }}></div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', margin: '1rem 0' }}>
+                  <div style={{ flex: 1, height: '1px', background: 'var(--color-border)' }} />
+                  <span style={{ color: 'var(--color-text-light)', fontSize: '0.85rem' }}>or pay with card</span>
+                  <div style={{ flex: 1, height: '1px', background: 'var(--color-border)' }} />
+                </div>
+              </div>
+            )}
+            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Card Information *</label>
             <div id="card-container" style={{
               minHeight: '100px', padding: '1rem', background: 'white', borderRadius: '8px', border: '1px solid var(--color-border)'
             }}></div>

@@ -107,6 +107,8 @@ Deployed via AWS Amplify with automatic CI/CD from Git. See `AMPLIFY_SETUP.md`.
 | `docs/SMS_PHONE_NUMBER.md` | Toll-free number registration, AWS verification form values, approval tips |
 | `docs/KIOSK_CHECKOUT.md` | Tablet point-of-sale for in-person payments, kiosk auth, Square Terminal upgrade path |
 | `docs/TESTING.md` | Testing strategy, running tests, what's covered, and roadmap for future test coverage |
+| `docs/CUSTOMER_FEEDBACK_MARCH_2025.md` | March 2025 customer feedback: schedules, auto-routing, add-ons, sauna separation |
+| `docs/VISIT_NOTES_APRIL_2025.md` | April 2025 on-site visit notes: group bookings, intake forms, CRM, calendar invites |
 
 ---
 
@@ -187,6 +189,8 @@ The following bounded contexts are candidates for extraction from the Next.js mo
 - [ ] Some services are offered by multiple vendors — need shared service support
 - [ ] Update Kera's service list
 - [ ] Vagaro calendar sync — currently handled via booking blackout + manual entry (see `docs/BOOKING_BLACKOUT_MANUAL_APPOINTMENTS.md`)
+- [ ] Staff/profile pictures should be uniform size on vendor pages
+- [ ] Verify social media + Google review links render on public vendor pages
 
 ## Future Enhancements
 
@@ -199,4 +203,17 @@ The following bounded contexts are candidates for extraction from the Next.js mo
 - [ ] **Auto rent payment**: automated rent collection from subletting vendors
 - [ ] **Square Integration service**: aplit as a backend microservice that can be duplicated and/or used separately
 - [ ] **Kiosk checkout (tablet POS)**: tablet at checkout counter for in-person payments — see `docs/KIOSK_CHECKOUT.md`
+- [ ] **Bridal party / group booking rules**: limit to ≤30 min services for 3+ people, require deposit
+- [ ] **Spa package day restrictions**: configurable allowed days (e.g., Sat–Mon) per bundle
+- [ ] **Advance booking minimum**: no same-day bookings for spa day packages (configurable per bundle/service)
+- [ ] **Event time frame selection**: morning/afternoon/evening blocks instead of exact time slots for packages
+- [ ] **Vendor intake forms**: per-vendor or per-service intake questions shown during booking
+- [ ] **New client flag**: checkbox at booking for first-time clients (triggers consultation scheduling)
+- [ ] **Liability/waiver form**: acceptance required at booking, stored on appointment
+- [ ] **Calendar invites**: iCal attachments in booking/confirmation/cancellation/reschedule emails
+- [ ] **Client CRM**: customer profiles with notes, booking history, cross-vendor visibility
+- [ ] **No-show tracking**: flag repeat offenders, require prepayment
+- [ ] **Membership option**: explore recurring membership model
+- [ ] **Sound room rental**: bookable resource like sauna
+- [ ] **Sound bath classes**: class calendar, registration, vendor CRUD for class management
 

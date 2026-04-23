@@ -66,11 +66,13 @@ export default function ServicesPage() {
       .catch(() => setLoading(false))
   }, [])
 
+  const MAX_SERVICES = 4
+
   const toggleService = (service) => {
     setSelectedServices(prev =>
       prev.find(s => s.serviceId === service.serviceId)
         ? prev.filter(s => s.serviceId !== service.serviceId)
-        : [...prev, service]
+        : prev.length >= MAX_SERVICES ? prev : [...prev, service]
     )
   }
 
@@ -116,7 +118,7 @@ export default function ServicesPage() {
         Browse all of our services and book your next appointment.
       </p>
       <p style={{ color: 'var(--color-text-light)', textAlign: 'center', marginBottom: '1.5rem', fontSize: '1.1rem' }}>
-        Select one or more services, then continue to book.
+        Select up to {MAX_SERVICES} services, then continue to book.
       </p>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '0.5rem', marginBottom: '2.5rem' }}>

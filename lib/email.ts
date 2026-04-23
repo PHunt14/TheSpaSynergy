@@ -65,14 +65,14 @@ export async function sendEmail(to: string, subject: string, htmlBody: string) {
   }
 }
 
-function formatDateTime(dateTime: string): string {
+export function formatDateTime(dateTime: string): string {
   return new Date(dateTime).toLocaleString('en-US', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
     hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York',
   })
 }
 
-function emailWrapper(content: string): string {
+export function emailWrapper(content: string): string {
   return `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       ${content}
