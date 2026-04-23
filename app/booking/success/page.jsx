@@ -1,7 +1,8 @@
 'use client'
 
 import { useSearchParams } from 'next/navigation'
-import { Suspense } from 'react'
+import { Suspense, useEffect, useRef } from 'react'
+import { record } from 'aws-amplify/analytics'
 import Link from 'next/link'
 
 function SuccessContent() {
@@ -13,6 +14,20 @@ function SuccessContent() {
   const confirmation = params.get('confirmation')
   const staffName = params.get('staffName')
   const people = params.get('people')
+
+  const tracked = useRef(false)
+  useEffect(() => {
+    if (tracked.current || !appointmentId) return
+    tracked.current = true
+    record({
+      name: 'BookingCompleted',
+      attributes: {
+        paymentMethod: paymentMethod || 'unknown',
+        requiresConfirmation: confirmation === 'required' ? 'yes' : 'no',
+        ...(people ? { groupSize: people } : {}),
+      },
+    })
+  }, [appointmentId])
 
   return (
     <main style={{ textAlign: 'center', maxWidth: '600px', margin: '0 auto', padding: '2rem' }}>
