@@ -75,6 +75,30 @@ After deploying, visit `/api/square/debug` in your browser. It will show which v
 - **Single vendor**: Payment goes to the vendor's Square account. If a vendor hasn't connected Square, only in-person payment is offered at checkout
 - **Bundle (multi-vendor)**: Payment is split via Square's `additionalRecipients` — house vendor is the primary recipient, other vendors receive their portions
 - **House fees**: Automatically deducted and kept by the house vendor. See `docs/HOUSE_FEE_IMPLEMENTATION.md`
+- **Apple Pay / Google Pay**: When available on the customer's device, express checkout buttons appear above the card form. Same payment flow — no additional backend setup required
+
+### Apple Pay & Google Pay Setup
+
+Both wallet options use the Square Web Payments SDK. Google Pay works out of the box. Apple Pay requires domain registration.
+
+#### Apple Pay — Domain Verification (Required)
+
+1. Go to https://developer.squareup.com → your application → **Apple Pay** tab
+2. Click **Add** under "Web domains"
+3. Register each domain where checkout runs:
+   - `www.thespasynergy.com` (production)
+   - `www.dev.thespasynergy.com` (dev, if testing Apple Pay)
+4. Square will provide a domain verification file — download it
+5. Host the file at `https://yourdomain.com/.well-known/apple-developer-merchantid-domain-association`
+   - In Next.js: place the file in `public/.well-known/apple-developer-merchantid-domain-association`
+6. Click **Verify** in the Square dashboard
+7. Apple Pay buttons will appear for customers on Safari (iPhone, iPad, Mac with Touch ID)
+
+> **Note**: Apple Pay will not appear on localhost. Test on a deployed environment with HTTPS.
+
+#### Google Pay — No Setup Required
+
+Google Pay works automatically with the Square Web Payments SDK. The button appears for customers using Chrome with a saved card in Google Pay.
 
 ## OAuth Flow
 
