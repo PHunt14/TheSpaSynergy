@@ -1,6 +1,8 @@
 import { defineBackend } from '@aws-amplify/backend';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { FunctionUrlAuthType } from 'aws-cdk-lib/aws-lambda';
+import { CfnApp } from 'aws-cdk-lib/aws-pinpoint';
+import { Stack } from 'aws-cdk-lib';
 import { auth } from './auth/resource.js';
 import { data } from './data/resource.js';
 import { sendSms } from './functions/send-sms/resource.js';
@@ -12,6 +14,35 @@ const backend = defineBackend({
   sendSms,
   sendEmail,
 });
+
+// --- Pinpoint Analytics ---
+const analyticsStack = backend.createStack('analytics-stack');
+const pinpointApp = new CfnApp(analyticsStack, 'Pinpoint', {
+  name: 'theSpaSynergy',
+});
+
+backend.addOutput({
+  analytics: {
+    amazon_pinpoint: {
+      app_id: pinpointApp.ref,
+      aws_region: Stack.of(analyticsStack).region,
+    },
+  },
+});
+
+// Allow unauthenticated users (public visitors) to submit analytics events
+backend.auth.resources.unauthenticatedUserIamRole.addToPrincipalPolicy(
+  new PolicyStatement({
+    actions: ['mobiletargeting:PutEvents', 'mobiletargeting:UpdateEndpoint'],
+    resources: ['*'],
+  })
+);
+backend.auth.resources.authenticatedUserIamRole.addToPrincipalPolicy(
+  new PolicyStatement({
+    actions: ['mobiletargeting:PutEvents', 'mobiletargeting:UpdateEndpoint'],
+    resources: ['*'],
+  })
+);
 
 // Grant SNS publish permissions to the Lambda function
 backend.sendSms.resources.lambda.addToRolePolicy(
