@@ -150,7 +150,7 @@ export default function VendorDetailPage() {
       <FadeIn>
         <div style={{
           height: '300px',
-          background: (vendorId === 'vendor-kera-studio' || vendorId === 'vendor-winsome-woods') ? 'var(--color-bg)' : 'linear-gradient(135deg, var(--color-primary), var(--color-secondary))',
+          background: (vendorId === 'vendor-kera-studio' || vendorId === 'vendor-winsome-woods' || vendorId === 'vendor-selene-glow-studio') ? 'var(--color-bg)' : 'linear-gradient(135deg, var(--color-primary), var(--color-secondary))',
           borderRadius: '12px',
           display: 'flex',
           alignItems: 'center',
@@ -171,6 +171,12 @@ export default function VendorDetailPage() {
             <img
               src="https://the-spa-synergy-public.s3.amazonaws.com/vendorPictures/Winsome_Hero00.jpg"
               alt="Winsome Woods"
+              style={{ maxWidth: '90%', maxHeight: '90%', objectFit: 'contain', borderRadius: '12px' }}
+            />
+          ) : vendorId === 'vendor-selene-glow-studio' ? (
+            <img
+              src="https://the-spa-synergy-public.s3.amazonaws.com/vendorPictures/JylianHafer_SeleneGlow_Profile00.jpeg"
+              alt="Selene Glow Studio"
               style={{ maxWidth: '90%', maxHeight: '90%', objectFit: 'contain', borderRadius: '12px' }}
             />
           ) : (

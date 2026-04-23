@@ -43,6 +43,7 @@ export default function VendorsPage() {
           const vendorImages = {
             'vendor-kera-studio': 'https://the-spa-synergy-public.s3.amazonaws.com/vendorPictures/Kera_Logo00.jpg',
             'vendor-winsome-woods': 'https://the-spa-synergy-public.s3.amazonaws.com/vendorPictures/Winsome_Hero00.jpg',
+            'vendor-selene-glow-studio': 'https://the-spa-synergy-public.s3.amazonaws.com/vendorPictures/JylianHafer_SeleneGlow_Profile00.jpeg',
           }
           const imageUrl = vendorImages[vendor.vendorId]
 
