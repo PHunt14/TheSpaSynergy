@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import { fetchAuthSession } from 'aws-amplify/auth'
 
+const ALL_DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+
 export default function BundlesManagement() {
   const [bundles, setBundles] = useState([])
   const [services, setServices] = useState([])
@@ -16,7 +18,8 @@ export default function BundlesManagement() {
     name: '',
     description: '',
     selectedServices: [],
-    discountPercent: 0
+    discountPercent: 0,
+    allowedDays: []
   })
 
   useEffect(() => {
@@ -89,7 +92,8 @@ export default function BundlesManagement() {
       serviceIds: newBundle.selectedServices,
       price: discountedPrice,
       discountPercent: newBundle.discountPercent,
-      isActive: editingBundle ? editingBundle.isActive : true
+      isActive: editingBundle ? editingBundle.isActive : true,
+      allowedDays: newBundle.allowedDays.length > 0 ? newBundle.allowedDays : undefined
     }
     
     console.log('Saving bundle:', bundleData)
@@ -108,7 +112,7 @@ export default function BundlesManagement() {
         alert(editingBundle ? 'Bundle updated!' : 'Bundle created!')
         setShowAddForm(false)
         setEditingBundle(null)
-        setNewBundle({ name: '', description: '', selectedServices: [], discountPercent: 0 })
+        setNewBundle({ name: '', description: '', selectedServices: [], discountPercent: 0, allowedDays: [] })
         await loadData()
       } else {
         console.error('Save failed:', result)
@@ -145,7 +149,8 @@ export default function BundlesManagement() {
       name: bundle.name,
       description: bundle.description || '',
       selectedServices: bundle.serviceIds || [],
-      discountPercent: bundle.discountPercent || 0
+      discountPercent: bundle.discountPercent || 0,
+      allowedDays: bundle.allowedDays || []
     })
     setShowAddForm(true)
   }
@@ -279,7 +284,7 @@ export default function BundlesManagement() {
           setShowAddForm(!showAddForm)
           if (showAddForm) {
             setEditingBundle(null)
-            setNewBundle({ name: '', description: '', selectedServices: [], discountPercent: 0 })
+            setNewBundle({ name: '', description: '', selectedServices: [], discountPercent: 0, allowedDays: [] })
           }
         }}
         className="cta"
@@ -329,6 +334,29 @@ export default function BundlesManagement() {
               onChange={(e) => setNewBundle({ ...newBundle, discountPercent: parseFloat(e.target.value) })}
               style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)' }}
             />
+          </div>
+
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Allowed Days (leave empty for any day)</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
+              {ALL_DAYS.map(day => (
+                <label key={day} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', textTransform: 'capitalize' }}>
+                  <input
+                    type="checkbox"
+                    checked={newBundle.allowedDays.includes(day)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setNewBundle({ ...newBundle, allowedDays: [...newBundle.allowedDays, day] })
+                      } else {
+                        setNewBundle({ ...newBundle, allowedDays: newBundle.allowedDays.filter(d => d !== day) })
+                      }
+                    }}
+                    style={{ width: '18px', height: '18px' }}
+                  />
+                  {day}
+                </label>
+              ))}
+            </div>
           </div>
 
           <div style={{ marginBottom: '1rem' }}>
@@ -398,6 +426,9 @@ export default function BundlesManagement() {
               )}
               <p style={{ color: 'var(--color-text-light)', fontSize: '0.9rem', marginBottom: '0.5rem' }}>
                 {bundle.discountPercent}% discount • ${bundle.price?.toFixed(2)}
+                {bundle.allowedDays?.length > 0 && (
+                  <> • {bundle.allowedDays.map(d => d.charAt(0).toUpperCase() + d.slice(0, 3)).join(', ')}</>
+                )}
               </p>
               <div style={{ fontSize: '0.85rem', color: 'var(--color-text-light)' }}>
                 <strong>Services:</strong>

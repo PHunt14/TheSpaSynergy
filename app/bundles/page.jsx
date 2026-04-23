@@ -32,7 +32,7 @@ export default function BundlesPage() {
     <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
       <h1>Spa Packages</h1>
       <p style={{ color: 'var(--color-text-light)', marginBottom: '1rem' }}>
-        Curated wellness experiences — available Fridays through Mondays.
+        Curated wellness experiences.
       </p>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '2rem' }}>
@@ -71,6 +71,11 @@ export default function BundlesPage() {
               </p>
               {groupLabel && (
                 <p style={{ fontSize: '0.9rem', color: 'var(--color-text-light)' }}>{groupLabel}</p>
+              )}
+              {bundle.allowedDays?.length > 0 && (
+                <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.5rem' }}>
+                  📅 {bundle.allowedDays.map(d => d.charAt(0).toUpperCase() + d.slice(1, 3)).join(', ')} only
+                </p>
               )}
             </div>
           )
