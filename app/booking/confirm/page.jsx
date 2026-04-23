@@ -119,25 +119,21 @@ function ConfirmPageContent() {
       await cardInstance.attach('#card-container')
       setCard(cardInstance)
 
+      const walletPaymentRequest = payments.paymentRequest({
+        countryCode: 'US',
+        currencyCode: 'USD',
+        total: { amount: totalPrice.toFixed(2), label: 'The Spa Synergy' }
+      })
+
       // Apple Pay
       try {
-        const applePayRequest = payments.paymentRequest({
-          countryCode: 'US',
-          currencyCode: 'USD',
-          total: { amount: totalPrice.toFixed(2), label: 'The Spa Synergy' }
-        })
-        const applePayInstance = await payments.applePay(applePayRequest)
+        const applePayInstance = await payments.applePay(walletPaymentRequest)
         setApplePay(applePayInstance)
       } catch { /* Apple Pay not available on this device/browser */ }
 
       // Google Pay
       try {
-        const googlePayRequest = payments.paymentRequest({
-          countryCode: 'US',
-          currencyCode: 'USD',
-          total: { amount: totalPrice.toFixed(2), label: 'The Spa Synergy' }
-        })
-        const googlePayInstance = await payments.googlePay(googlePayRequest)
+        const googlePayInstance = await payments.googlePay(walletPaymentRequest)
         await googlePayInstance.attach('#google-pay-container')
         setGooglePay(googlePayInstance)
       } catch { /* Google Pay not available on this device/browser */ }

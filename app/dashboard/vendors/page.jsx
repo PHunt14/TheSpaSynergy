@@ -3,6 +3,22 @@
 import { useState, useEffect, useRef } from 'react'
 import { fetchAuthSession } from 'aws-amplify/auth'
 
+const DEFAULT_WORKING_HOURS = {
+  monday: { start: '09:00', end: '17:00', closed: false },
+  tuesday: { start: '09:00', end: '17:00', closed: false },
+  wednesday: { start: '09:00', end: '17:00', closed: false },
+  thursday: { start: '09:00', end: '17:00', closed: false },
+  friday: { start: '09:00', end: '17:00', closed: false },
+  saturday: { start: '10:00', end: '15:00', closed: false },
+  sunday: { start: '10:00', end: '15:00', closed: true }
+}
+
+const emptyVendorForm = () => ({
+  name: '', description: '', email: '', phone: '',
+  bufferMinutes: 15, isActive: true, isHouse: false,
+  workingHours: { ...DEFAULT_WORKING_HOURS }
+})
+
 export default function Vendors() {
   const [vendors, setVendors] = useState([])
   const [loading, setLoading] = useState(true)
@@ -10,24 +26,7 @@ export default function Vendors() {
   const [editingVendor, setEditingVendor] = useState(null)
   const [currentUserRole, setCurrentUserRole] = useState(null)
   const formRef = useRef(null)
-  const [newVendor, setNewVendor] = useState({
-    name: '',
-    description: '',
-    email: '',
-    phone: '',
-    bufferMinutes: 15,
-    isActive: true,
-    isHouse: false,
-    workingHours: {
-      monday: { start: '09:00', end: '17:00', closed: false },
-      tuesday: { start: '09:00', end: '17:00', closed: false },
-      wednesday: { start: '09:00', end: '17:00', closed: false },
-      thursday: { start: '09:00', end: '17:00', closed: false },
-      friday: { start: '09:00', end: '17:00', closed: false },
-      saturday: { start: '10:00', end: '15:00', closed: false },
-      sunday: { start: '10:00', end: '15:00', closed: true }
-    }
-  })
+  const [newVendor, setNewVendor] = useState(emptyVendorForm())
 
   useEffect(() => {
     loadVendors()
@@ -83,24 +82,7 @@ export default function Vendors() {
         alert(editingVendor ? 'Vendor updated successfully!' : 'Vendor added successfully!')
         setShowAddForm(false)
         setEditingVendor(null)
-        setNewVendor({ 
-          name: '', 
-          description: '', 
-          email: '', 
-          phone: '', 
-          bufferMinutes: 15, 
-          isActive: true, 
-          isHouse: false,
-          workingHours: {
-            monday: { start: '09:00', end: '17:00', closed: false },
-            tuesday: { start: '09:00', end: '17:00', closed: false },
-            wednesday: { start: '09:00', end: '17:00', closed: false },
-            thursday: { start: '09:00', end: '17:00', closed: false },
-            friday: { start: '09:00', end: '17:00', closed: false },
-            saturday: { start: '10:00', end: '15:00', closed: false },
-            sunday: { start: '10:00', end: '15:00', closed: true }
-          }
-        })
+        setNewVendor(emptyVendorForm())
         loadVendors()
       } else {
         const data = await response.json()
@@ -122,15 +104,7 @@ export default function Vendors() {
       bufferMinutes: vendor.bufferMinutes || 15,
       isActive: vendor.isActive !== undefined ? vendor.isActive : true,
       isHouse: vendor.isHouse || false,
-      workingHours: vendor.workingHours || {
-        monday: { start: '09:00', end: '17:00', closed: false },
-        tuesday: { start: '09:00', end: '17:00', closed: false },
-        wednesday: { start: '09:00', end: '17:00', closed: false },
-        thursday: { start: '09:00', end: '17:00', closed: false },
-        friday: { start: '09:00', end: '17:00', closed: false },
-        saturday: { start: '10:00', end: '15:00', closed: false },
-        sunday: { start: '10:00', end: '15:00', closed: true }
-      }
+      workingHours: vendor.workingHours || { ...DEFAULT_WORKING_HOURS }
     })
     setShowAddForm(true)
     setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
@@ -139,24 +113,7 @@ export default function Vendors() {
   const handleCancelEdit = () => {
     setEditingVendor(null)
     setShowAddForm(false)
-    setNewVendor({ 
-      name: '', 
-      description: '', 
-      email: '', 
-      phone: '', 
-      bufferMinutes: 15, 
-      isActive: true, 
-      isHouse: false,
-      workingHours: {
-        monday: { start: '09:00', end: '17:00', closed: false },
-        tuesday: { start: '09:00', end: '17:00', closed: false },
-        wednesday: { start: '09:00', end: '17:00', closed: false },
-        thursday: { start: '09:00', end: '17:00', closed: false },
-        friday: { start: '09:00', end: '17:00', closed: false },
-        saturday: { start: '10:00', end: '15:00', closed: false },
-        sunday: { start: '10:00', end: '15:00', closed: true }
-      }
-    })
+    setNewVendor(emptyVendorForm())
   }
 
   const handleToggleActive = async (vendor) => {
