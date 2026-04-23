@@ -16,28 +16,27 @@ Feedback collected during on-site visit with customers. Items triaged and sorted
 **Source**: "The vendor page in the dashboard to active or edit vendors does not work"
 **Root cause**: Three bugs in `app/dashboard/vendors/page.jsx`:
 1. Form render condition required `editingVendor` to be truthy — blocked the form from ever showing
-2. No "Add Vendor" button existed on the page
-3. `loadVendors()` was called after saves but the function was named `initVendors` — list never refreshed
+2. `loadVendors()` was called after saves but the function was named `initVendors` — list never refreshed
 
 ---
 
 ## Verify
 
-### Social Media & Google Review Links on Vendor Pages
+### ✅ Social Media & Google Review Links on Vendor Pages
 **Source**: "Verify what it looks like when a business has setup their social media and google review links"
-**Status**: VendorSettings already supports Facebook, Instagram, TikTok, Website, and Google Place ID. Need to verify the public vendor detail page renders them.
+**Status**: VendorSettings supports Facebook, Instagram, TikTok, Website, and Google Place ID. Public vendor detail page renders them in the Contact section.
 
 ---
 
 ## Pre-Launch
 
-### 📋 Staff/Profile Pictures — Uniform Size
+### ✅ Staff/Profile Pictures — Uniform Size
 **Source**: "Make all of the staff/profile pictures the same size"
-**Effort**: CSS fix
+**Fix**: Set profile images to fixed 300×300px with `object-fit: cover` in `app/vendors/[vendorId]/page.jsx`.
 
-### 📋 Jylian Cover Photo
+### ✅ Jylian Cover Photo
 **Source**: "Jylian photo as her cover photo"
-**Effort**: Content update (S3 upload + seed data or vendor settings)
+**Fix**: Added Jylian's profile photo as the Selene Glow Studio hero/card image on both the vendors listing and vendor detail pages.
 
 ### 📋 Individual Vendor Booking — QA Pass
 **Source**: "Individual bookings for individual vendors is the most popular, bread and butter, make sure that is 100% fool proof before go-live."
@@ -59,12 +58,9 @@ Feedback collected during on-site visit with customers. Items triaged and sorted
 - Require deposit (partial payment at checkout)
 - Charcuterie board add-on for events (see existing add-on work in June feedback #7)
 
-### 📋 Spa Package Day Restrictions
+### ✅ Spa Package Day Restrictions
 **Source**: "Spa packages only Saturday through Monday. Perhaps also Friday, let's make this configurable in the settings page."
-**Implementation notes**:
-- Add `allowedDays` field to Bundle model (e.g., `["friday", "saturday", "sunday", "monday"]`)
-- Configurable per-bundle in vendor settings or bundle management
-- Availability API filters time slots by allowed days for bundles
+**Fix**: `allowedDays` field on Bundle model, configurable per-bundle via dashboard checkboxes. Calendar picker filters to allowed days. Customer-facing pages show dynamic day labels. Empty = any day allowed.
 
 ### 📋 Advance Booking Requirement
 **Source**: "Spa day packages need to be booked in advance... no day-of bookings, probably make it at least a week in advance"

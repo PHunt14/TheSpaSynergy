@@ -8,7 +8,7 @@ import 'react-datepicker/dist/react-datepicker.css'
 import BookingDisabled, { isBookingEnabled } from '../../components/BookingDisabled'
 
 const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
-const PACKAGE_ALLOWED_DAYS = ['friday', 'saturday', 'sunday', 'monday']
+const DAY_LABELS = { sunday: 'Sunday', monday: 'Monday', tuesday: 'Tuesday', wednesday: 'Wednesday', thursday: 'Thursday', friday: 'Friday', saturday: 'Saturday' }
 
 function BundleTimeContent() {
   const params = useSearchParams()
@@ -24,15 +24,17 @@ function BundleTimeContent() {
   const [vendorInfo, setVendorInfo] = useState(null)
   const [bundle, setBundle] = useState(null)
 
-  const allowedDays = bundle?.allowedDays?.length > 0 ? bundle.allowedDays : PACKAGE_ALLOWED_DAYS
+  const allowedDays = bundle?.allowedDays?.length > 0 ? bundle.allowedDays : null
 
   const isAllowedDay = (date) => {
+    if (!allowedDays) return true
     const dayName = DAY_NAMES[date.getDay()]
     return allowedDays.includes(dayName)
   }
 
   // Find the next allowed date from today
   useEffect(() => {
+    if (!allowedDays) return
     const today = new Date()
     for (let i = 0; i < 7; i++) {
       const candidate = new Date(today)
@@ -96,12 +98,14 @@ function BundleTimeContent() {
         {bundle?.name || 'Package'}: {services.length} services • {totalDuration} min
       </p>
 
-      <div style={{
-        background: '#fff3cd', border: '1px solid #ffc107', borderRadius: '8px',
-        padding: '0.75rem 1rem', marginBottom: '1.5rem', fontSize: '0.9rem'
-      }}>
-        📅 Available <strong>Fridays through Mondays</strong> only.
-      </div>
+      {allowedDays && (
+        <div style={{
+          background: '#fff3cd', border: '1px solid #ffc107', borderRadius: '8px',
+          padding: '0.75rem 1rem', marginBottom: '1.5rem', fontSize: '0.9rem'
+        }}>
+          📅 Available <strong>{allowedDays.map(d => DAY_LABELS[d]).join(', ')}</strong> only.
+        </div>
+      )}
 
       <div style={{ marginTop: '1.5rem' }}>
         <h3>Select Your Date</h3>
