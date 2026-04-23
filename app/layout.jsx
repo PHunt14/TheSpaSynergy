@@ -1,5 +1,6 @@
 import './styles/globals.css'
 import './styles/variables.css'
+import './amplify-config'
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'
 import CherryBlossom from './components/CherryBlossom'

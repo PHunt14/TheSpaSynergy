@@ -2,7 +2,6 @@
 
 import { useSearchParams } from 'next/navigation'
 import { Suspense, useEffect, useRef } from 'react'
-import { record } from 'aws-amplify/analytics'
 import Link from 'next/link'
 
 function SuccessContent() {
@@ -19,14 +18,19 @@ function SuccessContent() {
   useEffect(() => {
     if (tracked.current || !appointmentId) return
     tracked.current = true
-    record({
-      name: 'BookingCompleted',
-      attributes: {
-        paymentMethod: paymentMethod || 'unknown',
-        requiresConfirmation: confirmation === 'required' ? 'yes' : 'no',
-        ...(people ? { groupSize: people } : {}),
-      },
-    })
+    try {
+      const { record } = require('aws-amplify/analytics')
+      record({
+        name: 'BookingCompleted',
+        attributes: {
+          paymentMethod: paymentMethod || 'unknown',
+          requiresConfirmation: confirmation === 'required' ? 'yes' : 'no',
+          ...(people ? { groupSize: people } : {}),
+        },
+      })
+    } catch {
+      // Analytics not configured
+    }
   }, [appointmentId])
 
   return (
