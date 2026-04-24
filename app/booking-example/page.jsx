@@ -1,6 +1,4 @@
-export const metadata = {
-  title: 'Review Booking | The Spa Synergy',
-}
+'use client'
 
 export default function BookingExamplePage() {
   return (
