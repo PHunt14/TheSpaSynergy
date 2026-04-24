@@ -62,21 +62,21 @@ AWS requires toll-free verification before you can send to real customers. Unver
 
 **Use case description** (copy/paste):
 
-> The Kera Studio operates a multi-vendor spa and wellness booking platform (thespasynergy.com) at its location in Fort Ritchie, MD. The platform sends transactional SMS notifications to customers and service providers when appointments are booked, confirmed, cancelled, or rescheduled. Messages are only sent to users who have explicitly opted in during the booking process. We do not send marketing or promotional messages.
+> The Kera Studio, doing business as The Spa Synergy (thespasynergy.com), operates a multi-vendor spa and wellness booking platform at its location in Fort Ritchie, MD. The platform sends transactional SMS notifications to customers and service providers when appointments are booked, confirmed, cancelled, or rescheduled. Messages are only sent to users who have explicitly opted in via an unchecked-by-default checkbox during the online booking checkout process. We do not send marketing or promotional messages. The Kera Studio is the legal business entity; "The Spa Synergy" is the consumer-facing brand name for the booking platform.
 
 #### Opt-In Information
 
 | Field | Value |
 |-------|-------|
 | Opt-in type | **Web form** |
-| Opt-in website URL | https://www.thespasynergy.com/booking |
+| Opt-in website URL | https://www.thespasynergy.com |
 | Opt-in description | See below |
 
 **Opt-in description** (copy/paste):
 
-> During the online booking process, customers are presented with a checkbox labeled "I agree to receive text messages about my appointment." The checkbox is unchecked by default and must be actively selected by the customer. Only customers who check this box receive SMS notifications. Service providers (vendors) enable SMS alerts through their authenticated dashboard settings.
+> During the online booking checkout process at https://www.thespasynergy.com/booking/confirm, customers are presented with an unchecked-by-default checkbox labeled: "I agree to receive automated SMS appointment updates from The Spa Synergy (e.g. confirmations, reminders, cancellations). Msg frequency: ~1–5 msgs per booking. Msg & data rates may apply. Reply STOP to cancel, HELP for help. Consent is not required to book. Privacy Policy & Terms." The checkbox links to our Privacy Policy (https://www.thespasynergy.com/privacy) and Terms of Service (https://www.thespasynergy.com/terms), both of which contain dedicated SMS sections covering message frequency, opt-out instructions, and data sharing practices. Service providers (vendors) enable SMS alerts through their authenticated dashboard settings.
 
-> **Important**: AWS may ask for a screenshot of the opt-in mechanism. Take a screenshot of the booking form showing the SMS opt-in checkbox before submitting.
+> **CRITICAL**: Attach a screenshot of the booking checkout page showing the SMS opt-in checkbox in its unchecked state, with the full disclosure text and Privacy Policy / Terms links visible. AWS reviewers almost always require this — missing screenshots are the #1 reason for registration returns.
 
 #### Sample Messages
 
@@ -130,11 +130,13 @@ Replace with your actual toll-free number. Redeploy after setting the variable.
 
 ### Verification rejected
 
-Common reasons:
+Common reasons and fixes:
+- **Company name mismatch**: Registration says "The Kera Studio" but website says "The Spa Synergy." Fix: the use case description now explicitly states the DBA relationship. Both names should appear in the registration
+- **Missing opt-in screenshot**: AWS almost always requires a screenshot attachment showing the checkbox. This is the #1 return reason
+- **Opt-in URL not directly accessible**: The checkbox lives on `/booking/confirm` which requires query params. Use the base URL `https://www.thespasynergy.com` and attach a screenshot instead of relying on the reviewer navigating to the checkbox
+- **Privacy/Terms pages not live**: Verify `thespasynergy.com/privacy` and `thespasynergy.com/terms` are deployed and accessible before submitting
+- **Sample messages don't match use case**: Keep sample messages consistent with "transactional appointment notifications"
 - Website wasn't accessible at review time
-- Opt-in mechanism wasn't visible or clear
-- Sample messages didn't match the stated use case
-- Company name on the form didn't match the website (note: "The Kera Studio" won't appear on every page of thespasynergy.com — if AWS flags this, explain that The Kera Studio is the business entity operating the platform branded as "The Spa Synergy")
 
 You can resubmit with corrections. Check the rejection reason in the console.
 
