@@ -65,7 +65,7 @@ export default function VendorsPage() {
                 height: '250px',
                 backgroundImage: imageUrl ? `url(${imageUrl})` : 'linear-gradient(135deg, var(--color-primary), var(--color-secondary))',
                 backgroundSize: 'cover',
-                backgroundPosition: 'center',
+                backgroundPosition: vendor.vendorId === 'vendor-selene-glow-studio' ? 'center 30%' : 'center',
               }} />
               <div style={{ padding: '1.5rem' }}>
                 <h3>{vendor.name}</h3>
