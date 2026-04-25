@@ -177,7 +177,7 @@ export default function VendorDetailPage() {
             <img
               src="https://the-spa-synergy-public.s3.amazonaws.com/vendorPictures/JylianHafer_SeleneGlow_Profile00.jpeg"
               alt="Selene Glow Studio"
-              style={{ maxWidth: '90%', maxHeight: '90%', objectFit: 'contain', borderRadius: '12px' }}
+              style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 30%', borderRadius: '12px' }}
             />
           ) : (
             '[Hero Image]'
