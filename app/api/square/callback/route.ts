@@ -94,29 +94,20 @@ export async function GET(request: NextRequest) {
       squareConnectedAt: new Date().toISOString(),
     }
 
-    // Save to StaffSchedule or Vendor
-    if (staffId) {
-      const { errors } = await client.models.StaffSchedule.update({
-        visibleId: staffId,
-        ...tokenFields,
-      } as any)
-      if (errors) {
-        console.error('Error updating staff schedule:', JSON.stringify(errors, null, 2))
-        return Response.redirect(`${baseUrl}/dashboard/settings?error=oauth_failed&details=db_update_failed`)
-      }
-      return Response.redirect(`${baseUrl}/dashboard/settings?success=square_connected&staffId=${staffId}`)
-    } else {
-      const { errors } = await client.models.Vendor.update({
-        vendorId,
-        squareApplicationId: appId,
-        ...tokenFields,
-      } as any)
-      if (errors) {
-        console.error('Error updating vendor:', JSON.stringify(errors, null, 2))
-        return Response.redirect(`${baseUrl}/dashboard/settings?error=oauth_failed&details=db_update_failed`)
-      }
-      return Response.redirect(`${baseUrl}/dashboard/settings?success=square_connected`)
+    if (!staffId) {
+      return Response.redirect(`${baseUrl}/dashboard/settings?error=oauth_failed&details=staff_id_required`)
     }
+
+    // Save to StaffSchedule
+    const { errors } = await client.models.StaffSchedule.update({
+      visibleId: staffId,
+      ...tokenFields,
+    } as any)
+    if (errors) {
+      console.error('Error updating staff schedule:', JSON.stringify(errors, null, 2))
+      return Response.redirect(`${baseUrl}/dashboard/settings?error=oauth_failed&details=db_update_failed`)
+    }
+    return Response.redirect(`${baseUrl}/dashboard/settings?success=square_connected&staffId=${staffId}`)
   } catch (error: any) {
     console.error('Square callback error:', error)
     return Response.redirect(`${baseUrl}/dashboard/settings?error=oauth_failed&details=${encodeURIComponent(error.message || 'unknown')}`)

@@ -16,10 +16,6 @@ const labelStyle = { display: 'block', marginBottom: '0.5rem', fontWeight: '500'
 
 export default function VendorSettings({ currentUser, vendors, selectedVendorId, setSelectedVendorId, showMessage }) {
   const [saving, setSaving] = useState(false)
-  const [squareConnected, setSquareConnected] = useState(false)
-  const [squareConnectedAt, setSquareConnectedAt] = useState(null)
-  const [squareOAuthStatus, setSquareOAuthStatus] = useState('disconnected')
-  const [connectingSquare, setConnectingSquare] = useState(false)
 
   const [vendorName, setVendorName] = useState('')
   const [vendorEmail, setVendorEmail] = useState('')
@@ -46,9 +42,6 @@ export default function VendorSettings({ currentUser, vendors, selectedVendorId,
     try {
       const { data: v } = await client.models.Vendor.get({ vendorId })
       if (v) {
-        setSquareConnected(!!v.squareAccessToken)
-        setSquareConnectedAt(v.squareConnectedAt)
-        setSquareOAuthStatus(v.squareOAuthStatus || (v.squareAccessToken ? 'connected' : 'disconnected'))
         setVendorName(v.name || '')
         setVendorEmail(v.email || '')
         setVendorPhone(v.phone || '')
@@ -104,34 +97,6 @@ export default function VendorSettings({ currentUser, vendors, selectedVendorId,
     } finally { setSaving(false) }
   }
 
-  const handleConnectSquare = () => {
-    window.location.href = `/api/square/connect?vendorId=${selectedVendorId}`
-  }
-
-  const handleDisconnectSquare = async () => {
-    if (!confirm('Disconnect your Square account? Customers will not be able to pay online until you reconnect.')) return
-    setConnectingSquare(true)
-    try {
-      const res = await fetch('/api/square/disconnect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ vendorId: selectedVendorId })
-      })
-      if (!res.ok) {
-        const data = await res.json()
-        showMessage('Error disconnecting Square: ' + (data.error || 'Unknown error'))
-      } else {
-        setSquareConnected(false)
-        setSquareConnectedAt(null)
-        setSquareOAuthStatus('disconnected')
-        showMessage('Square account disconnected successfully')
-      }
-    } catch {
-      showMessage('Error disconnecting Square account')
-    } finally {
-      setConnectingSquare(false)
-    }
-  }
 
   const handleSaveVendorBlackout = async () => {
     setBlackoutLoading(true)
@@ -155,7 +120,7 @@ export default function VendorSettings({ currentUser, vendors, selectedVendorId,
   return (
     <div>
       <p style={{ color: 'var(--color-text-light)', marginBottom: '2rem' }}>
-        Manage vendor profile, payments, and booking settings.
+        Manage vendor profile and booking settings. Staff members connect their Square payment accounts in My Settings.
       </p>
 
       {/* Vendor Selector (admin only) */}
@@ -221,49 +186,6 @@ export default function VendorSettings({ currentUser, vendors, selectedVendorId,
         </button>
       </div>
 
-      {/* Square Payment Integration */}
-      <div style={sectionStyle}>
-        <h2 style={{ marginTop: 0, marginBottom: '1.5rem' }}>Square Payment Integration<Tooltip text="Connect your Square account so customers can pay online at checkout. Payments are deposited directly to your Square account." /></h2>
-        {squareConnected ? (
-          <div>
-            <div style={{ padding: '1rem', background: squareOAuthStatus === 'error' ? '#f8d7da' : '#d4edda', border: `1px solid ${squareOAuthStatus === 'error' ? '#f5c6cb' : '#c3e6cb'}`, borderRadius: '8px', marginBottom: '1rem' }}>
-              {squareOAuthStatus === 'error' ? (
-                <div>
-                  <div style={{ fontWeight: '500', color: '#721c24', marginBottom: '0.5rem' }}>⚠ Square Connection Error</div>
-                  <p style={{ fontSize: '0.85rem', color: '#721c24', margin: 0 }}>Your Square connection needs to be refreshed. Please reconnect.</p>
-                </div>
-              ) : (
-                <div>
-                  <div style={{ fontWeight: '500', color: '#155724', marginBottom: '0.5rem' }}>✓ Square Account Connected</div>
-                  {squareConnectedAt && (
-                    <div style={{ fontSize: '0.85rem', color: '#155724' }}>
-                      Connected on {new Date(squareConnectedAt).toLocaleDateString()}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-            <div style={{ display: 'flex', gap: '1rem' }}>
-              {squareOAuthStatus === 'error' && (
-                <button onClick={handleConnectSquare} className="cta">Reconnect Square</button>
-              )}
-              <button onClick={handleDisconnectSquare} disabled={connectingSquare} style={{
-                padding: '0.75rem 1.5rem', background: '#dc3545', color: 'white', border: 'none',
-                borderRadius: '8px', cursor: 'pointer', fontSize: '1rem', fontWeight: '500'
-              }}>
-                {connectingSquare ? 'Disconnecting...' : 'Disconnect Square'}
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div>
-            <p style={{ fontSize: '0.9rem', color: 'var(--color-text-light)', marginBottom: '1rem' }}>
-              Connect your Square account to receive payments directly. You'll be redirected to Square to authorize access.
-            </p>
-            <button onClick={handleConnectSquare} className="cta">Connect with Square</button>
-          </div>
-        )}
-      </div>
 
       {/* Booking Blackout */}
       <div style={sectionStyle}>

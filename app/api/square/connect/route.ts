@@ -5,8 +5,8 @@ export async function GET(request: NextRequest) {
   try {
     const vendorId = request.nextUrl.searchParams.get('vendorId')
     const staffId = request.nextUrl.searchParams.get('staffId')
-    if (!vendorId) {
-      return Response.json({ error: 'vendorId required' }, { status: 400 })
+    if (!vendorId || !staffId) {
+      return Response.json({ error: 'vendorId and staffId required' }, { status: 400 })
     }
 
     const appId = process.env.SQUARE_APPLICATION_ID || process.env.NEXT_PUBLIC_SQUARE_APPLICATION_ID

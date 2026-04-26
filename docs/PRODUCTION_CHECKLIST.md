@@ -107,11 +107,12 @@ After the `main` branch deploys and the prod backend is created:
 - [ ] In Square Developer Dashboard → Webhooks, add endpoint: `https://www.thespasynergy.com/api/webhooks/square`
   - Subscribe to: `payment.updated`, `payment.completed`
   - Copy the signature key to `SQUARE_WEBHOOK_SIGNATURE_KEY` env var
-- [ ] Each vendor connects their Square account: Dashboard → Settings → Vendor Settings tab → "Connect with Square"
+- [ ] Each staff member connects their Square account: Dashboard → Settings → My Settings tab → "Connect with Square"
+- [ ] Admins can verify connections on the Staff page (💳 badge)
 - [ ] Test a payment (use a $0 service or refund a small test payment)
 - [ ] **Delete `/api/square/debug` endpoint** before going live with real customers
 
-> Online payments are not required for launch. Vendors without a connected Square account will only offer in-person payment at checkout.
+> Online payments are not required for launch. Staff members without a connected Square account will only offer in-person payment at checkout.
 
 ## 10. Apple Pay (Optional)
 

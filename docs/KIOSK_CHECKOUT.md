@@ -31,7 +31,7 @@ The kiosk uses a **PIN-based authentication** system, completely separate from t
 Each appointment carries its own `vendorId` and `staffId`. When a customer pays at the kiosk:
 
 1. The kiosk sends the appointment's `vendorId` and `staffId` to `POST /api/payment`
-2. The payment API resolves Square credentials: staff's Square account first, then vendor's
+2. The payment API resolves Square credentials from the assigned **staff member's** Square account
 3. House fees are calculated and split automatically (same logic as online checkout)
 4. Payment is deposited to the correct Square account
 
