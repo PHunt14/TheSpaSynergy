@@ -38,7 +38,7 @@ npm run test:e2e:headed
 
 | File | Tests | What's Covered |
 |------|-------|----------------|
-| `square/oauth-payment.test.mjs` | 31 | OAuth URL generation, state encoding/decoding, webhook signature verification, webhook event processing + idempotency, vendor token builders, disconnect builders, payment vendor validation, token expiry detection, payment route integration (POST /api/payment) |
+| `square/oauth-payment.test.mjs` | 37 | OAuth URL generation, state encoding/decoding, webhook signature verification, webhook event processing + idempotency, vendor token builders (legacy), staff token builders, disconnect builders, payment validation (staff-level only), token expiry detection, payment route integration (POST /api/payment with staff-level Square auth) |
 | `utils/payment.test.mjs` | 23 | `calculatePaymentSplits` — single/multi vendor, house fees, aggregation, edge cases; `calculateVendorNet` — fee subtraction; `formatPaymentSplits` — display formatting |
 
 ### Component Tests (`__tests__/components/`)

@@ -14,9 +14,9 @@ const client = generateClient<Schema>()
 
 export async function POST(request: NextRequest) {
   try {
-    const { vendorId, staffId } = await request.json()
-    if (!vendorId && !staffId) {
-      return Response.json({ error: 'vendorId or staffId required' }, { status: 400 })
+    const { staffId } = await request.json()
+    if (!staffId) {
+      return Response.json({ error: 'staffId required' }, { status: 400 })
     }
 
     // Auth check
@@ -39,61 +39,20 @@ export async function POST(request: NextRequest) {
     }
 
     // Staff disconnect
-    if (staffId) {
-      const { data: staff } = await client.models.StaffSchedule.get({ visibleId: staffId } as any)
-      if (!staff) {
-        return Response.json({ error: 'Staff not found' }, { status: 404 })
-      }
-
-      // Staff can only disconnect their own account; admins/owners can disconnect any staff in their vendor
-      const isOwnAccount = staff.staffEmail === currentUser.email
-      const isAdminOrOwner = currentUser.role === 'admin' || (currentUser.role === 'owner' && staff.vendorId === currentUser.vendorId)
-      if (!isOwnAccount && !isAdminOrOwner) {
-        return Response.json({ error: 'Unauthorized' }, { status: 403 })
-      }
-
-      // Revoke token
-      if (staff.squareAccessToken) {
-        try {
-          const appId = process.env.SQUARE_APPLICATION_ID || process.env.NEXT_PUBLIC_SQUARE_APPLICATION_ID
-          const appSecret = process.env.SQUARE_APPLICATION_SECRET
-          if (appId && appSecret) {
-            const env = process.env.NEXT_PUBLIC_SQUARE_ENVIRONMENT || 'sandbox'
-            const squareClient = new Client({
-              environment: env === 'production' ? Environment.Production : Environment.Sandbox,
-            })
-            await squareClient.oAuthApi.revokeToken({
-              clientId: appId,
-              accessToken: staff.squareAccessToken,
-            }, `Client ${appSecret}`)
-          }
-        } catch (revokeError) {
-          console.error('Staff token revocation failed (continuing):', revokeError)
-        }
-      }
-
-      const { errors } = await client.models.StaffSchedule.update({
-        visibleId: staffId,
-        squareAccessToken: null,
-        squareRefreshToken: null,
-        squareMerchantId: null,
-        squareLocationId: null,
-        squareOAuthStatus: 'disconnected',
-        squareTokenExpiresAt: null,
-        squareConnectedAt: null,
-      } as any)
-
-      if (errors) return Response.json({ error: 'Failed to update staff' }, { status: 500 })
-      return Response.json({ success: true })
+    const { data: staff } = await client.models.StaffSchedule.get({ visibleId: staffId } as any)
+    if (!staff) {
+      return Response.json({ error: 'Staff not found' }, { status: 404 })
     }
 
-    // Vendor disconnect (existing logic)
-    if (currentUser.role === 'vendor' || (currentUser.role === 'owner' && currentUser.vendorId !== vendorId)) {
+    // Staff can only disconnect their own account; admins/owners can disconnect any staff in their vendor
+    const isOwnAccount = staff.staffEmail === currentUser.email
+    const isAdminOrOwner = currentUser.role === 'admin' || (currentUser.role === 'owner' && staff.vendorId === currentUser.vendorId)
+    if (!isOwnAccount && !isAdminOrOwner) {
       return Response.json({ error: 'Unauthorized' }, { status: 403 })
     }
 
-    const { data: vendor } = await client.models.Vendor.get({ vendorId })
-    if (vendor?.squareAccessToken) {
+    // Revoke token
+    if (staff.squareAccessToken) {
       try {
         const appId = process.env.SQUARE_APPLICATION_ID || process.env.NEXT_PUBLIC_SQUARE_APPLICATION_ID
         const appSecret = process.env.SQUARE_APPLICATION_SECRET
@@ -104,27 +63,26 @@ export async function POST(request: NextRequest) {
           })
           await squareClient.oAuthApi.revokeToken({
             clientId: appId,
-            accessToken: vendor.squareAccessToken,
+            accessToken: staff.squareAccessToken,
           }, `Client ${appSecret}`)
         }
       } catch (revokeError) {
-        console.error('Token revocation failed (continuing with disconnect):', revokeError)
+        console.error('Staff token revocation failed (continuing):', revokeError)
       }
     }
 
-    const { errors } = await client.models.Vendor.update({
-      vendorId,
+    const { errors } = await client.models.StaffSchedule.update({
+      visibleId: staffId,
       squareAccessToken: null,
       squareRefreshToken: null,
       squareMerchantId: null,
       squareLocationId: null,
-      squareApplicationId: null,
       squareOAuthStatus: 'disconnected',
       squareTokenExpiresAt: null,
       squareConnectedAt: null,
     } as any)
 
-    if (errors) return Response.json({ error: 'Failed to update vendor' }, { status: 500 })
+    if (errors) return Response.json({ error: 'Failed to update staff' }, { status: 500 })
     return Response.json({ success: true })
   } catch (error: any) {
     console.error('Square disconnect error:', error)

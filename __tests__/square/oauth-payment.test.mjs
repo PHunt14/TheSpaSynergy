@@ -6,13 +6,15 @@
  * - OAuth state encoding/decoding
  * - Webhook signature verification
  * - Webhook event processing + idempotency
- * - Vendor token update builders
- * - Vendor disconnect update builder
- * - Payment vendor validation
+ * - Vendor token update builders (legacy, still exported)
+ * - Staff token update builders
+ * - Vendor disconnect update builder (legacy, still exported)
+ * - Staff disconnect update builder
+ * - Payment validation (staff-level only)
  * - Token expiry detection
  *
  * Integration tests for:
- * - Payment route (POST /api/payment)
+ * - Payment route (POST /api/payment) — staff-level Square credentials
  */
 
 import { jest } from '@jest/globals'
@@ -24,6 +26,8 @@ import {
   verifyWebhookSignature,
   buildVendorTokenUpdate,
   buildVendorDisconnectUpdate,
+  buildStaffTokenUpdate,
+  buildStaffDisconnectUpdate,
   processPaymentEvent,
   validateVendorForPayment,
   isTokenExpiringSoon,
@@ -38,15 +42,6 @@ process.env.NEXT_PUBLIC_SQUARE_LOCATION_ID = 'LTEST123'
 process.env.NEXT_PUBLIC_SQUARE_ENVIRONMENT = 'sandbox'
 process.env.NEXT_PUBLIC_APP_URL = 'http://localhost:3000'
 process.env.SQUARE_WEBHOOK_SIGNATURE_KEY = 'test-webhook-key'
-
-// ── Helpers ───────────────────────────────────────────────────
-
-function makeWebhookSignature(body) {
-  const url = 'http://localhost:3000/api/webhooks/square'
-  const hmac = createHmac('sha256', 'test-webhook-key')
-  hmac.update(url + body)
-  return hmac.digest('base64')
-}
 
 // ═══════════════════════════════════════════════════════════════
 // UNIT TESTS
@@ -149,7 +144,7 @@ describe('verifyWebhookSignature', () => {
   })
 })
 
-// ─── Vendor Token Update Builder ──────────────────────────────
+// ─── Vendor Token Update Builder (legacy, still exported) ─────
 
 describe('buildVendorTokenUpdate', () => {
   test('builds correct update object from token result', () => {
@@ -174,34 +169,12 @@ describe('buildVendorTokenUpdate', () => {
   })
 
   test('returns null when accessToken is missing', () => {
-    const result = buildVendorTokenUpdate('vendor-1', {
-      accessToken: null,
-      refreshToken: 'ref',
-    }, 'LOC1', 'app-id')
+    const result = buildVendorTokenUpdate('vendor-1', { accessToken: null, refreshToken: 'ref' }, 'LOC1', 'app-id')
     expect(result).toBeNull()
-  })
-
-  test('handles missing refreshToken gracefully', () => {
-    const result = buildVendorTokenUpdate('vendor-1', {
-      accessToken: 'tok',
-    }, 'LOC1', 'app-id')
-    expect(result.squareRefreshToken).toBeNull()
-    expect(result.squareMerchantId).toBeNull()
-  })
-
-  test('generates default expiresAt when not provided', () => {
-    const result = buildVendorTokenUpdate('vendor-1', {
-      accessToken: 'tok',
-    }, 'LOC1', 'app-id')
-    const expiry = new Date(result.squareTokenExpiresAt).getTime()
-    const now = Date.now()
-    // Should be ~30 days from now
-    expect(expiry).toBeGreaterThan(now + 29 * 24 * 60 * 60 * 1000)
-    expect(expiry).toBeLessThan(now + 31 * 24 * 60 * 60 * 1000)
   })
 })
 
-// ─── Vendor Disconnect Update Builder ─────────────────────────
+// ─── Vendor Disconnect Update Builder (legacy, still exported) ─
 
 describe('buildVendorDisconnectUpdate', () => {
   test('clears all Square fields', () => {
@@ -213,6 +186,67 @@ describe('buildVendorDisconnectUpdate', () => {
       squareMerchantId: null,
       squareLocationId: null,
       squareApplicationId: null,
+      squareOAuthStatus: 'disconnected',
+      squareTokenExpiresAt: null,
+      squareConnectedAt: null,
+    })
+  })
+})
+
+// ─── Staff Token Update Builder ───────────────────────────────
+
+describe('buildStaffTokenUpdate', () => {
+  test('builds correct update object from token result', () => {
+    const result = buildStaffTokenUpdate('staff-makaila-abc1', {
+      accessToken: 'tok_staff',
+      refreshToken: 'ref_staff',
+      merchantId: 'merch-staff',
+      expiresAt: '2025-09-01T00:00:00Z',
+    }, 'SLOC1')
+
+    expect(result).toMatchObject({
+      visibleId: 'staff-makaila-abc1',
+      squareAccessToken: 'tok_staff',
+      squareRefreshToken: 'ref_staff',
+      squareMerchantId: 'merch-staff',
+      squareLocationId: 'SLOC1',
+      squareOAuthStatus: 'connected',
+      squareTokenExpiresAt: '2025-09-01T00:00:00Z',
+    })
+    expect(result.squareConnectedAt).toBeDefined()
+  })
+
+  test('returns null when accessToken is missing', () => {
+    const result = buildStaffTokenUpdate('staff-1', { accessToken: null }, 'SLOC1')
+    expect(result).toBeNull()
+  })
+
+  test('handles missing refreshToken gracefully', () => {
+    const result = buildStaffTokenUpdate('staff-1', { accessToken: 'tok' }, 'SLOC1')
+    expect(result.squareRefreshToken).toBeNull()
+    expect(result.squareMerchantId).toBeNull()
+  })
+
+  test('generates default expiresAt when not provided', () => {
+    const result = buildStaffTokenUpdate('staff-1', { accessToken: 'tok' }, 'SLOC1')
+    const expiry = new Date(result.squareTokenExpiresAt).getTime()
+    const now = Date.now()
+    expect(expiry).toBeGreaterThan(now + 29 * 24 * 60 * 60 * 1000)
+    expect(expiry).toBeLessThan(now + 31 * 24 * 60 * 60 * 1000)
+  })
+})
+
+// ─── Staff Disconnect Update Builder ──────────────────────────
+
+describe('buildStaffDisconnectUpdate', () => {
+  test('clears all Square fields', () => {
+    const result = buildStaffDisconnectUpdate('staff-1')
+    expect(result).toEqual({
+      visibleId: 'staff-1',
+      squareAccessToken: null,
+      squareRefreshToken: null,
+      squareMerchantId: null,
+      squareLocationId: null,
       squareOAuthStatus: 'disconnected',
       squareTokenExpiresAt: null,
       squareConnectedAt: null,
@@ -269,7 +303,7 @@ describe('processPaymentEvent', () => {
     const appointment = { appointmentId: 'appt-1', paymentStatus: null, status: 'pending' }
     const result = processPaymentEvent(event, appointment)
     expect(result.paymentStatus).toBe('PENDING')
-    expect(result.status).toBeUndefined() // status unchanged
+    expect(result.status).toBeUndefined()
   })
 
   test('handles missing amountMoney', () => {
@@ -282,42 +316,54 @@ describe('processPaymentEvent', () => {
   })
 })
 
-// ─── Payment Vendor Validation ────────────────────────────────
+// ─── Payment Validation (staff-level only) ────────────────────
 
 describe('validateVendorForPayment', () => {
-  test('returns error for null vendor', () => {
-    const result = validateVendorForPayment(null)
-    expect(result.error).toBe('Vendor not found')
-    expect(result.status).toBe(404)
+  test('returns error when staff has no Square token', () => {
+    const result = validateVendorForPayment(null, { squareAccessToken: null })
+    expect(result.error).toContain('configuration')
+    expect(result.status).toBe(400)
   })
 
-  test('returns error for vendor with OAuth error status', () => {
-    const result = validateVendorForPayment({
-      squareOAuthStatus: 'error',
+  test('returns error when staff is null', () => {
+    const result = validateVendorForPayment(null, null)
+    expect(result.error).toContain('configuration')
+    expect(result.status).toBe(400)
+  })
+
+  test('returns error when staff is undefined', () => {
+    const result = validateVendorForPayment(null)
+    expect(result.error).toContain('configuration')
+    expect(result.status).toBe(400)
+  })
+
+  test('returns error when staff has OAuth error status', () => {
+    const result = validateVendorForPayment(null, {
       squareAccessToken: 'expired-tok',
+      squareOAuthStatus: 'error',
     })
     expect(result.error).toContain('unavailable')
     expect(result.status).toBe(400)
   })
 
-  test('returns error for vendor without access token', () => {
-    const result = validateVendorForPayment({
-      squareOAuthStatus: 'disconnected',
-      squareAccessToken: null,
+  test('returns accessToken and locationId for connected staff', () => {
+    const result = validateVendorForPayment(null, {
+      squareAccessToken: 'staff-tok',
+      squareLocationId: 'SLOC-1',
+      squareOAuthStatus: 'connected',
     })
-    expect(result.error).toContain('configuration')
-    expect(result.status).toBe(500)
+    expect(result.accessToken).toBe('staff-tok')
+    expect(result.locationId).toBe('SLOC-1')
+    expect(result.error).toBeUndefined()
   })
 
-  test('returns accessToken and locationId for connected vendor', () => {
-    const result = validateVendorForPayment({
-      squareOAuthStatus: 'connected',
-      squareAccessToken: 'tok-123',
-      squareLocationId: 'LOC-1',
-    })
-    expect(result.accessToken).toBe('tok-123')
-    expect(result.locationId).toBe('LOC-1')
-    expect(result.error).toBeUndefined()
+  test('ignores vendor even if vendor has token — uses staff only', () => {
+    const result = validateVendorForPayment(
+      { squareAccessToken: 'vendor-tok', squareLocationId: 'VLOC-1' },
+      { squareAccessToken: 'staff-tok', squareLocationId: 'SLOC-1', squareOAuthStatus: 'connected' }
+    )
+    expect(result.accessToken).toBe('staff-tok')
+    expect(result.locationId).toBe('SLOC-1')
   })
 })
 
@@ -345,10 +391,14 @@ describe('isTokenExpiringSoon', () => {
 })
 
 // ═══════════════════════════════════════════════════════════════
-// INTEGRATION TESTS — Payment Route
+// INTEGRATION TESTS — Payment Route (staff-level Square auth)
 // ═══════════════════════════════════════════════════════════════
 
-// Mock dependencies before importing payment route
+const mockStaffDb = {}
+const mockStaffGet = jest.fn(async ({ visibleId }) => ({
+  data: mockStaffDb[visibleId] || null,
+  errors: null,
+}))
 const mockVendorDb = {}
 const mockVendorGet = jest.fn(async ({ vendorId }) => ({
   data: mockVendorDb[vendorId] || null,
@@ -371,6 +421,7 @@ jest.unstable_mockModule('aws-amplify/data', () => ({
   generateClient: jest.fn(() => ({
     models: {
       Vendor: { get: mockVendorGet, list: mockVendorList },
+      StaffSchedule: { get: mockStaffGet },
     },
   })),
 }))
@@ -379,16 +430,24 @@ jest.unstable_mockModule('aws-amplify', () => ({
 }))
 jest.unstable_mockModule('../../../amplify_outputs.json', () => ({}), { virtual: true })
 
+function seedStaff(overrides = {}) {
+  const s = {
+    visibleId: 'staff-1',
+    staffName: 'Test Staff',
+    vendorId: 'vendor-1',
+    squareAccessToken: null,
+    squareLocationId: null,
+    squareOAuthStatus: 'disconnected',
+    ...overrides,
+  }
+  mockStaffDb[s.visibleId] = s
+  return s
+}
+
 function seedVendor(overrides = {}) {
   const v = {
     vendorId: 'vendor-1',
     name: 'Test Vendor',
-    squareAccessToken: null,
-    squareRefreshToken: null,
-    squareMerchantId: null,
-    squareLocationId: null,
-    squareOAuthStatus: 'disconnected',
-    squareConnectedAt: null,
     isHouse: false,
     ...overrides,
   }
@@ -397,10 +456,11 @@ function seedVendor(overrides = {}) {
 }
 
 function resetDb() {
+  Object.keys(mockStaffDb).forEach((k) => delete mockStaffDb[k])
   Object.keys(mockVendorDb).forEach((k) => delete mockVendorDb[k])
 }
 
-describe('POST /api/payment (integration)', () => {
+describe('POST /api/payment (integration — staff-level auth)', () => {
   let handler
 
   beforeAll(async () => {
@@ -412,10 +472,10 @@ describe('POST /api/payment (integration)', () => {
     jest.clearAllMocks()
   })
 
-  test('uses vendor access token for payment', async () => {
-    seedVendor({
-      squareAccessToken: 'vendor-tok',
-      squareLocationId: 'VLOC1',
+  test('uses staff access token for payment', async () => {
+    seedStaff({
+      squareAccessToken: 'staff-tok',
+      squareLocationId: 'SLOC1',
       squareOAuthStatus: 'connected',
     })
     mockCreatePayment.mockResolvedValueOnce({
@@ -427,6 +487,7 @@ describe('POST /api/payment (integration)', () => {
         sourceId: 'cnon:card-nonce-ok',
         amount: 65,
         vendorId: 'vendor-1',
+        staffId: 'staff-1',
       }),
     }
     const res = await handler.POST(req)
@@ -436,10 +497,8 @@ describe('POST /api/payment (integration)', () => {
     expect(body.paymentId).toBe('pay-new')
   })
 
-  test('rejects payment when vendor not connected and no platform token', async () => {
-    seedVendor({ squareAccessToken: null })
-    const origToken = process.env.SQUARE_ACCESS_TOKEN
-    delete process.env.SQUARE_ACCESS_TOKEN
+  test('rejects payment when no staffId provided', async () => {
+    seedVendor({ squareAccessToken: 'vendor-tok', squareLocationId: 'VLOC1' })
 
     const req = {
       json: async () => ({
@@ -449,19 +508,33 @@ describe('POST /api/payment (integration)', () => {
       }),
     }
     const res = await handler.POST(req)
-    expect(res.status).toBe(500)
-
-    process.env.SQUARE_ACCESS_TOKEN = origToken
+    expect(res.status).toBe(400)
   })
 
-  test('rejects payment when vendor has OAuth error status', async () => {
-    seedVendor({ squareOAuthStatus: 'error', squareAccessToken: 'expired-tok' })
+  test('rejects payment when staff has no Square token', async () => {
+    seedStaff({ squareAccessToken: null })
 
     const req = {
       json: async () => ({
         sourceId: 'cnon:card-nonce-ok',
         amount: 65,
         vendorId: 'vendor-1',
+        staffId: 'staff-1',
+      }),
+    }
+    const res = await handler.POST(req)
+    expect(res.status).toBe(400)
+  })
+
+  test('rejects payment when staff has OAuth error status', async () => {
+    seedStaff({ squareAccessToken: 'expired-tok', squareOAuthStatus: 'error' })
+
+    const req = {
+      json: async () => ({
+        sourceId: 'cnon:card-nonce-ok',
+        amount: 65,
+        vendorId: 'vendor-1',
+        staffId: 'staff-1',
       }),
     }
     const res = await handler.POST(req)
@@ -476,12 +549,13 @@ describe('POST /api/payment (integration)', () => {
     expect(res.status).toBe(400)
   })
 
-  test('returns 404 for unknown vendor', async () => {
+  test('returns error when staff not found', async () => {
     const req = {
       json: async () => ({
         sourceId: 'cnon:card-nonce-ok',
         amount: 65,
-        vendorId: 'vendor-nonexistent',
+        vendorId: 'vendor-1',
+        staffId: 'staff-nonexistent',
       }),
     }
     const res = await handler.POST(req)
@@ -489,7 +563,7 @@ describe('POST /api/payment (integration)', () => {
   })
 
   test('returns error when Square API fails', async () => {
-    seedVendor({ squareAccessToken: 'vendor-tok', squareLocationId: 'VLOC1' })
+    seedStaff({ squareAccessToken: 'staff-tok', squareLocationId: 'SLOC1', squareOAuthStatus: 'connected' })
     mockCreatePayment.mockRejectedValueOnce(new Error('Card declined'))
 
     const req = {
@@ -497,6 +571,7 @@ describe('POST /api/payment (integration)', () => {
         sourceId: 'cnon:card-nonce-fail',
         amount: 65,
         vendorId: 'vendor-1',
+        staffId: 'staff-1',
       }),
     }
     const res = await handler.POST(req)

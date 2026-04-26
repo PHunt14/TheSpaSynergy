@@ -35,29 +35,18 @@ export async function POST(request) {
 }
 
 async function resolveSquareCredentials(dataClient, vendorId, staffId) {
-  // Try staff member's Square account first
-  if (staffId) {
-    const { data: staff } = await dataClient.models.StaffSchedule.get({ visibleId: staffId });
-    if (staff?.squareAccessToken && staff.squareOAuthStatus !== 'error') {
-      return { accessToken: staff.squareAccessToken, locationId: staff.squareLocationId };
-    }
-    if (staff?.squareOAuthStatus === 'error') {
-      console.warn(`Staff ${staffId} Square token in error state, falling back to vendor`);
-    }
+  if (!staffId) {
+    return { error: 'No staff assigned', details: 'Online payment requires an assigned staff member with Square connected', status: 400 };
   }
-
-  // Fall back to vendor's Square account
-  const { data: vendor } = await dataClient.models.Vendor.get({ vendorId });
-  if (!vendor) return { error: 'Vendor not found', status: 404 };
-  if (vendor.squareOAuthStatus === 'error') {
-    return { error: 'Payment unavailable', details: 'Square account needs to be reconnected', status: 400 };
+  const { data: staff } = await dataClient.models.StaffSchedule.get({ visibleId: staffId });
+  if (!staff) return { error: 'Staff not found', status: 404 };
+  if (staff.squareOAuthStatus === 'error') {
+    return { error: 'Payment unavailable', details: 'Staff Square account needs to be reconnected', status: 400 };
   }
-  const accessToken = vendor.squareAccessToken || process.env.SQUARE_ACCESS_TOKEN;
-  const locationId = vendor.squareLocationId;
-  if (!accessToken || !locationId) {
-    return { error: 'Payment configuration error', details: 'Square payment not configured', status: 500 };
+  if (!staff.squareAccessToken || !staff.squareLocationId) {
+    return { error: 'Payment configuration error', details: 'Staff member has not connected Square', status: 400 };
   }
-  return { accessToken, locationId };
+  return { accessToken: staff.squareAccessToken, locationId: staff.squareLocationId };
 }
 
 async function processSinglePayment(sourceId, amount, vendorId, staffId) {

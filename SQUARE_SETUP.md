@@ -1,14 +1,18 @@
 # Square Integration Setup
 
-## For Vendors: Connecting Your Square Account
+## For Staff & Owners: Connecting Your Square Account
 
-1. Log in to the Vendor Dashboard → Settings → Vendor Settings tab
-2. Click **"Connect with Square"**
+Square accounts are connected at the **individual staff level**, not the vendor level. This means each person who performs services connects their own Square account.
+
+1. Log in to the Vendor Dashboard → Settings → **My Settings** tab
+2. Under "Your Payment Account", click **"Connect with Square"**
 3. You'll be redirected to Square to authorize access
 4. After authorizing, you'll be redirected back to the dashboard
 5. Your connection status will show as "Connected"
 
-That's it — no credentials to copy/paste.
+This applies to owners too — owners connect their Square account through My Settings, just like any other staff member.
+
+Admins can see which staff members have connected Square on the **Staff** page (💳 badge on each staff card).
 
 ## For Platform Admin
 
@@ -72,7 +76,7 @@ After deploying, visit `/api/square/debug` in your browser. It will show which v
 
 ## How Payments Work
 
-- **Single vendor**: Payment goes to the vendor's Square account. If a vendor hasn't connected Square, only in-person payment is offered at checkout
+- **Single service**: Payment goes to the **assigned staff member's** Square account. If the staff member hasn't connected Square, only in-person payment is offered at checkout
 - **Bundle (multi-vendor)**: Payment is split via Square's `additionalRecipients` — house vendor is the primary recipient, other vendors receive their portions
 - **House fees**: Automatically deducted and kept by the house vendor. See `docs/HOUSE_FEE_IMPLEMENTATION.md`
 - **Apple Pay / Google Pay**: When available on the customer's device, express checkout buttons appear above the card form. Same payment flow — no additional backend setup required
@@ -102,16 +106,16 @@ Google Pay works automatically with the Square Web Payments SDK. The button appe
 
 ## OAuth Flow
 
-1. Vendor clicks "Connect with Square" → `GET /api/square/connect?vendorId=...`
+1. Staff clicks "Connect with Square" → `GET /api/square/connect?vendorId=...&staffId=...`
 2. Redirected to Square authorization page
-3. Vendor authorizes → Square redirects to `GET /api/square/callback?code=...&state=...`
+3. Staff authorizes → Square redirects to `GET /api/square/callback?code=...&state=...`
 4. Backend exchanges code for access + refresh tokens
-5. Tokens stored on vendor record, location auto-detected
+5. Tokens stored on the **StaffSchedule** record, location auto-detected
 6. Tokens auto-refresh before expiry (30-day lifecycle)
 
 ## Disconnecting
 
-Vendors can disconnect via Settings → Vendor Settings tab → "Disconnect Square". This revokes the OAuth token and clears stored credentials.
+Staff can disconnect via Settings → My Settings tab → "Disconnect Square". This revokes the OAuth token and clears stored credentials.
 
 ## Testing
 
@@ -142,7 +146,7 @@ With production credentials, use any of these approaches:
    - Prod: `https://www.thespasynergy.com/api/square/callback`
 5. **Deploy** — env var changes require a new build
 6. Verify at `/api/square/debug` that all vars show as "set"
-7. Test the OAuth flow: Dashboard → Settings → Vendor Settings tab → Connect with Square
+7. Test the OAuth flow: Dashboard → Settings → My Settings tab → Connect with Square
 
 ### Test Card (Sandbox Only)
 
@@ -152,9 +156,9 @@ With production credentials, use any of these approaches:
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/square/connect?vendorId=` | GET | Initiates OAuth flow |
-| `/api/square/callback` | GET | OAuth callback (handles token exchange) |
-| `/api/square/disconnect` | POST | Revokes token, clears vendor fields |
+| `/api/square/connect?vendorId=&staffId=` | GET | Initiates OAuth flow (staffId required) |
+| `/api/square/callback` | GET | OAuth callback (saves tokens to StaffSchedule) |
+| `/api/square/disconnect` | POST | Revokes token, clears staff Square fields |
 | `/api/webhooks/square` | POST | Square webhook receiver |
 | `/api/payment` | POST | Process payment |
 

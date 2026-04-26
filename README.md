@@ -49,7 +49,7 @@ Deployed via AWS Amplify with automatic CI/CD from Git. See `AMPLIFY_SETUP.md`.
 
 - Customers can browse vendors, view services, and book appointments through a multi-step flow
 - Customers can select multiple services and book them together
-- When a vendor's Square account is connected, customers can pay online at checkout
+- When the assigned staff member's Square account is connected, customers can pay online at checkout
 - Customers who don't pay online will pay in-person at the appointment
 - On booking, both the customer and vendor receive:
   - An **email** notification with appointment details
@@ -61,8 +61,8 @@ Deployed via AWS Amplify with automatic CI/CD from Git. See `AMPLIFY_SETUP.md`.
 
 - Accessible only with Cognito credentials (1-hour inactivity timeout)
 - **Role-based access**:
-  - **Owner**: full access including Square payment integration
-  - **Admin**: can manage all vendors and access Square integration
+  - **Owner**: full access
+  - **Admin**: can manage all vendors
   - **Vendor**: can only see their own data
 - A staff member for one vendor cannot see appointments or payment info for another vendor
 - Vendors can:
@@ -72,7 +72,7 @@ Deployed via AWS Amplify with automatic CI/CD from Git. See `AMPLIFY_SETUP.md`.
   - Assign which staff members can perform each service (based on staff logged in for that vendor, excluding admins)
   - Cancel, reschedule, and confirm appointments
   - Add and manage staff members
-  - Connect their Square account (Settings → Vendor Settings)
+  - Connect their Square account (Settings → My Settings)
   - Add social media links (Settings → Vendor Settings)
   - Update contact information (Settings → Vendor Settings)
 - Staff members can:

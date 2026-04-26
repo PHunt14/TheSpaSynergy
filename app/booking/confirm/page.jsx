@@ -277,8 +277,7 @@ function ConfirmPageContent() {
 
   const hasConsultation = allServiceDetails.some(s => s.requiresConsultation)
   const cardDisabled = allServiceDetails.some(s => s.cardPaymentDisabled)
-  const vendorSquareConnected = !!vendorDetails?.squareLocationId
-  const squareAvailable = staffSquareConnected || vendorSquareConnected
+  const squareAvailable = !!staffSquareConnected
   const requiresConfirmation = !!bundleId || hasConsultation
 
   return (
