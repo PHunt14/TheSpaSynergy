@@ -554,12 +554,14 @@ export default function Staff() {
                       <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>{s.staffName}</div>
                       <div style={{ fontSize: '0.9rem', color: 'var(--color-text-light)' }}>{getVendorName(s.vendorId)}</div>
                       {s.staffEmail && <div style={{ fontSize: '0.85rem', color: 'var(--color-text-light)' }}>{s.staffEmail}</div>}
-                      {(s.emailAlertsEnabled || s.smsAlertsEnabled) && (
-                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
-                          {s.emailAlertsEnabled && <span style={{ fontSize: '0.8rem', background: '#d4edda', color: '#155724', padding: '0.15rem 0.5rem', borderRadius: '10px' }}>📧 Email</span>}
-                          {s.smsAlertsEnabled && <span style={{ fontSize: '0.8rem', background: '#d4edda', color: '#155724', padding: '0.15rem 0.5rem', borderRadius: '10px' }}>📱 SMS</span>}
-                        </div>
-                      )}
+                      <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem', flexWrap: 'wrap' }}>
+                        {s.squareAccessToken
+                          ? <span style={{ fontSize: '0.8rem', background: '#d4edda', color: '#155724', padding: '0.15rem 0.5rem', borderRadius: '10px' }}>💳 Square</span>
+                          : <span style={{ fontSize: '0.8rem', background: '#f8d7da', color: '#721c24', padding: '0.15rem 0.5rem', borderRadius: '10px' }}>💳 No Square</span>
+                        }
+                        {s.emailAlertsEnabled && <span style={{ fontSize: '0.8rem', background: '#d4edda', color: '#155724', padding: '0.15rem 0.5rem', borderRadius: '10px' }}>📧 Email</span>}
+                        {s.smsAlertsEnabled && <span style={{ fontSize: '0.8rem', background: '#d4edda', color: '#155724', padding: '0.15rem 0.5rem', borderRadius: '10px' }}>📱 SMS</span>}
+                      </div>
                     </div>
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                       <button onClick={() => startEditSchedule(s)} style={btnStyle('#2196F3')}>Edit</button>
