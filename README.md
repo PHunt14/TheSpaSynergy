@@ -10,6 +10,7 @@ Luxury spa and wellness booking platform serving Fort Ritchie, MD and surroundin
 - **Authentication**: AWS Cognito
 - **Payments**: Square (multi-party splits)
 - **Notifications**: AWS SNS (SMS), AWS SES (email), Twilio (dev SMS)
+- **Analytics**: AWS Pinpoint, Google Analytics (GA4)
 - **Hosting**: AWS Amplify
 - **Node**: v22.16.0
 
@@ -109,6 +110,7 @@ Deployed via AWS Amplify with automatic CI/CD from Git. See `AMPLIFY_SETUP.md`.
 | `docs/TESTING.md` | Testing strategy, running tests, what's covered, and roadmap for future test coverage |
 | `docs/CUSTOMER_FEEDBACK_MARCH_2025.md` | March 2025 customer feedback: schedules, auto-routing, add-ons, sauna separation |
 | `docs/VISIT_NOTES_APRIL_2025.md` | April 2025 on-site visit notes: group bookings, intake forms, CRM, calendar invites |
+| `docs/GOOGLE_ANALYTICS.md` | Google Analytics (GA4) setup: property creation, env var, what's tracked |
 
 ---
 
