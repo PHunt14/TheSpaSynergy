@@ -71,7 +71,7 @@ export async function POST(request: Request) {
       bundleId: bundleId || undefined,
       dateTime,
       customer: JSON.stringify(customer),
-      status: status || 'pending',
+      status: status || 'pending-confirmation',
       paymentId,
       createdAt: new Date().toISOString(),
     } as any);
