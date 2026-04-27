@@ -171,7 +171,8 @@ function ConfirmPageContent() {
 
   const createAppointments = async (paymentId, pMethod) => {
     const dateTimeISO = buildDateTimeISO()
-    const status = 'pending-confirmation'
+    const isResource = allServiceDetails.every(s => s.resourceType === 'sauna')
+    const status = isResource ? 'confirmed' : 'pending-confirmation'
 
     const results = await Promise.all(
       allServiceDetails.map(svc =>
@@ -221,7 +222,7 @@ function ConfirmPageContent() {
         service: allServiceDetails.map(s => s.name).join(', '),
         payment: pMethod
       })
-      successUrl.set('confirmation', 'required')
+      if (requiresConfirmation) successUrl.set('confirmation', 'required')
       if (staffName) successUrl.set('staffName', staffName)
       if (people) successUrl.set('people', people)
       window.location.href = `/booking/success?${successUrl}`
@@ -278,7 +279,7 @@ function ConfirmPageContent() {
   const hasConsultation = allServiceDetails.some(s => s.requiresConsultation)
   const cardDisabled = allServiceDetails.some(s => s.cardPaymentDisabled)
   const squareAvailable = !!staffSquareConnected
-  const requiresConfirmation = true
+  const requiresConfirmation = !allServiceDetails.every(s => s.resourceType === 'sauna')
 
   return (
     <main>
