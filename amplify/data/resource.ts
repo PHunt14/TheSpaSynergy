@@ -141,6 +141,7 @@ const schema = a.schema({
       squareOAuthStatus: a.string().default('disconnected'),
       squareTokenExpiresAt: a.string(),
       squareConnectedAt: a.string(),
+      squareCatalogMappings: a.json(),
     })
     .identifier(['visibleId'])
     .secondaryIndexes((index) => [index('vendorId')])

@@ -20,6 +20,8 @@ export default function MySettings({ currentUser, showMessage }) {
   const [smsAlertsEnabled, setSmsAlertsEnabled] = useState(false)
   const [smsAlertPhone, setSmsAlertPhone] = useState('')
   const [saving, setSaving] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const [syncResult, setSyncResult] = useState(null)
 
   useEffect(() => {
     if (currentUser.email && currentUser.vendorId) {
@@ -104,6 +106,30 @@ export default function MySettings({ currentUser, showMessage }) {
     }
   }
 
+  const handleSyncCatalog = async () => {
+    if (!myStaffSchedule) return
+    setSyncing(true)
+    setSyncResult(null)
+    try {
+      const res = await fetch('/api/square/catalog-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ staffId: myStaffSchedule.visibleId })
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        showMessage('Error syncing: ' + (data.error || 'Unknown error'))
+        return
+      }
+      setSyncResult(data)
+      showMessage(`Synced ${data.synced} services to Square (${data.created} new, ${data.updated} updated)`)
+    } catch (error) {
+      showMessage('Error syncing services to Square')
+    } finally {
+      setSyncing(false)
+    }
+  }
+
   return (
     <div>
       <p style={{ color: 'var(--color-text-light)', marginBottom: '2rem' }}>
@@ -174,6 +200,22 @@ export default function MySettings({ currentUser, showMessage }) {
                 }}>
                   {connectingStaffSquare ? 'Disconnecting...' : 'Disconnect Square'}
                 </button>
+              </div>
+
+              {/* Sync Services to Square */}
+              <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid var(--color-border)' }}>
+                <h3 style={{ marginTop: 0, marginBottom: '0.5rem', fontSize: '1rem' }}>Sync Services to Square<Tooltip text="Pushes your assigned services into your Square catalog so charges show with service names and you can use them on your Square POS app." /></h3>
+                <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginBottom: '1rem' }}>
+                  Creates or updates your services in Square so payments show service names in your Square Dashboard and POS app.
+                </p>
+                <button onClick={handleSyncCatalog} disabled={syncing} className="cta" style={{ fontSize: '0.95rem' }}>
+                  {syncing ? 'Syncing...' : 'Sync Services to Square'}
+                </button>
+                {syncResult && (
+                  <p style={{ fontSize: '0.85rem', color: '#155724', marginTop: '0.75rem' }}>
+                    ✓ {syncResult.synced} services synced ({syncResult.created} new, {syncResult.updated} updated)
+                  </p>
+                )}
               </div>
             </div>
           ) : (

@@ -3,12 +3,13 @@ import { randomUUID } from 'crypto';
 import { generateClient } from 'aws-amplify/data';
 import config from '../../../amplify_outputs.json';
 import { Amplify } from 'aws-amplify';
+import { buildOrderLineItems } from '../../../lib/square/catalog.js';
 
 Amplify.configure(config, { ssr: true });
 
 export async function POST(request) {
   try {
-    const { sourceId, amount, vendorId, staffId, bundlePayments, appointmentId } = await request.json();
+    const { sourceId, amount, vendorId, staffId, bundlePayments, appointmentId, serviceIds, people } = await request.json();
 
     if (!sourceId || !amount) {
       return Response.json({ error: 'Missing payment details' }, { status: 400 });
@@ -16,7 +17,7 @@ export async function POST(request) {
 
     // Single vendor payment
     if (vendorId && !bundlePayments) {
-      return await processSinglePayment(sourceId, amount, vendorId, staffId);
+      return await processSinglePayment(sourceId, amount, vendorId, staffId, serviceIds, people);
     }
 
     // Multi-vendor bundle payment
@@ -49,7 +50,7 @@ async function resolveSquareCredentials(dataClient, vendorId, staffId) {
   return { accessToken: staff.squareAccessToken, locationId: staff.squareLocationId };
 }
 
-async function processSinglePayment(sourceId, amount, vendorId, staffId) {
+async function processSinglePayment(sourceId, amount, vendorId, staffId, serviceIds, people) {
   const dataClient = generateClient();
   const creds = await resolveSquareCredentials(dataClient, vendorId, staffId);
 
@@ -67,6 +68,27 @@ async function processSinglePayment(sourceId, amount, vendorId, staffId) {
   });
 
   try {
+    // Load service details for order line items
+    let orderId = undefined;
+    if (serviceIds?.length > 0) {
+      const serviceDetails = [];
+      for (const sid of serviceIds) {
+        const { data: svc } = await dataClient.models.Service.get({ serviceId: sid });
+        if (svc) serviceDetails.push(svc);
+      }
+      if (serviceDetails.length > 0) {
+        const lineItems = buildOrderLineItems(serviceDetails, people);
+        const { result: orderResult } = await client.ordersApi.createOrder({
+          order: {
+            locationId,
+            lineItems,
+          },
+          idempotencyKey: randomUUID(),
+        });
+        orderId = orderResult.order.id;
+      }
+    }
+
     const { result } = await client.paymentsApi.createPayment({
       sourceId,
       idempotencyKey: randomUUID(),
@@ -74,7 +96,8 @@ async function processSinglePayment(sourceId, amount, vendorId, staffId) {
         amount: Math.round(amount * 100),
         currency: 'USD'
       },
-      locationId
+      locationId,
+      orderId,
     });
 
     return Response.json({

@@ -99,6 +99,7 @@ Deployed via AWS Amplify with automatic CI/CD from Git. See `AMPLIFY_SETUP.md`.
 | `AMPLIFY_SETUP.md` | AWS Amplify deployment and environment setup |
 | `SQUARE_SETUP.md` | Square integration quick-start for vendors and admins |
 | `docs/SQUARE_MULTI_PARTY_PAYMENTS.md` | Technical details: payment API, multi-vendor splits |
+| `docs/SQUARE_CATALOG_SYNC.md` | Square Catalog sync: service push, order line items, OAuth scopes |
 | `docs/HOUSE_FEE_IMPLEMENTATION.md` | House fee business model, payment flow examples, configuration |
 | `docs/NOTIFICATIONS_SETUP.md` | SMS + email setup: providers, testing, production checklist |
 | `docs/REFUND_STRATEGY.md` | Refund logic, house fee reversal, vendor ledger design, phased build plan |
@@ -198,7 +199,7 @@ The following bounded contexts are candidates for extraction from the Next.js mo
 
 - [ ] **Booking flow redesign**: book → pick day/week → select services (instead of vendor-first)
 - [ ] **Multi-service week requests**: select multiple services and request availability for a given week
-- [ ] **Square Catalog sync**: link services to Square catalog items for automatic pricing/reporting
+- [ ] **Square Catalog sync**: ~~link services to Square catalog items for automatic pricing/reporting~~ ✅ Implemented — staff can sync from My Settings. Future: auto-sync on service create/edit
 - [ ] **Appointment export**: vendors can text themselves a link to the day's appointments
 - [ ] **Appointment reminders**: SMS/email reminders before appointments
 - [ ] **Calendar sync**: Google/Apple calendar integration

@@ -80,6 +80,24 @@ After deploying, visit `/api/square/debug` in your browser. It will show which v
 - **Bundle (multi-vendor)**: Payment is split via Square's `additionalRecipients` — house vendor is the primary recipient, other vendors receive their portions
 - **House fees**: Automatically deducted and kept by the house vendor. See `docs/HOUSE_FEE_IMPLEMENTATION.md`
 - **Apple Pay / Google Pay**: When available on the customer's device, express checkout buttons appear above the card form. Same payment flow — no additional backend setup required
+- **Order line items**: When services have been synced to Square (see below), payments include an Order with named line items. This means charges show up in the vendor's Square Dashboard with service names instead of generic amounts
+
+### Square Catalog Sync
+
+Each staff member can sync their assigned services to their Square catalog from **Dashboard → Settings → My Settings**. This:
+
+- Creates items in their Square catalog matching the services they perform
+- Maps service categories (Relaxation, Beauty, etc.) to Square catalog categories
+- Makes charges show up with service names in their Square Dashboard and reporting
+- Allows them to use the same services on their Square POS app (phone/tablet) for in-person payments
+
+**How it works:**
+1. Staff connects their Square account (My Settings → Connect with Square)
+2. Staff clicks **"Sync Services to Square"** (appears after connecting)
+3. All active services assigned to that staff member are created/updated in their Square catalog
+4. On subsequent syncs, existing items are updated (name, price, duration) rather than duplicated
+
+**Note:** Staff who connected Square before the catalog sync feature was added will need to **disconnect and reconnect** their Square account to grant the new `ITEMS_WRITE` and `ITEMS_READ` permissions.
 
 ### Apple Pay & Google Pay Setup
 
@@ -159,10 +177,12 @@ With production credentials, use any of these approaches:
 | `/api/square/connect?vendorId=&staffId=` | GET | Initiates OAuth flow (staffId required) |
 | `/api/square/callback` | GET | OAuth callback (saves tokens to StaffSchedule) |
 | `/api/square/disconnect` | POST | Revokes token, clears staff Square fields |
+| `/api/square/catalog-sync` | POST | Syncs staff's assigned services to their Square catalog |
 | `/api/webhooks/square` | POST | Square webhook receiver |
-| `/api/payment` | POST | Process payment |
+| `/api/payment` | POST | Process payment (creates Order with line items if services synced) |
 
 ## Further Reading
 
 - **Payment splitting technical details**: `docs/SQUARE_MULTI_PARTY_PAYMENTS.md`
 - **House fee configuration & examples**: `docs/HOUSE_FEE_IMPLEMENTATION.md`
+- **Square Catalog sync technical details**: `docs/SQUARE_CATALOG_SYNC.md`
