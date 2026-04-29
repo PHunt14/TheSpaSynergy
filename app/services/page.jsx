@@ -34,6 +34,34 @@ function FadeIn({ children, style }) {
   )
 }
 
+function ServiceTile({ service, isSelected, addons, onToggle }) {
+  return (
+    <div>
+      <div onClick={() => onToggle(service)} style={{
+        padding: '0.75rem',
+        borderRadius: addons.length > 0 ? '8px 8px 0 0' : '8px',
+        cursor: 'pointer',
+        background: isSelected ? 'var(--color-primary)' : 'white',
+        color: isSelected ? 'white' : 'var(--color-text)',
+        border: isSelected ? '2px solid var(--color-primary-dark)' : '2px solid transparent',
+        transition: '0.2s ease',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <strong>{service.name}</strong>
+          <span style={{ fontSize: '1.2rem', opacity: 0.7 }}>{isSelected ? '✓' : '+'}</span>
+        </div>
+        {service.description && <div style={{ fontSize: '1rem', opacity: 0.9, margin: '0.25rem 0' }}>{service.description}</div>}
+        <div style={{ fontSize: '1.05rem', opacity: 0.8 }}>{service.duration} min • ${service.price}</div>
+      </div>
+      {addons.length > 0 && (
+        <div style={{ background: '#f9f5f0', padding: '0.5rem 0.75rem', borderTop: '1px dashed var(--color-border)', fontSize: '0.85rem', color: 'var(--color-text-light)' }}>
+          Add-ons: {addons.map(a => `${a.name} (+$${a.price})`).join(', ')}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function ServicesPage() {
   const router = useRouter()
   const [vendors, setVendors] = useState([])
@@ -202,7 +230,7 @@ export default function ServicesPage() {
                       )}
                     </FadeIn>
                   )
-                })}
+                })}}
               </div>
             ) : (
               <div className="grid-3-cols" style={{
@@ -230,42 +258,7 @@ export default function ServicesPage() {
                         const isSelected = selectedServices.find(s => s.serviceId === service.serviceId)
                         const addons = getAddons(service.serviceId)
                         return (
-                          <div key={service.serviceId}>
-                            <div
-                              onClick={() => toggleService(service)}
-                              style={{
-                                padding: '0.75rem',
-                                borderRadius: addons.length > 0 ? '8px 8px 0 0' : '8px',
-                                cursor: 'pointer',
-                                background: isSelected ? 'var(--color-primary)' : 'white',
-                                color: isSelected ? 'white' : 'var(--color-text)',
-                                border: isSelected ? '2px solid var(--color-primary-dark)' : '2px solid transparent',
-                                transition: '0.2s ease',
-                              }}
-                            >
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <strong>{service.name}</strong>
-                                <span style={{ fontSize: '1.2rem', opacity: 0.7 }}>{isSelected ? '✓' : '+'}</span>
-                              </div>
-                              {service.description && (
-                                <div style={{ fontSize: '1rem', opacity: 0.9, margin: '0.25rem 0' }}>
-                                  {service.description}
-                                </div>
-                              )}
-                              <div style={{ fontSize: '1.05rem', opacity: 0.8 }}>
-                                {service.duration} min • ${service.price}
-                              </div>
-                            </div>
-                            {addons.length > 0 && (
-                              <div style={{
-                                background: '#f9f5f0', borderRadius: '0 0 8px 8px',
-                                padding: '0.5rem 0.75rem', borderTop: '1px dashed var(--color-border)',
-                                fontSize: '0.85rem', color: 'var(--color-text-light)'
-                              }}>
-                                Add-ons: {addons.map(a => `${a.name} (+$${a.price})`).join(', ')}
-                              </div>
-                            )}
-                          </div>
+                          <ServiceTile key={service.serviceId} service={service} isSelected={isSelected} addons={addons} onToggle={toggleService} />
                         )
                       })}
                     </div>

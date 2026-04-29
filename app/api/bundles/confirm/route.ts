@@ -11,103 +11,93 @@ function formatPhone(phone: string): string {
   return phone.startsWith('+') ? phone : `+1${phone.replace(/\D/g, '')}`;
 }
 
+function parseJsonField(value: any): any {
+  return typeof value === 'string' ? JSON.parse(value) : value || {};
+}
+
+async function cancelBundle(bundleId: string, vendorId: string, bundle: any, confirmations: any, customer: any) {
+  if (bundle.appointmentIds) {
+    await Promise.all(
+      bundle.appointmentIds.map(id =>
+        client.models.Appointment.update({ appointmentId: id as any, status: 'cancelled' as any })
+      )
+    );
+  }
+
+  const updatedConfirmations = Object.fromEntries(
+    Object.keys(confirmations).map(v => [v, v === vendorId ? 'cancelled' : confirmations[v]])
+  );
+
+  await client.models.Bundle.update({
+    bundleId: bundleId as any,
+    status: 'cancelled' as any,
+    vendorConfirmations: JSON.stringify(updatedConfirmations) as any,
+  });
+
+  if (customer?.phone && customer?.smsOptIn) {
+    snsClient.send(new PublishCommand({
+      PhoneNumber: formatPhone(customer.phone),
+      Message: `Bundle Cancelled\n\nYour ${bundle.name} booking has been cancelled by a vendor.\n\nThe Spa Synergy\nReply STOP to opt out`,
+    })).catch(err => console.error('SMS failed:', err));
+  }
+}
+
+async function confirmVendorPortion(bundleId: string, vendorId: string, bundle: any, confirmations: any, customer: any) {
+  confirmations[vendorId] = 'confirmed';
+  const allConfirmed = Object.values(confirmations).every(s => s === 'confirmed');
+  const newStatus = allConfirmed ? 'confirmed' : 'pending-confirmation';
+
+  await client.models.Bundle.update({
+    bundleId: bundleId as any,
+    status: newStatus as any,
+    vendorConfirmations: JSON.stringify(confirmations) as any,
+  });
+
+  if (bundle.appointmentIds) {
+    const appointments = await Promise.all(
+      bundle.appointmentIds.map(id => client.models.Appointment.get({ appointmentId: id }))
+    );
+    await Promise.all(
+      appointments
+        .filter(a => a.data?.vendorId === vendorId)
+        .map(a => client.models.Appointment.update({ appointmentId: a.data!.appointmentId as any, status: 'confirmed' as any }))
+    );
+  }
+
+  if (allConfirmed && customer?.phone && customer?.smsOptIn) {
+    const formattedDateTime = bundle.dateTime
+      ? new Date(bundle.dateTime).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
+      : '';
+    snsClient.send(new PublishCommand({
+      PhoneNumber: formatPhone(customer.phone),
+      Message: `Bundle Confirmed!\n\n${bundle.name}\nDate/Time: ${formattedDateTime}\n\nAll vendors have confirmed your appointment.\n\nThe Spa Synergy\nReply STOP to opt out`,
+    })).catch(err => console.error('SMS failed:', err));
+  }
+
+  return newStatus;
+}
+
 export async function POST(request: Request) {
   try {
     const { bundleId, vendorId, action } = await request.json();
-
     if (!bundleId || !vendorId || !action) {
       return Response.json({ error: 'bundleId, vendorId, and action required' }, { status: 400 });
     }
 
     const { data: bundle } = await client.models.Bundle.get({ bundleId });
-    if (!bundle || !bundle.status) {
-      return Response.json({ error: 'Bundle booking not found' }, { status: 404 });
-    }
+    if (!bundle || !bundle.status) return Response.json({ error: 'Bundle booking not found' }, { status: 404 });
 
-    const confirmations = typeof bundle.vendorConfirmations === 'string'
-      ? JSON.parse(bundle.vendorConfirmations)
-      : bundle.vendorConfirmations || {};
+    const confirmations = parseJsonField(bundle.vendorConfirmations);
+    if (!(vendorId in confirmations)) return Response.json({ error: 'Vendor not part of this bundle' }, { status: 400 });
 
-    if (!(vendorId in confirmations)) {
-      return Response.json({ error: 'Vendor not part of this bundle' }, { status: 400 });
-    }
-
-    const customer = typeof bundle.customer === 'string'
-      ? JSON.parse(bundle.customer)
-      : bundle.customer;
+    const customer = parseJsonField(bundle.customer);
 
     if (action === 'cancel') {
-      // Cancel all appointments in the bundle
-      if (bundle.appointmentIds) {
-        await Promise.all(
-          bundle.appointmentIds.map(id =>
-            client.models.Appointment.update({ appointmentId: id as any, status: 'cancelled' as any })
-          )
-        );
-      }
-
-      await client.models.Bundle.update({
-        bundleId: bundleId as any,
-        status: 'cancelled' as any,
-        vendorConfirmations: JSON.stringify(
-          Object.fromEntries(Object.keys(confirmations).map(v => [v, v === vendorId ? 'cancelled' : confirmations[v]]))
-        ) as any,
-      });
-
-      // Notify customer (only if opted in)
-      if (customer?.phone && customer?.smsOptIn) {
-        snsClient.send(new PublishCommand({
-          PhoneNumber: formatPhone(customer.phone),
-          Message: `Bundle Cancelled\n\nYour ${bundle.name} booking has been cancelled by a vendor.\n\nThe Spa Synergy\nReply STOP to opt out`,
-        })).catch(err => console.error('SMS failed:', err));
-      }
-
+      await cancelBundle(bundleId, vendorId, bundle, confirmations, customer);
       return Response.json({ success: true, bundleStatus: 'cancelled' });
     }
 
-    // Confirm this vendor's portion
-    confirmations[vendorId] = 'confirmed';
-
-    const allConfirmed = Object.values(confirmations).every(s => s === 'confirmed');
-    const newStatus = allConfirmed ? 'confirmed' : 'pending-confirmation';
-
-    // Update bundle
-    await client.models.Bundle.update({
-      bundleId: bundleId as any,
-      status: newStatus as any,
-      vendorConfirmations: JSON.stringify(confirmations) as any,
-    });
-
-    // Confirm this vendor's appointments
-    if (bundle.appointmentIds) {
-      const appointments = await Promise.all(
-        bundle.appointmentIds.map(id => client.models.Appointment.get({ appointmentId: id }))
-      );
-      await Promise.all(
-        appointments
-          .filter(a => a.data?.vendorId === vendorId)
-          .map(a => client.models.Appointment.update({
-            appointmentId: a.data!.appointmentId as any,
-            status: 'confirmed' as any,
-          }))
-      );
-    }
-
-    // If fully confirmed, notify customer (only if opted in)
-    if (allConfirmed && customer?.phone && customer?.smsOptIn) {
-      const formattedDateTime = bundle.dateTime
-        ? new Date(bundle.dateTime).toLocaleString('en-US', {
-            month: 'short', day: 'numeric', year: 'numeric',
-            hour: 'numeric', minute: '2-digit', hour12: true
-          })
-        : '';
-
-      snsClient.send(new PublishCommand({
-        PhoneNumber: formatPhone(customer.phone),
-        Message: `Bundle Confirmed!\n\n${bundle.name}\nDate/Time: ${formattedDateTime}\n\nAll vendors have confirmed your appointment.\n\nThe Spa Synergy\nReply STOP to opt out`,
-      })).catch(err => console.error('SMS failed:', err));
-    }
-
+    const newStatus = await confirmVendorPortion(bundleId, vendorId, bundle, confirmations, customer);
     return Response.json({ success: true, bundleStatus: newStatus });
   } catch (error) {
     console.error('Bundle confirm error:', error);

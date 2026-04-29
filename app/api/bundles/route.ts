@@ -41,29 +41,18 @@ export async function POST(request: Request) {
   }
 }
 
+const BUNDLE_FIELDS = ['name', 'description', 'serviceIds', 'vendorIds', 'price', 'discountPercent',
+  'isActive', 'minPeople', 'maxPeople', 'allowedDays', 'addOns', 'contactOnly', 'status', 'appointmentIds', 'dateTime']
+
 export async function PATCH(request: Request) {
   try {
     const body = await request.json()
-    const updateData: any = {
-      bundleId: body.bundleId as any,
+    const updateData: any = { bundleId: body.bundleId as any }
+    for (const field of BUNDLE_FIELDS) {
+      if (body[field] !== undefined) updateData[field] = body[field]
     }
-    if (body.name !== undefined) updateData.name = body.name
-    if (body.description !== undefined) updateData.description = body.description
-    if (body.serviceIds !== undefined) updateData.serviceIds = body.serviceIds
-    if (body.vendorIds !== undefined) updateData.vendorIds = body.vendorIds
-    if (body.price !== undefined) updateData.price = body.price
-    if (body.discountPercent !== undefined) updateData.discountPercent = body.discountPercent
-    if (body.isActive !== undefined) updateData.isActive = body.isActive
-    if (body.minPeople !== undefined) updateData.minPeople = body.minPeople
-    if (body.maxPeople !== undefined) updateData.maxPeople = body.maxPeople
-    if (body.allowedDays !== undefined) updateData.allowedDays = body.allowedDays
-    if (body.addOns !== undefined) updateData.addOns = body.addOns
-    if (body.contactOnly !== undefined) updateData.contactOnly = body.contactOnly
-    if (body.status !== undefined) updateData.status = body.status
     if (body.vendorConfirmations !== undefined) updateData.vendorConfirmations = JSON.stringify(body.vendorConfirmations)
-    if (body.appointmentIds !== undefined) updateData.appointmentIds = body.appointmentIds
     if (body.customer !== undefined) updateData.customer = JSON.stringify(body.customer)
-    if (body.dateTime !== undefined) updateData.dateTime = body.dateTime
     
     const { data: bundle } = await client.models.Bundle.update(updateData)
     return Response.json({ bundle })

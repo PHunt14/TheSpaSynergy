@@ -70,33 +70,43 @@ export async function GET(request: Request) {
       filter: { vendorId: { eq: vendorId }, dateTime: { beginsWith: datePrefix } }
     });
 
-    const availableDates: string[] = [];
-
-    for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
-      if (d < minDate) continue;
-
-      const dateStr = d.toISOString().split('T')[0];
-      const dayOfWeek = DAY_NAMES[d.getDay()];
-
-      const dayHours = getDayHoursSync(vendor, service, dayOfWeek, d, staffList || [], workingHours, saunaHours, allowedStaffIds);
-      if (!dayHours?.start) continue;
-
-      const staff = !isSauna ? resolveStaffSync(staffList || [], dayOfWeek, d, allowedStaffIds) : null;
-
-      const dayAppointments = (monthAppointments || []).filter(apt => {
-        if (apt.status === 'cancelled') return false;
-        if (!apt.dateTime.startsWith(dateStr)) return false;
-        return true;
-      });
-
-      if (hasAnySlot(dayHours.start, dayHours.end, service.duration, vendor.bufferMinutes || 15, dayAppointments, dateStr, d, staff)) {
-        availableDates.push(dateStr);
-      }
-    }
+    const availableDates = buildAvailableDates(
+      firstDay, lastDay, minDate, isSauna, vendor, service,
+      staffList || [], workingHours, saunaHours, allowedStaffIds,
+      monthAppointments || []
+    );
 
     return Response.json({ availableDates });
   } catch (error) {
     console.error('Error fetching available dates:', error);
     return Response.json({ error: 'Failed to fetch available dates' }, { status: 500 });
   }
+}
+
+function buildAvailableDates(
+  firstDay: Date, lastDay: Date, minDate: Date, isSauna: boolean,
+  vendor: any, service: any, staffList: any[], workingHours: any,
+  saunaHours: any, allowedStaffIds: string[] | null, monthAppointments: any[]
+): string[] {
+  const availableDates: string[] = [];
+
+  for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
+    if (d < minDate) continue;
+    const dateStr = d.toISOString().split('T')[0];
+    const dayOfWeek = DAY_NAMES[d.getDay()];
+
+    const dayHours = getDayHoursSync(vendor, service, dayOfWeek, d, staffList, workingHours, saunaHours, allowedStaffIds);
+    if (!dayHours?.start) continue;
+
+    const staff = !isSauna ? resolveStaffSync(staffList, dayOfWeek, d, allowedStaffIds) : null;
+    const dayAppointments = monthAppointments.filter(apt =>
+      apt.status !== 'cancelled' && apt.dateTime.startsWith(dateStr)
+    );
+
+    if (hasAnySlot(dayHours.start, dayHours.end, service.duration, vendor.bufferMinutes || 15, dayAppointments, dateStr, d, staff)) {
+      availableDates.push(dateStr);
+    }
+  }
+
+  return availableDates;
 }
