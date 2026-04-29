@@ -3,7 +3,7 @@ import { generateServerClientUsingCookies } from '@aws-amplify/adapter-nextjs/da
 import { cookies } from 'next/headers';
 import type { Schema } from '../../../../amplify/data/resource';
 import config from '../../../../amplify_outputs.json' with { type: 'json' };
-import { getStaffServices, groupByCategory, buildCategoryObject, buildItemObject, parseSyncResponse } from '../../../lib/square/catalog.js';
+import { getStaffServices, groupByCategory, buildCategoryObject, buildItemObject, parseSyncResponse } from '@/lib/square/catalog.js';
 import { randomUUID } from 'crypto';
 
 const dbClient = generateServerClientUsingCookies<Schema>({
@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     }
 
     const { data: allServices } = await dbClient.models.Service.list({
-      filter: { vendorId: { eq: staff.vendorId }, isActive: { eq: true } },
+      filter: { vendorId: { eq: staff.vendorId }, isActive: { eq: 'true' } } as any,
     });
 
     const services = getStaffServices(allServices || [], staff.visibleId);
