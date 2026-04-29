@@ -99,7 +99,7 @@ INLINE_POLICY='{
     {
       "Effect": "Allow",
       "Action": "appsync:ListApiKeys",
-      "Resource": "arn:aws:appsync:'"$REGION"':'"$ACCOUNT_ID"':apis/'"$APPSYNC_API_ID"'/*"
+      "Resource": "arn:aws:appsync:'"$REGION"':'"$ACCOUNT_ID"':apis/'"$APPSYNC_API_ID"'"
     },
     {
       "Effect": "Allow",
@@ -126,9 +126,9 @@ echo "2/4 Creating Lambda function..."
 # Package the function
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 TEMP_ZIP=$(mktemp /tmp/api-key-monitor-XXXXXX.zip)
-cd "$SCRIPT_DIR/api-key-monitor"
-zip -j "$TEMP_ZIP" index.js > /dev/null
-cd - > /dev/null
+rm -f "$TEMP_ZIP"
+powershell -Command "Compress-Archive -Path '$SCRIPT_DIR/api-key-monitor/index.js' -DestinationPath '$TEMP_ZIP' -Force" 2>/dev/null || \
+  (cd "$SCRIPT_DIR/api-key-monitor" && zip -j "$TEMP_ZIP" index.js > /dev/null && cd - > /dev/null)
 
 # Create or update
 aws lambda create-function \
