@@ -130,10 +130,11 @@ After the `main` branch deploys and the prod backend is created:
 
 ### API Key Rotation
 
-The AppSync API key expires every 30 days (`apiKeyAuthorizationMode: { expiresInDays: 30 }`). If it expires, the entire public site breaks (browsing, booking, everything).
+The AppSync API key expires every 365 days (`apiKeyAuthorizationMode: { expiresInDays: 365 }`). If it expires, the entire public site breaks (browsing, booking, everything). A redeploy in Amplify Console regenerates the key with a fresh 365-day window.
 
-- [ ] Set a recurring reminder to rotate the API key before expiry
-- [ ] Consider extending `expiresInDays` in `amplify/data/resource.ts` or setting up auto-rotation
+- [ ] Run `scripts/infra/setup-api-key-monitor.sh` to deploy the expiration monitor
+- The monitor checks daily and alerts you 30 days before expiry via email + SMS
+- When the alert fires, just redeploy (push a commit or click "Redeploy" in Amplify Console)
 
 ### Ongoing Maintenance
 
