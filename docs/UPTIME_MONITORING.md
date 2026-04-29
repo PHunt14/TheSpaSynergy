@@ -119,3 +119,32 @@ The health check ID is printed by the setup script and can also be found in the 
 | False alarms | Alarm requires 2 consecutive failures — transient blips won't trigger. If still noisy, increase `--evaluation-periods` to 3 |
 | Dashboard shows no data | Health check metrics take ~5 minutes to start appearing after creation |
 | "Access denied" on setup | Ensure IAM user/role has `route53:*`, `cloudwatch:*`, `sns:*` permissions |
+
+## AppSync API Key Expiration Monitor
+
+The AppSync API key expires after 365 days. If it expires, the entire public site breaks (no data loads). A separate Lambda runs daily to check the key's expiration and alert you 30 days before it expires.
+
+### How It Works
+
+1. A Lambda function runs daily at 9:00 AM ET via EventBridge
+2. It calls `appsync:ListApiKeys` to get the active key's expiration timestamp
+3. It publishes a `SpaSynergy/ApiKeyDaysUntilExpiry` metric to CloudWatch
+4. A CloudWatch alarm fires when the metric drops to ≤30 days
+5. The alarm sends email + SMS via the same SNS topic as uptime alerts
+
+### Setup
+
+```bash
+chmod +x scripts/infra/setup-api-key-monitor.sh
+./scripts/infra/setup-api-key-monitor.sh
+```
+
+The script auto-detects your AppSync API ID. If it can't find it, it will tell you how to provide it manually.
+
+### When the Alarm Fires
+
+Just **redeploy in Amplify Console** (or push any commit). The deploy regenerates the API key with a fresh 365-day expiration. No code changes needed.
+
+### Cost
+
+$0.00/month — the Lambda runs once per day, well within the free tier (1M requests/month).
