@@ -609,6 +609,10 @@ html, body {
   opacity: 0.4;
 }
 
+.spa-datepicker .react-datepicker__day--disabled.unavailable-day {
+  text-decoration: line-through;
+}
+
 .spa-datepicker .react-datepicker__navigation {
   top: 1rem;
 }

@@ -21,6 +21,8 @@ function TimePageContent() {
   const [assignedStaff, setAssignedStaff] = useState(null)
   const [bookingBlocked, setBookingBlocked] = useState(false)
   const [disabledUntil, setDisabledUntil] = useState(null)
+  const [availableDates, setAvailableDates] = useState(null)
+  const [loadingDates, setLoadingDates] = useState(false)
 
   useEffect(() => {
     if (!service || !vendor) return
@@ -41,6 +43,36 @@ function TimePageContent() {
         setVendorInfo(vnd)
       })
   }, [service, vendor])
+
+  const fetchAvailableDates = (date) => {
+    if (!vendor || !service) return
+    const month = date.getMonth() + 1
+    const year = date.getFullYear()
+    setLoadingDates(true)
+    fetch(`/api/available-dates?vendorId=${vendor}&serviceId=${service}&month=${month}&year=${year}`)
+      .then(res => res.json())
+      .then(data => {
+        setAvailableDates(new Set(data.availableDates || []))
+        setLoadingDates(false)
+      })
+      .catch(() => setLoadingDates(false))
+  }
+
+  useEffect(() => {
+    if (vendor && service && isBookingEnabled) fetchAvailableDates(selectedDate)
+  }, [vendor, service])
+
+  const isDateAvailable = (date) => {
+    if (!availableDates) return true
+    const dateStr = date.toISOString().split('T')[0]
+    return availableDates.has(dateStr)
+  }
+
+  const getDayClassName = (date) => {
+    if (!availableDates) return ''
+    const dateStr = date.toISOString().split('T')[0]
+    return availableDates.has(dateStr) ? '' : 'unavailable-day'
+  }
 
   useEffect(() => {
     if (!vendor || !service || !selectedDate || !isBookingEnabled) return
@@ -105,7 +137,10 @@ function TimePageContent() {
           <DatePicker
             selected={selectedDate}
             onChange={setSelectedDate}
+            onMonthChange={fetchAvailableDates}
             minDate={serviceInfo?.resourceType === 'sauna' ? new Date() : new Date(Date.now() + 86400000)}
+            filterDate={isDateAvailable}
+            dayClassName={getDayClassName}
             inline
           />
         </div>

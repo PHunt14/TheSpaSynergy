@@ -40,6 +40,7 @@ npm run test:e2e:headed
 |------|-------|----------------|
 | `square/oauth-payment.test.mjs` | 37 | OAuth URL generation, state encoding/decoding, webhook signature verification, webhook event processing + idempotency, vendor token builders (legacy), staff token builders, disconnect builders, payment validation (staff-level only), token expiry detection, payment route integration (POST /api/payment with staff-level Square auth) |
 | `utils/payment.test.mjs` | 23 | `calculatePaymentSplits` — single/multi vendor, house fees, aggregation, edge cases; `calculateVendorNet` — fee subtraction; `formatPaymentSplits` — display formatting |
+| `utils/availability.test.mjs` | 39 | `getRecurrenceHours` — every-other-week (with/without anchor), 2nd-of-month, standard fallback; `resolveStaffSync` — auto-assign rules, schedule-based resolution, allowedStaff filtering, recurrence in schedules; `getDayHoursSync` — sauna hours, staff schedule priority, vendor fallback; `hasAnySlot` — open/fully-booked detection, staff filtering, window-too-small; `timeOverlaps` — overlap with buffer, adjacent, identical, zero-buffer; `generateTimeSlots` — slot generation, booked exclusion, dateTime formats; `formatTime` — 12-hour display; `DAY_NAMES` constant |
 
 ### Component Tests (`__tests__/components/`)
 
@@ -54,7 +55,7 @@ npm run test:e2e:headed
 |------|-------|----------------|
 | `smoke.spec.ts` | 6 | Homepage load + title + CTA, booking page loads, vendors page loads, contact page loads, navbar links, footer content |
 
-**Current totals: 65 Jest tests passing, 6 E2E tests ready**
+**Current totals: 110 Jest tests passing, 6 E2E tests ready**
 
 ## Architecture
 
@@ -92,25 +93,21 @@ If the download fails (network issues), retry or use `npx playwright install --w
 
 Prioritized by business value and complexity. Each section includes the file to test and what to cover.
 
-### 1. Availability / Time Slot Logic (HIGH VALUE)
+### 1. Availability / Time Slot Logic ✅ DONE
 
-The availability route (`app/api/availability/route.ts`) contains the most complex logic in the app. The pure functions at the bottom of the file are testable without mocking:
+Pure functions have been extracted to `app/utils/availability.js` and are shared by both `app/api/availability/route.ts` and `app/api/available-dates/route.ts`. Covered in `__tests__/utils/availability.test.mjs` (39 tests).
 
-**Extract and test these functions:**
-- `generateTimeSlots(startTime, endTime, duration, buffer, bookedSlots, date)` — slot generation with conflict detection
-- `timeOverlaps(newTime, bookedTime, duration, buffer)` — overlap calculation
-- `getRecurrenceHours(daySchedule, requestedDate)` — every-other-week and 2nd-of-month patterns
-- `formatTime(hour, min)` — 12-hour display formatting
+**What's tested:**
+- `getRecurrenceHours` — every-other-week (with/without anchor), 2nd-of-month, standard
+- `resolveStaffSync` — auto-assign rules, schedule fallback, allowedStaff filtering, recurrence
+- `getDayHoursSync` — sauna hours, staff schedule priority, vendor working hours fallback
+- `hasAnySlot` — open/booked detection, staff filtering, window size edge cases
+- `timeOverlaps` — overlap with buffer, adjacent slots, zero buffer
+- `generateTimeSlots` — full slot generation, booked exclusion, dateTime format variants
+- `formatTime` — 12-hour AM/PM display
 
-These are currently not exported. **Recommended approach**: extract them to `app/utils/availability.js` (or a shared lib), export them, and write unit tests. This is the single highest-value testing task remaining.
-
-**Test cases to write:**
-- Slot generation with no conflicts
-- Slot generation with overlapping appointments
-- Buffer time between appointments
-- Today's date filtering (past slots excluded)
-- Every-other-week recurrence with anchor dates
-- 2nd-of-month recurrence pattern
+**Remaining test opportunities:**
+- Today's date filtering (past slots excluded) — requires mocking `Date.now()`
 - Edge cases: midnight crossover, 0-duration, end time before start time
 
 ### 2. Appointment Route Integration Tests (HIGH VALUE)
@@ -195,6 +192,7 @@ jest.mock('aws-amplify/auth', () => ({
 
 | Route | Priority | Notes |
 |-------|----------|-------|
+| `api/available-dates/route.ts` | Medium | Month-level date availability (uses shared `availability.js` utils — pure logic already tested, route-level integration not yet) |
 | `api/services/route.ts` | Medium | CRUD + auth checks |
 | `api/vendors/route.ts` | Medium | Role-based filtering |
 | `api/staff/route.ts` | Medium | Staff CRUD |

@@ -23,6 +23,7 @@ function BundleTimeContent() {
   const [services, setServices] = useState([])
   const [vendorInfo, setVendorInfo] = useState(null)
   const [bundle, setBundle] = useState(null)
+  const [availableDates, setAvailableDates] = useState(null)
 
   const allowedDays = bundle?.allowedDays?.length > 0 ? bundle.allowedDays : null
 
@@ -65,6 +66,32 @@ function BundleTimeContent() {
       }
     })
   }, [])
+
+  const fetchAvailableDates = (date) => {
+    const vendorId = services[0]?.vendorId
+    if (!vendorId || serviceIds.length === 0) return
+    const month = date.getMonth() + 1
+    const year = date.getFullYear()
+    fetch(`/api/available-dates?vendorId=${vendorId}&serviceId=${serviceIds[0]}&month=${month}&year=${year}`)
+      .then(res => res.json())
+      .then(data => setAvailableDates(new Set(data.availableDates || [])))
+      .catch(() => {})
+  }
+
+  useEffect(() => {
+    if (services.length > 0 && isBookingEnabled) fetchAvailableDates(selectedDate || new Date())
+  }, [services])
+
+  const isDateAvailable = (date) => {
+    if (allowedDays && !isAllowedDay(date)) return false
+    if (!availableDates) return true
+    return availableDates.has(date.toISOString().split('T')[0])
+  }
+
+  const getDayClassName = (date) => {
+    if (!availableDates) return ''
+    return availableDates.has(date.toISOString().split('T')[0]) ? '' : 'unavailable-day'
+  }
 
   useEffect(() => {
     if (!isBookingEnabled || serviceIds.length === 0 || !selectedDate) return
@@ -113,8 +140,10 @@ function BundleTimeContent() {
           <DatePicker
             selected={selectedDate}
             onChange={setSelectedDate}
+            onMonthChange={fetchAvailableDates}
             minDate={new Date()}
-            filterDate={isAllowedDay}
+            filterDate={isDateAvailable}
+            dayClassName={getDayClassName}
             inline
           />
         </div>
