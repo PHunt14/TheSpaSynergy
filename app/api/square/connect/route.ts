@@ -25,7 +25,9 @@ export async function GET(request: NextRequest) {
       'PAYMENTS_WRITE',
       'PAYMENTS_READ',
       'ORDERS_WRITE',
-      'ORDERS_READ'
+      'ORDERS_READ',
+      'ITEMS_WRITE',
+      'ITEMS_READ'
     ].join('%20')
 
     const squareBase = appId.startsWith('sandbox-')

@@ -161,7 +161,9 @@ function ConfirmPageContent() {
         sourceId: token,
         amount: totalPrice,
         vendorId: vendor || allServiceDetails[0]?.vendorId,
-        staffId: staffId || undefined
+        staffId: staffId || undefined,
+        serviceIds: allServiceDetails.map(s => s.serviceId),
+        people: people || undefined
       })
     })
     const paymentData = await paymentResponse.json()
