@@ -37,7 +37,7 @@ function FadeIn({ children, style }) {
 function ServiceTile({ service, isSelected, addons, onToggle }) {
   return (
     <div>
-      <div onClick={() => onToggle(service)} style={{
+      <div onClick={() => onToggle(service)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onToggle(service) }} style={{
         padding: '0.75rem',
         borderRadius: addons.length > 0 ? '8px 8px 0 0' : '8px',
         cursor: 'pointer',
@@ -201,7 +201,7 @@ export default function ServicesPage() {
                       transition: '0.2s ease',
                       overflow: 'hidden',
                     }}>
-                      <div onClick={() => toggleService(service)} style={{
+                      <div onClick={() => toggleService(service)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleService(service) }} style={{
                         padding: '0.75rem',
                         background: isSelected ? 'var(--color-primary)' : 'var(--color-accent)',
                         color: isSelected ? 'white' : 'var(--color-text)',

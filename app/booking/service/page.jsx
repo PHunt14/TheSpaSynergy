@@ -21,6 +21,9 @@ function ServiceCard({ service, isExpanded, selectedAddons, onServiceClick, onTo
     <div>
       <div
         onClick={() => onServiceClick(service)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onServiceClick(service) }}
         style={{
           padding: '1rem',
           borderRadius: isExpanded ? '8px 8px 0 0' : '8px',
