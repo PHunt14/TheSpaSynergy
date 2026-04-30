@@ -56,92 +56,49 @@ const getCurrentUserFromSession = async () => {
   }
 };
 
+function buildUserAttributes(email: string, role: string, vendorId?: string, firstName?: string, lastName?: string) {
+  const attrs = [
+    { Name: 'email', Value: email },
+    { Name: 'email_verified', Value: 'true' },
+    { Name: 'custom:role', Value: role },
+  ];
+  if (firstName) attrs.push({ Name: 'given_name', Value: firstName });
+  if (lastName) attrs.push({ Name: 'family_name', Value: lastName });
+  if ((role === 'vendor' || role === 'owner') && vendorId) {
+    attrs.push({ Name: 'custom:vendorId', Value: vendorId });
+  }
+  return attrs;
+}
+
 export async function POST(request: Request) {
   try {
     const currentUser = await getCurrentUserFromSession();
     console.log('Staff POST - currentUser:', currentUser);
-    if (!currentUser) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    if (!currentUser) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { email, firstName, lastName, vendorId, role } = await request.json();
+    if (!email || !role) return Response.json({ error: 'Email and role required' }, { status: 400 });
+    if (role === 'vendor' && !vendorId) return Response.json({ error: 'VendorId required for vendor role' }, { status: 400 });
 
-    if (!email || !role) {
-      return Response.json({ error: 'Email and role required' }, { status: 400 });
-    }
-
-    if (role === 'vendor' && !vendorId) {
-      return Response.json({ error: 'VendorId required for vendor role' }, { status: 400 });
-    }
-
-    // Vendor/owner can only invite staff to their own vendor, and cannot create admins
     if (currentUser.role === 'vendor' || currentUser.role === 'owner') {
-      if (role === 'admin') {
-        return Response.json({ error: 'Unauthorized: Cannot create admin users' }, { status: 403 });
-      }
-      if (vendorId && vendorId !== currentUser.vendorId) {
-        return Response.json({ error: 'Unauthorized: Can only invite staff to your own vendor' }, { status: 403 });
-      }
+      if (role === 'admin') return Response.json({ error: 'Unauthorized: Cannot create admin users' }, { status: 403 });
+      if (vendorId && vendorId !== currentUser.vendorId) return Response.json({ error: 'Unauthorized: Can only invite staff to your own vendor' }, { status: 403 });
     }
 
     const userPoolId = getUserPoolId();
-    if (!userPoolId) {
-      return Response.json({ error: 'User pool not configured' }, { status: 500 });
-    }
+    if (!userPoolId) return Response.json({ error: 'User pool not configured' }, { status: 500 });
 
     const client = await getClientWithCredentials();
-
-    const userAttributes = [
-      {
-        Name: 'email',
-        Value: email
-      },
-      {
-        Name: 'email_verified',
-        Value: 'true'
-      },
-      {
-        Name: 'custom:role',
-        Value: role
-      }
-    ];
-
-    if (firstName) {
-      userAttributes.push({
-        Name: 'given_name',
-        Value: firstName
-      });
-    }
-
-    if (lastName) {
-      userAttributes.push({
-        Name: 'family_name',
-        Value: lastName
-      });
-    }
-
-    // Add vendorId for vendor and owner users
-    if ((role === 'vendor' || role === 'owner') && vendorId) {
-      userAttributes.push({
-        Name: 'custom:vendorId',
-        Value: vendorId
-      });
-    }
-
-    // Generate a temporary password
     const tempPassword = `Tmp${Math.random().toString(36).slice(2, 8)}!${Math.floor(Math.random() * 90 + 10)}`;
 
-    const command = new AdminCreateUserCommand({
+    await client.send(new AdminCreateUserCommand({
       UserPoolId: userPoolId,
       Username: email,
-      UserAttributes: userAttributes,
+      UserAttributes: buildUserAttributes(email, role, vendorId, firstName, lastName),
       TemporaryPassword: tempPassword,
       MessageAction: 'SUPPRESS',
-    });
+    }));
 
-    await client.send(command);
-
-    // Send branded invite email via SES
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://thespasynergy.com';
     const nameGreeting = firstName ? ` ${firstName}` : '';
     const html = `
@@ -156,23 +113,15 @@ export async function POST(request: Request) {
         <p>You'll be asked to set a new password on your first login.</p>
         <p><a href="${appUrl}/dashboard" style="display: inline-block; background: #8B4789; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: bold;">Log In to Dashboard</a></p>
         <p style="margin-top: 16px;"><a href="${appUrl}" style="color: #8B4789; text-decoration: underline;">Visit The Spa Synergy</a></p>
-        <p style="color: #666; font-size: 12px; margin-top: 30px;">
-          The Spa Synergy<br>Fort Ritchie, MD
-        </p>
+        <p style="color: #666; font-size: 12px; margin-top: 30px;">The Spa Synergy<br>Fort Ritchie, MD</p>
       </div>`;
 
     await sendEmail(email, 'Your Spa Synergy Dashboard Invitation', html);
 
-    return Response.json({ 
-      success: true,
-      message: 'User invited successfully. They will receive an email with login instructions.'
-    });
+    return Response.json({ success: true, message: 'User invited successfully. They will receive an email with login instructions.' });
   } catch (error: any) {
     console.error('Error inviting user:', error);
-    return Response.json({ 
-      error: 'Failed to invite user',
-      details: error.message 
-    }, { status: 500 });
+    return Response.json({ error: 'Failed to invite user', details: error.message }, { status: 500 });
   }
 }
 

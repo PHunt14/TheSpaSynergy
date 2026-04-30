@@ -122,50 +122,42 @@ export async function POST(request: Request) {
   }
 }
 
+function buildScheduleUpdateData(visibleId: string, body: any): any {
+  const updateData: any = { visibleId };
+  const directFields = ['staffName', 'staffEmail', 'isActive', 'smsAlertsEnabled', 'smsAlertPhone', 'emailAlertsEnabled'];
+  for (const field of directFields) {
+    if (body[field] !== undefined) updateData[field] = body[field];
+  }
+  if (body.schedule !== undefined) {
+    updateData.schedule = typeof body.schedule === 'string' ? body.schedule : JSON.stringify(body.schedule);
+  }
+  if (body.autoAssignRules !== undefined) {
+    updateData.autoAssignRules = body.autoAssignRules === null ? null
+      : typeof body.autoAssignRules === 'string' ? body.autoAssignRules : JSON.stringify(body.autoAssignRules);
+  }
+  return updateData;
+}
+
 export async function PATCH(request: Request) {
   try {
     const currentUser = await getCurrentUser();
     if (!currentUser) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await request.json();
-    const { visibleId, staffName, staffEmail, schedule, autoAssignRules, isActive } = body;
+    const { visibleId } = body;
+    if (!visibleId) return Response.json({ error: 'visibleId required' }, { status: 400 });
 
-    if (!visibleId) {
-      return Response.json({ error: 'visibleId required' }, { status: 400 });
-    }
-
-    // Verify the record exists before updating
     const { data: existing, errors: getErrors } = await client.models.StaffSchedule.get({ visibleId } as any);
     if (getErrors || !existing) {
       console.error('Staff schedule not found or get error:', getErrors);
       return Response.json({ error: 'Staff schedule not found' }, { status: 404 });
     }
 
-    // Vendor/owner can only edit schedules for their own vendor
-    if (currentUser.role === 'vendor' || currentUser.role === 'owner') {
-      if (existing.vendorId !== currentUser.vendorId) {
-        return Response.json({ error: 'Unauthorized: Can only manage schedules for your own vendor' }, { status: 403 });
-      }
+    if ((currentUser.role === 'vendor' || currentUser.role === 'owner') && existing.vendorId !== currentUser.vendorId) {
+      return Response.json({ error: 'Unauthorized: Can only manage schedules for your own vendor' }, { status: 403 });
     }
 
-    const updateData: any = { visibleId };
-    if (staffName !== undefined) updateData.staffName = staffName;
-    if (staffEmail !== undefined) updateData.staffEmail = staffEmail;
-    if (schedule !== undefined) {
-      updateData.schedule = typeof schedule === 'string' ? schedule : JSON.stringify(schedule);
-    }
-    if (autoAssignRules !== undefined) {
-      if (autoAssignRules === null) {
-        updateData.autoAssignRules = null;
-      } else {
-        updateData.autoAssignRules = typeof autoAssignRules === 'string' ? autoAssignRules : JSON.stringify(autoAssignRules);
-      }
-    }
-    if (isActive !== undefined) updateData.isActive = isActive;
-    if (body.smsAlertsEnabled !== undefined) updateData.smsAlertsEnabled = body.smsAlertsEnabled;
-    if (body.smsAlertPhone !== undefined) updateData.smsAlertPhone = body.smsAlertPhone;
-    if (body.emailAlertsEnabled !== undefined) updateData.emailAlertsEnabled = body.emailAlertsEnabled;
-
+    const updateData = buildScheduleUpdateData(visibleId, body);
     const { data, errors } = await client.models.StaffSchedule.update(updateData as any);
     if (errors) {
       console.error('Staff schedule update errors:', JSON.stringify(errors, null, 2));

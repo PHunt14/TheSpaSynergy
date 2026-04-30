@@ -319,7 +319,7 @@ function ConfirmPageContent() {
         <p style={{ marginTop: '0.75rem' }}><strong>Date:</strong> {date ? new Date(date).toLocaleDateString() : 'N/A'}</p>
         <p><strong>Time:</strong> {time}</p>
         {staffName && <p><strong>With:</strong> {decodeURIComponent(staffName)}</p>}
-        {people && <p><strong>Group Size:</strong> {people} people</p>}
+        {!!people && <p><strong>Group Size:</strong> {people} people</p>}
       </div>
 
       <form onSubmit={handleSubmit} style={{ marginTop: '2rem' }}>

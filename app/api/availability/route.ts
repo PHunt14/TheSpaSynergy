@@ -2,7 +2,7 @@ import { generateServerClientUsingCookies } from '@aws-amplify/adapter-nextjs/da
 import { cookies } from 'next/headers';
 import type { Schema } from '../../../amplify/data/resource';
 import config from '../../../amplify_outputs.json' with { type: 'json' };
-import { getRecurrenceHours, generateTimeSlots, formatTime, timeOverlaps } from '../../utils/availability.js';
+import { getRecurrenceHours, generateTimeSlots } from '../../utils/availability.js';
 
 const client = generateServerClientUsingCookies<Schema>({
   config,
@@ -73,20 +73,7 @@ export async function GET(request: Request) {
     });
 
     // Filter by resource type — sauna appointments don't block staff and vice versa
-    const relevantAppointments = [];
-    for (const apt of allAppointments || []) {
-      if (apt.status === 'cancelled') continue;
-      const { data: aptService } = await client.models.Service.get({ serviceId: apt.serviceId });
-      const aptIsSauna = (aptService?.resourceType || 'staff') === 'sauna';
-      if (isSauna && aptIsSauna) {
-        relevantAppointments.push(apt);
-      } else if (!isSauna && !aptIsSauna) {
-        // For staff services, only block if same staff member (or no staff tracking yet)
-        if (!assignedStaff || !apt.staffId || apt.staffId === assignedStaff.visibleId) {
-          relevantAppointments.push(apt);
-        }
-      }
-    }
+    const relevantAppointments = await filterRelevantAppointments(allAppointments || [], isSauna, assignedStaff, serviceId);
 
     const slots = generateTimeSlots(
       dayHours.start,
@@ -105,6 +92,23 @@ export async function GET(request: Request) {
     console.error('Error fetching availability:', error);
     return Response.json({ error: 'Failed to fetch availability' }, { status: 500 });
   }
+}
+
+async function filterRelevantAppointments(appointments: any[], isSauna: boolean, assignedStaff: any, serviceId: string) {
+  const relevant = [];
+  for (const apt of appointments) {
+    if (apt.status === 'cancelled') continue;
+    const { data: aptService } = await client.models.Service.get({ serviceId: apt.serviceId });
+    const aptIsSauna = (aptService?.resourceType || 'staff') === 'sauna';
+    if (isSauna && aptIsSauna) {
+      relevant.push(apt);
+    } else if (!isSauna && !aptIsSauna) {
+      if (!assignedStaff || !apt.staffId || apt.staffId === assignedStaff.visibleId) {
+        relevant.push(apt);
+      }
+    }
+  }
+  return relevant;
 }
 
 async function getDayHours(vendor: any, service: any, dayOfWeek: string, requestedDate: Date) {

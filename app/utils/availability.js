@@ -33,32 +33,27 @@ export function getRecurrenceHours(daySchedule, requestedDate) {
 
 export function resolveStaffSync(staffList, dayOfWeek, requestedDate, allowedStaffIds) {
   const isAllowed = (staff) => !allowedStaffIds || allowedStaffIds.length === 0 || allowedStaffIds.includes(staff.visibleId)
+  const eligible = staffList.filter(s => s.isActive && isAllowed(s))
 
-  for (const staff of staffList) {
-    if (!staff.isActive || !staff.autoAssignRules || !isAllowed(staff)) continue
+  const autoAssigned = eligible.find(staff => {
+    if (!staff.autoAssignRules) return false
     const rules = JSON.parse(staff.autoAssignRules)
-    for (const rule of rules) {
-      if (rule.action === 'auto-assign' && rule.days?.includes(dayOfWeek)) return staff
-    }
-  }
+    return rules.some(r => r.action === 'auto-assign' && r.days?.includes(dayOfWeek))
+  })
+  if (autoAssigned) return autoAssigned
 
-  for (const staff of staffList) {
-    if (!staff.isActive || !staff.schedule || !isAllowed(staff)) continue
+  return eligible.find(staff => {
+    if (!staff.schedule) return false
     const schedule = JSON.parse(staff.schedule)
     const daySchedule = schedule[dayOfWeek]
-    if (!daySchedule) continue
-    if (daySchedule.recurrence) {
-      const hours = getRecurrenceHours(daySchedule, requestedDate)
-      if (hours?.start) return staff
-    } else if (daySchedule.start) {
-      return staff
-    }
-  }
-
-  return null
+    if (!daySchedule) return false
+    if (daySchedule.recurrence) return !!getRecurrenceHours(daySchedule, requestedDate)?.start
+    return !!daySchedule.start
+  }) || null
 }
 
-export function getDayHoursSync(vendor, service, dayOfWeek, date, staffList, workingHours, saunaHours, allowedStaffIds) {
+export function getDayHoursSync(vendor, service, dayOfWeek, date, ctx) {
+  const { staffList, workingHours, saunaHours, allowedStaffIds } = ctx
   const isSauna = (service.resourceType || 'staff') === 'sauna'
 
   if (isSauna && saunaHours) {
@@ -80,7 +75,8 @@ export function getDayHoursSync(vendor, service, dayOfWeek, date, staffList, wor
   return workingHours[dayOfWeek] || null
 }
 
-export function hasAnySlot(startTime, endTime, duration, buffer, appointments, dateStr, date, staff) {
+export function hasAnySlot(startTime, endTime, duration, buffer, ctx) {
+  const { appointments, dateStr, date, staff } = ctx
   const [startHour, startMin] = startTime.split(':').map(Number)
   const [endHour, endMin] = endTime.split(':').map(Number)
 
@@ -170,6 +166,8 @@ export function generateTimeSlots(startTime, endTime, serviceDuration, bufferMin
 
 export function formatTime(hour, min) {
   const period = hour >= 12 ? 'PM' : 'AM'
-  const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour
+  let displayHour = hour
+  if (hour > 12) displayHour = hour - 12
+  else if (hour === 0) displayHour = 12
   return `${displayHour}:${min.toString().padStart(2, '0')} ${period}`
 }

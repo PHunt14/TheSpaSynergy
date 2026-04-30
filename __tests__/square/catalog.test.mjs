@@ -261,7 +261,7 @@ describe('buildOrderLineItems', () => {
   })
 
   test('defaults to quantity 1 when people is null', () => {
-    const items = buildOrderLineItems(services, null)
+    const items = buildOrderLineItems(services)
     expect(items[0].quantity).toBe('1')
   })
 })

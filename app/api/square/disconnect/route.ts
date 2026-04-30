@@ -12,14 +12,29 @@ Amplify.configure(config, { ssr: true })
 const { runWithAmplifyServerContext } = createServerRunner({ config })
 const client = generateClient<Schema>()
 
+async function revokeSquareToken(accessToken: string) {
+  const appId = process.env.SQUARE_APPLICATION_ID || process.env.NEXT_PUBLIC_SQUARE_APPLICATION_ID
+  const appSecret = process.env.SQUARE_APPLICATION_SECRET
+  if (!appId || !appSecret) return
+
+  const env = process.env.NEXT_PUBLIC_SQUARE_ENVIRONMENT || 'sandbox'
+  const squareClient = new Client({
+    environment: env === 'production' ? Environment.Production : Environment.Sandbox,
+  })
+  await squareClient.oAuthApi.revokeToken({ clientId: appId, accessToken }, `Client ${appSecret}`)
+}
+
+function isAuthorizedToDisconnect(staff: any, currentUser: any): boolean {
+  const isOwnAccount = staff.staffEmail === currentUser.email
+  const isAdminOrOwner = currentUser.role === 'admin' || (currentUser.role === 'owner' && staff.vendorId === currentUser.vendorId)
+  return isOwnAccount || isAdminOrOwner
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { staffId } = await request.json()
-    if (!staffId) {
-      return Response.json({ error: 'staffId required' }, { status: 400 })
-    }
+    if (!staffId) return Response.json({ error: 'staffId required' }, { status: 400 })
 
-    // Auth check
     const currentUser = await runWithAmplifyServerContext({
       nextServerContext: { cookies },
       operation: async (contextSpec) => {
@@ -33,53 +48,22 @@ export async function POST(request: NextRequest) {
         }
       }
     })
+    if (!currentUser) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
-    if (!currentUser) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // Staff disconnect
     const { data: staff } = await client.models.StaffSchedule.get({ visibleId: staffId } as any)
-    if (!staff) {
-      return Response.json({ error: 'Staff not found' }, { status: 404 })
-    }
+    if (!staff) return Response.json({ error: 'Staff not found' }, { status: 404 })
+    if (!isAuthorizedToDisconnect(staff, currentUser)) return Response.json({ error: 'Unauthorized' }, { status: 403 })
 
-    // Staff can only disconnect their own account; admins/owners can disconnect any staff in their vendor
-    const isOwnAccount = staff.staffEmail === currentUser.email
-    const isAdminOrOwner = currentUser.role === 'admin' || (currentUser.role === 'owner' && staff.vendorId === currentUser.vendorId)
-    if (!isOwnAccount && !isAdminOrOwner) {
-      return Response.json({ error: 'Unauthorized' }, { status: 403 })
-    }
-
-    // Revoke token
     if (staff.squareAccessToken) {
-      try {
-        const appId = process.env.SQUARE_APPLICATION_ID || process.env.NEXT_PUBLIC_SQUARE_APPLICATION_ID
-        const appSecret = process.env.SQUARE_APPLICATION_SECRET
-        if (appId && appSecret) {
-          const env = process.env.NEXT_PUBLIC_SQUARE_ENVIRONMENT || 'sandbox'
-          const squareClient = new Client({
-            environment: env === 'production' ? Environment.Production : Environment.Sandbox,
-          })
-          await squareClient.oAuthApi.revokeToken({
-            clientId: appId,
-            accessToken: staff.squareAccessToken,
-          }, `Client ${appSecret}`)
-        }
-      } catch (revokeError) {
-        console.error('Staff token revocation failed (continuing):', revokeError)
-      }
+      try { await revokeSquareToken(staff.squareAccessToken) }
+      catch (e) { console.error('Staff token revocation failed (continuing):', e) }
     }
 
     const { errors } = await client.models.StaffSchedule.update({
       visibleId: staffId,
-      squareAccessToken: null,
-      squareRefreshToken: null,
-      squareMerchantId: null,
-      squareLocationId: null,
-      squareOAuthStatus: 'disconnected',
-      squareTokenExpiresAt: null,
-      squareConnectedAt: null,
+      squareAccessToken: null, squareRefreshToken: null, squareMerchantId: null,
+      squareLocationId: null, squareOAuthStatus: 'disconnected',
+      squareTokenExpiresAt: null, squareConnectedAt: null,
     } as any)
 
     if (errors) return Response.json({ error: 'Failed to update staff' }, { status: 500 })
