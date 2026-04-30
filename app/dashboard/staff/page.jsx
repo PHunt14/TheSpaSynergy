@@ -11,6 +11,12 @@ const emptySchedule = () => DAYS.reduce((acc, d) => ({ ...acc, [d]: { start: nul
 const inputStyle = { padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.95rem' }
 const btnStyle = (bg) => ({ padding: '0.5rem 1rem', borderRadius: '6px', border: 'none', background: bg, color: 'white', cursor: 'pointer', fontSize: '0.85rem' })
 
+function getRoleBadgeColor(role) {
+  if (role === 'admin') return '#2196F3'
+  if (role === 'owner') return '#9C27B0'
+  return '#4CAF50'
+}
+
 export default function Staff() {
   const [email, setEmail] = useState('')
   const [firstName, setFirstName] = useState('')
@@ -341,7 +347,7 @@ export default function Staff() {
                           <option value="admin">Admin</option>
                         </select>
                       ) : (
-                        <span style={{ padding: '0.25rem 0.75rem', borderRadius: '12px', fontSize: '0.85rem', background: user.role === 'admin' ? '#2196F3' : user.role === 'owner' ? '#9C27B0' : '#4CAF50', color: 'white' }}>
+                        <span style={{ padding: '0.25rem 0.75rem', borderRadius: '12px', fontSize: '0.85rem', background: getRoleBadgeColor(user.role), color: 'white' }}>
                           {user.role}
                         </span>
                       )}

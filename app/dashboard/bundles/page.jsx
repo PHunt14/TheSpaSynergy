@@ -375,11 +375,10 @@ export default function BundlesManagement() {
                           type="checkbox"
                           checked={newBundle.selectedServices.includes(service.serviceId)}
                           onChange={(e) => {
-                            if (e.target.checked) {
-                              setNewBundle({ ...newBundle, selectedServices: [...newBundle.selectedServices, service.serviceId] })
-                            } else {
-                              setNewBundle({ ...newBundle, selectedServices: newBundle.selectedServices.filter(id => id !== service.serviceId) })
-                            }
+                            const updated = e.target.checked
+                              ? [...newBundle.selectedServices, service.serviceId]
+                              : newBundle.selectedServices.filter(id => id !== service.serviceId)
+                            setNewBundle({ ...newBundle, selectedServices: updated })
                           }}
                           style={{ width: '18px', height: '18px' }}
                         />
