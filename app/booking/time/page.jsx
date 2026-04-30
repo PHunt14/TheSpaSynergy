@@ -47,7 +47,6 @@ function TimePageContent() {
     if (!vendor || !service) return
     const month = date.getMonth() + 1
     const year = date.getFullYear()
-    setLoadingDates(true)
     fetch(`/api/available-dates?vendorId=${vendor}&serviceId=${service}&month=${month}&year=${year}`)
       .then(res => res.json())
       .then(data => {
