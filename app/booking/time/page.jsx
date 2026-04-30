@@ -22,6 +22,7 @@ function TimePageContent() {
   const [bookingBlocked, setBookingBlocked] = useState(false)
   const [disabledUntil, setDisabledUntil] = useState(null)
   const [availableDates, setAvailableDates] = useState(null)
+  const [loadingDates, setLoadingDates] = useState(false)
 
   useEffect(() => {
     if (!service || !vendor) return
@@ -52,8 +53,9 @@ function TimePageContent() {
       .then(res => res.json())
       .then(data => {
         setAvailableDates(new Set(data.availableDates || []))
+        setLoadingDates(false)
       })
-      .catch(() => {})
+      .catch(() => { setLoadingDates(false) })
   }
 
   useEffect(() => {
