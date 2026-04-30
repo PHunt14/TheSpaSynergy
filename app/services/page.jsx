@@ -230,7 +230,7 @@ export default function ServicesPage() {
                       )}
                     </FadeIn>
                   )
-                })}}
+                })}
               </div>
             ) : (
               <div className="grid-3-cols" style={{
