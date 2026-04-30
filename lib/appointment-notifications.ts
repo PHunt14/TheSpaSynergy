@@ -74,6 +74,18 @@ const EVENT_LABELS: Record<NotificationEvent, { customerVerb: string; subject: s
   rescheduled: { customerVerb: 'rescheduled', subject: 'Appointment Rescheduled', heading: 'Appointment Rescheduled' },
 };
 
+const EVENT_DESCRIPTIONS: Record<NotificationEvent, string> = {
+  confirmed: 'Great news — your appointment has been confirmed!',
+  cancelled: 'Your appointment has been cancelled.',
+  rescheduled: 'Your appointment has been rescheduled to a new date and time.',
+};
+
+const STAFF_ACTION_TEXT: Record<NotificationEvent, string> = {
+  confirmed: 'You confirmed the following appointment:',
+  cancelled: 'The following appointment has been cancelled:',
+  rescheduled: 'The following appointment has been rescheduled:',
+};
+
 function buildCustomerEmailBody(params: NotificationParams): string {
   const { event, appointment, details, newDateTime } = params;
   const { heading } = EVENT_LABELS[event];
@@ -83,7 +95,7 @@ function buildCustomerEmailBody(params: NotificationParams): string {
 
   let body = `
     <h2 style="color: #8B4789;">${heading}</h2>
-    <p>${event === 'confirmed' ? 'Great news — your appointment has been confirmed!' : event === 'cancelled' ? 'Your appointment has been cancelled.' : 'Your appointment has been rescheduled to a new date and time.'}</p>
+    <p>${EVENT_DESCRIPTIONS[event]}</p>
     <div style="background: #f9f9f9; padding: 20px; border-radius: 8px; margin: 20px 0;">
       <p><strong>Service:</strong> ${details.serviceName}</p>
       ${withHtml}
@@ -102,7 +114,7 @@ function buildStaffVendorEmailBody(params: NotificationParams, customer: any): s
   const { event, appointment, details, newDateTime } = params;
   const { heading } = EVENT_LABELS[event];
   const dateTimeDisplay = event === 'rescheduled' && newDateTime ? newDateTime : (appointment.dateTime || '');
-  const actionText = event === 'confirmed' ? 'You confirmed the following appointment:' : event === 'cancelled' ? 'The following appointment has been cancelled:' : 'The following appointment has been rescheduled:';
+  const actionText = STAFF_ACTION_TEXT[event];
 
   return `
     <h2 style="color: #8B4789;">${heading}</h2>

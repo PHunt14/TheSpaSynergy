@@ -52,7 +52,8 @@ export function resolveStaffSync(staffList, dayOfWeek, requestedDate, allowedSta
   }) || null
 }
 
-export function getDayHoursSync(vendor, service, dayOfWeek, date, staffList, workingHours, saunaHours, allowedStaffIds) {
+export function getDayHoursSync(vendor, service, dayOfWeek, date, ctx) {
+  const { staffList, workingHours, saunaHours, allowedStaffIds } = ctx
   const isSauna = (service.resourceType || 'staff') === 'sauna'
 
   if (isSauna && saunaHours) {
@@ -74,7 +75,8 @@ export function getDayHoursSync(vendor, service, dayOfWeek, date, staffList, wor
   return workingHours[dayOfWeek] || null
 }
 
-export function hasAnySlot(startTime, endTime, duration, buffer, appointments, dateStr, date, staff) {
+export function hasAnySlot(startTime, endTime, duration, buffer, ctx) {
+  const { appointments, dateStr, date, staff } = ctx
   const [startHour, startMin] = startTime.split(':').map(Number)
   const [endHour, endMin] = endTime.split(':').map(Number)
 
@@ -164,6 +166,8 @@ export function generateTimeSlots(startTime, endTime, serviceDuration, bufferMin
 
 export function formatTime(hour, min) {
   const period = hour >= 12 ? 'PM' : 'AM'
-  const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour
+  let displayHour = hour
+  if (hour > 12) displayHour = hour - 12
+  else if (hour === 0) displayHour = 12
   return `${displayHour}:${min.toString().padStart(2, '0')} ${period}`
 }

@@ -4,7 +4,7 @@ import { cookies } from 'next/headers';
 import type { Schema } from '../../../../amplify/data/resource';
 import config from '../../../../amplify_outputs.json' with { type: 'json' };
 import { getStaffServices, groupByCategory, buildCategoryObject, buildItemObject, parseSyncResponse } from '@/lib/square/catalog.js';
-import { randomUUID } from 'crypto';
+import { randomUUID } from 'node:crypto';
 
 const dbClient = generateServerClientUsingCookies<Schema>({
   config,

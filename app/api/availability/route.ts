@@ -2,7 +2,7 @@ import { generateServerClientUsingCookies } from '@aws-amplify/adapter-nextjs/da
 import { cookies } from 'next/headers';
 import type { Schema } from '../../../amplify/data/resource';
 import config from '../../../amplify_outputs.json' with { type: 'json' };
-import { getRecurrenceHours, generateTimeSlots, formatTime, timeOverlaps } from '../../utils/availability.js';
+import { getRecurrenceHours, generateTimeSlots } from '../../utils/availability.js';
 
 const client = generateServerClientUsingCookies<Schema>({
   config,

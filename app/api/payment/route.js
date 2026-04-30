@@ -9,7 +9,7 @@ Amplify.configure(config, { ssr: true });
 
 export async function POST(request) {
   try {
-    const { sourceId, amount, vendorId, staffId, bundlePayments, appointmentId, serviceIds, people } = await request.json();
+    const { sourceId, amount, vendorId, staffId, bundlePayments, serviceIds, people } = await request.json();
 
     if (!sourceId || !amount) {
       return Response.json({ error: 'Missing payment details' }, { status: 400 });
@@ -69,7 +69,7 @@ async function processSinglePayment(sourceId, amount, vendorId, staffId, service
 
   try {
     // Load service details for order line items
-    let orderId = undefined;
+    let orderId;
     if (serviceIds?.length > 0) {
       const serviceDetails = [];
       for (const sid of serviceIds) {

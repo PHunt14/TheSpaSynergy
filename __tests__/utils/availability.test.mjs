@@ -157,19 +157,19 @@ describe('getDayHoursSync', () => {
   test('returns sauna hours for sauna service', () => {
     const saunaHours = { monday: { start: '10:00', end: '20:00' } }
     const service = { resourceType: 'sauna' }
-    const result = getDayHoursSync(vendor, service, 'monday', new Date(), [], workingHours, saunaHours, null)
+    const result = getDayHoursSync(vendor, service, 'monday', new Date(), { staffList: [], workingHours, saunaHours, allowedStaffIds: null })
     expect(result).toEqual({ start: '10:00', end: '20:00' })
   })
 
   test('returns vendor working hours as fallback', () => {
     const service = { resourceType: 'staff' }
-    const result = getDayHoursSync(vendor, service, 'monday', new Date(), [], workingHours, null, null)
+    const result = getDayHoursSync(vendor, service, 'monday', new Date(), { staffList: [], workingHours, saunaHours: null, allowedStaffIds: null })
     expect(result).toEqual({ start: '08:00', end: '18:00' })
   })
 
   test('returns null for day with no hours', () => {
     const service = { resourceType: 'staff' }
-    const result = getDayHoursSync(vendor, service, 'sunday', new Date(), [], workingHours, null, null)
+    const result = getDayHoursSync(vendor, service, 'sunday', new Date(), { staffList: [], workingHours, saunaHours: null, allowedStaffIds: null })
     expect(result).toBeNull()
   })
 
@@ -179,7 +179,7 @@ describe('getDayHoursSync', () => {
       visibleId: 's1', isActive: true, autoAssignRules: null,
       schedule: JSON.stringify({ monday: { start: '10:00', end: '14:00' } }),
     }]
-    const result = getDayHoursSync(vendor, service, 'monday', new Date(), staffList, workingHours, null, null)
+    const result = getDayHoursSync(vendor, service, 'monday', new Date(), { staffList, workingHours, saunaHours: null, allowedStaffIds: null })
     expect(result).toEqual({ start: '10:00', end: '14:00' })
   })
 })
@@ -220,7 +220,7 @@ describe('hasAnySlot', () => {
   const date = new Date('2099-01-15T00:00:00')
 
   test('returns true when no appointments', () => {
-    expect(hasAnySlot('09:00', '17:00', 60, 15, [], futureDate, date, null)).toBe(true)
+    expect(hasAnySlot('09:00', '17:00', 60, 15, { appointments: [], dateStr: futureDate, date, staff: null })).toBe(true)
   })
 
   test('returns false when fully booked', () => {
@@ -230,7 +230,7 @@ describe('hasAnySlot', () => {
       { dateTime: `${futureDate}T09:00:00`, staffId: null },
       { dateTime: `${futureDate}T09:30:00`, staffId: null },
     ]
-    expect(hasAnySlot('09:00', '10:30', 60, 15, appointments, futureDate, date, null)).toBe(false)
+    expect(hasAnySlot('09:00', '10:30', 60, 15, { appointments, dateStr: futureDate, date, staff: null })).toBe(false)
   })
 
   test('returns true when one slot remains', () => {
@@ -238,7 +238,7 @@ describe('hasAnySlot', () => {
       { dateTime: `${futureDate}T09:00:00`, staffId: null },
     ]
     // 09:00 blocked, but 10:00 should be open (09:00 + 60 + 15 = 10:15, so 10:30 is free)
-    expect(hasAnySlot('09:00', '12:00', 60, 15, [], futureDate, date, null)).toBe(true)
+    expect(hasAnySlot('09:00', '12:00', 60, 15, { appointments: [], dateStr: futureDate, date, staff: null })).toBe(true)
   })
 
   test('filters appointments by staff', () => {
@@ -246,11 +246,11 @@ describe('hasAnySlot', () => {
     const appointments = [
       { dateTime: `${futureDate}T09:00:00`, staffId: 'staff-2' }, // different staff
     ]
-    expect(hasAnySlot('09:00', '10:00', 60, 0, appointments, futureDate, date, staff)).toBe(true)
+    expect(hasAnySlot('09:00', '10:00', 60, 0, { appointments, dateStr: futureDate, date, staff })).toBe(true)
   })
 
   test('returns false when window too small for service', () => {
-    expect(hasAnySlot('09:00', '09:30', 60, 15, [], futureDate, date, null)).toBe(false)
+    expect(hasAnySlot('09:00', '09:30', 60, 15, { appointments: [], dateStr: futureDate, date, staff: null })).toBe(false)
   })
 })
 

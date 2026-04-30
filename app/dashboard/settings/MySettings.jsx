@@ -124,7 +124,7 @@ export default function MySettings({ currentUser, showMessage }) {
       setSyncResult(data)
       showMessage(`Synced ${data.synced} services to Square (${data.created} new, ${data.updated} updated)`)
     } catch (error) {
-      showMessage('Error syncing services to Square')
+      showMessage('Error syncing: ' + (error.message || 'Unknown error'))
     } finally {
       setSyncing(false)
     }

@@ -45,8 +45,8 @@ export async function GET(request: Request) {
     }
 
     const isSauna = (service.resourceType || 'staff') === 'sauna';
-    const monthNum = parseInt(month);
-    const yearNum = parseInt(year);
+    const monthNum = Number.parseInt(month);
+    const yearNum = Number.parseInt(year);
 
     // Build date range for the month
     const firstDay = new Date(yearNum, monthNum - 1, 1);
@@ -95,15 +95,15 @@ function buildAvailableDates(
     const dateStr = d.toISOString().split('T')[0];
     const dayOfWeek = DAY_NAMES[d.getDay()];
 
-    const dayHours = getDayHoursSync(vendor, service, dayOfWeek, d, staffList, workingHours, saunaHours, allowedStaffIds);
+    const dayHours = getDayHoursSync(vendor, service, dayOfWeek, d, { staffList, workingHours, saunaHours, allowedStaffIds });
     if (!dayHours?.start) continue;
 
-    const staff = !isSauna ? resolveStaffSync(staffList, dayOfWeek, d, allowedStaffIds) : null;
+    const staff = isSauna ? null : resolveStaffSync(staffList, dayOfWeek, d, allowedStaffIds);
     const dayAppointments = monthAppointments.filter(apt =>
       apt.status !== 'cancelled' && apt.dateTime.startsWith(dateStr)
     );
 
-    if (hasAnySlot(dayHours.start, dayHours.end, service.duration, vendor.bufferMinutes || 15, dayAppointments, dateStr, d, staff)) {
+    if (hasAnySlot(dayHours.start, dayHours.end, service.duration, vendor.bufferMinutes || 15, { appointments: dayAppointments, dateStr, date: d, staff })) {
       availableDates.push(dateStr);
     }
   }
