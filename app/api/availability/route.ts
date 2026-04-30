@@ -136,37 +136,25 @@ async function getDayHours(vendor: any, service: any, dayOfWeek: string, request
 }
 
 async function resolveStaff(vendorId: string, dayOfWeek: string, requestedDate: Date, allowedStaffIds?: string[] | null) {
-  const { data: staffList } = await client.models.StaffSchedule.listStaffScheduleByVendorId({
-    vendorId
-  });
-
+  const { data: staffList } = await client.models.StaffSchedule.listStaffScheduleByVendorId({ vendorId });
   if (!staffList || staffList.length === 0) return null;
 
   const isAllowed = (staff: any) => !allowedStaffIds || allowedStaffIds.length === 0 || allowedStaffIds.includes(staff.visibleId);
+  const eligible = staffList.filter(s => s.isActive && isAllowed(s));
 
-  for (const staff of staffList) {
-    if (!staff.isActive || !staff.autoAssignRules || !isAllowed(staff)) continue;
+  const autoAssigned = eligible.find(staff => {
+    if (!staff.autoAssignRules) return false;
     const rules = JSON.parse(staff.autoAssignRules as string);
-    for (const rule of rules) {
-      if (rule.action === 'auto-assign' && rule.days?.includes(dayOfWeek)) {
-        return staff;
-      }
-    }
-  }
+    return rules.some((r: any) => r.action === 'auto-assign' && r.days?.includes(dayOfWeek));
+  });
+  if (autoAssigned) return autoAssigned;
 
-  for (const staff of staffList) {
-    if (!staff.isActive || !staff.schedule || !isAllowed(staff)) continue;
+  return eligible.find(staff => {
+    if (!staff.schedule) return false;
     const schedule = JSON.parse(staff.schedule as string);
     const daySchedule = schedule[dayOfWeek];
-    if (!daySchedule) continue;
-
-    if (daySchedule.recurrence) {
-      const hours = getRecurrenceHours(daySchedule, requestedDate);
-      if (hours?.start) return staff;
-    } else if (daySchedule.start) {
-      return staff;
-    }
-  }
-
-  return null;
+    if (!daySchedule) return false;
+    if (daySchedule.recurrence) return !!getRecurrenceHours(daySchedule, requestedDate)?.start;
+    return !!daySchedule.start;
+  }) || null;
 }

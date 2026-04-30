@@ -197,12 +197,46 @@ export async function sendBookingNotifications(appointment: any) {
   await Promise.all(notifications);
 }
 
+function pushNotifications(
+  notifications: Promise<void>[],
+  params: NotificationParams,
+  customer: any,
+  formattedDateTime: string,
+  fullSubject: string,
+) {
+  const { event, details } = params;
+  const { customerVerb } = EVENT_LABELS[event];
+  const withName = details.staffName ? details.staffName.split(' ')[0] : '';
+
+  if (customer?.phone && customer?.smsOptIn) {
+    const smsWithLine = withName ? `\nWith: ${withName}` : '';
+    const dateLabel = event === 'rescheduled' ? 'New Date/Time' : 'Date/Time';
+    notifications.push(
+      sendSms(customer.phone, `Your appointment with ${details.vendorName} has been ${customerVerb}.\n\nService: ${details.serviceName}${smsWithLine}\n${dateLabel}: ${formattedDateTime}\n\nThe Spa Synergy\nReply STOP to opt out`)
+        .catch(err => console.error(`Customer ${event} SMS failed:`, err)) as Promise<void>
+    );
+  }
+
+  if (customer?.email || process.env.EMAIL_TEST_ADDRESS) {
+    notifications.push(
+      sendEmail(customer?.email || 'customer@placeholder.com', fullSubject, emailWrapper(buildCustomerEmailBody(params)))
+        .catch(err => console.error(`Customer ${event} email failed:`, err))
+    );
+  }
+
+  if (details.vendorEmail || process.env.EMAIL_TEST_ADDRESS) {
+    notifications.push(
+      sendEmail(details.vendorEmail || 'vendor@placeholder.com', fullSubject, emailWrapper(buildStaffVendorEmailBody(params, customer)))
+        .catch(err => console.error(`Vendor ${event} email failed:`, err))
+    );
+  }
+}
+
 export async function sendAppointmentNotifications(params: NotificationParams) {
   const { event, appointment, details, newDateTime } = params;
   const { customerVerb, subject } = EVENT_LABELS[event];
   const fullSubject = `${subject} - The Spa Synergy`;
   const customer = parseCustomer(appointment);
-  const withName = details.staffName ? details.staffName.split(' ')[0] : '';
   const dateTimeDisplay = event === 'rescheduled' && newDateTime ? newDateTime : appointment.dateTime;
 
   const formattedDateTime = dateTimeDisplay
@@ -213,34 +247,8 @@ export async function sendAppointmentNotifications(params: NotificationParams) {
     : 'Not specified';
 
   const notifications: Promise<void>[] = [];
+  pushNotifications(notifications, params, customer, formattedDateTime, fullSubject);
 
-  // Customer SMS
-  if (customer?.phone && customer?.smsOptIn) {
-    const smsWithLine = withName ? `\nWith: ${withName}` : '';
-    const dateLabel = event === 'rescheduled' ? 'New Date/Time' : 'Date/Time';
-    notifications.push(
-      sendSms(customer.phone, `Your appointment with ${details.vendorName} has been ${customerVerb}.\n\nService: ${details.serviceName}${smsWithLine}\n${dateLabel}: ${formattedDateTime}\n\nThe Spa Synergy\nReply STOP to opt out`)
-        .catch(err => console.error(`Customer ${event} SMS failed:`, err)) as Promise<void>
-    );
-  }
-
-  // Customer email
-  if (customer?.email || process.env.EMAIL_TEST_ADDRESS) {
-    notifications.push(
-      sendEmail(customer?.email || 'customer@placeholder.com', fullSubject, emailWrapper(buildCustomerEmailBody(params)))
-        .catch(err => console.error(`Customer ${event} email failed:`, err))
-    );
-  }
-
-  // Vendor email
-  if (details.vendorEmail || process.env.EMAIL_TEST_ADDRESS) {
-    notifications.push(
-      sendEmail(details.vendorEmail || 'vendor@placeholder.com', fullSubject, emailWrapper(buildStaffVendorEmailBody(params, customer)))
-        .catch(err => console.error(`Vendor ${event} email failed:`, err))
-    );
-  }
-
-  // Staff email + SMS
   const staffRecord = await resolveStaffForAppointment(appointment.vendorId, appointment.staffId, dateTimeDisplay);
   if (staffRecord?.emailAlertsEnabled && staffRecord?.staffEmail) {
     notifications.push(

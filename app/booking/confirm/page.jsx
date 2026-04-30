@@ -4,6 +4,30 @@ import { useSearchParams } from 'next/navigation'
 import { useState, useEffect, Suspense } from 'react'
 import BookingDisabled, { isBookingEnabled } from '../../components/BookingDisabled'
 
+function AppointmentSummary({ allServiceDetails, totalPrice, totalDuration, date, time, staffName, people }) {
+  return (
+    <div style={{ marginTop: '1.5rem', padding: '1rem', background: 'var(--color-accent)', borderRadius: '8px' }}>
+      <h3>Appointment Summary</h3>
+      {allServiceDetails.map(svc => (
+        <div key={svc.serviceId} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+          <span>{svc.name} ({svc.duration} min)</span>
+          <span>${svc.price}</span>
+        </div>
+      ))}
+      {allServiceDetails.length > 1 && (
+        <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: '0.5rem', marginTop: '0.5rem', display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
+          <span>Total ({totalDuration} min)</span>
+          <span>${totalPrice.toFixed(2)}</span>
+        </div>
+      )}
+      <p style={{ marginTop: '0.75rem' }}><strong>Date:</strong> {date ? new Date(date).toLocaleDateString() : 'N/A'}</p>
+      <p><strong>Time:</strong> {time}</p>
+      {staffName && <p><strong>With:</strong> {decodeURIComponent(staffName)}</p>}
+      {!!people && <p><strong>Group Size:</strong> {people} people</p>}
+    </div>
+  )
+}
+
 function ConfirmPageContent() {
   const params = useSearchParams()
   // Single service params
@@ -302,25 +326,15 @@ function ConfirmPageContent() {
         Review your appointment details and enter your information.
       </p>
 
-      <div style={{ marginTop: '1.5rem', padding: '1rem', background: 'var(--color-accent)', borderRadius: '8px' }}>
-        <h3>Appointment Summary</h3>
-        {allServiceDetails.map(svc => (
-          <div key={svc.serviceId} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-            <span>{svc.name} ({svc.duration} min)</span>
-            <span>${svc.price}</span>
-          </div>
-        ))}
-        {allServiceDetails.length > 1 && (
-          <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: '0.5rem', marginTop: '0.5rem', display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
-            <span>Total ({totalDuration} min)</span>
-            <span>${totalPrice.toFixed(2)}</span>
-          </div>
-        )}
-        <p style={{ marginTop: '0.75rem' }}><strong>Date:</strong> {date ? new Date(date).toLocaleDateString() : 'N/A'}</p>
-        <p><strong>Time:</strong> {time}</p>
-        {staffName && <p><strong>With:</strong> {decodeURIComponent(staffName)}</p>}
-        {!!people && <p><strong>Group Size:</strong> {people} people</p>}
-      </div>
+      <AppointmentSummary
+        allServiceDetails={allServiceDetails}
+        totalPrice={totalPrice}
+        totalDuration={totalDuration}
+        date={date}
+        time={time}
+        staffName={staffName}
+        people={people}
+      />
 
       <form onSubmit={handleSubmit} style={{ marginTop: '2rem' }}>
         <div style={{ marginBottom: '1rem' }}>

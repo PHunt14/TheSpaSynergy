@@ -85,6 +85,17 @@ function ServicePageContent() {
   const [selectedAddons, setSelectedAddons] = useState({})
   const categoryRefs = useRef({})
 
+  const groupServicesByCategory = (serviceList) => {
+    const parentServices = serviceList.filter(s => !(s.parentServiceIds?.length > 0))
+    return parentServices.reduce((acc, service) => {
+      const category = service.category || 'Other'
+      if (!acc[category]) acc[category] = []
+      service._addons = serviceList.filter(a => a.parentServiceIds?.includes(service.serviceId))
+      acc[category].push(service)
+      return acc
+    }, {})
+  }
+
   useEffect(() => {
     if (!vendor) return
     
@@ -93,16 +104,7 @@ function ServicePageContent() {
       fetch('/api/vendors').then(res => res.json())
     ])
       .then(([servicesData, vendorsData]) => {
-        const serviceList = servicesData.services || []
-        const parentServices = serviceList.filter(s => !(s.parentServiceIds?.length > 0))
-        const grouped = parentServices.reduce((acc, service) => {
-          const category = service.category || 'Other'
-          if (!acc[category]) acc[category] = []
-          service._addons = serviceList.filter(a => a.parentServiceIds?.includes(service.serviceId))
-          acc[category].push(service)
-          return acc
-        }, {})
-        setServices(grouped)
+        setServices(groupServicesByCategory(servicesData.services || []))
         setVendorInfo(vendorsData.vendors?.find(v => v.vendorId === vendor))
         setLoading(false)
       })

@@ -34,6 +34,35 @@ function FadeIn({ children, style }) {
   )
 }
 
+function CategoryBlock({ category, catServices, selectedServices, getAddons, toggleService }) {
+  return (
+    <FadeIn style={{
+      background: 'var(--color-accent)',
+      borderRadius: '12px',
+      border: '1px solid var(--color-border)',
+      padding: '1.5rem',
+    }}>
+      <h3 style={{
+        color: 'var(--color-primary-dark)',
+        marginBottom: '1rem',
+        marginTop: 0,
+        textAlign: 'center',
+        borderBottom: '2px solid var(--color-primary)',
+        paddingBottom: '0.5rem',
+      }}>{category}</h3>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+        {catServices.map(service => {
+          const isSelected = selectedServices.find(s => s.serviceId === service.serviceId)
+          const addons = getAddons(service.serviceId)
+          return (
+            <ServiceTile key={service.serviceId} service={service} isSelected={isSelected} addons={addons} onToggle={toggleService} />
+          )
+        })}
+      </div>
+    </FadeIn>
+  )
+}
+
 function ServiceTile({ service, isSelected, addons, onToggle }) {
   return (
     <div>
@@ -239,30 +268,7 @@ export default function ServicesPage() {
                 gap: '1.5rem',
               }}>
                 {Object.entries(categories).map(([category, catServices]) => (
-                  <FadeIn key={category} style={{
-                    background: 'var(--color-accent)',
-                    borderRadius: '12px',
-                    border: '1px solid var(--color-border)',
-                    padding: '1.5rem',
-                  }}>
-                    <h3 style={{
-                      color: 'var(--color-primary-dark)',
-                      marginBottom: '1rem',
-                      marginTop: 0,
-                      textAlign: 'center',
-                      borderBottom: '2px solid var(--color-primary)',
-                      paddingBottom: '0.5rem',
-                    }}>{category}</h3>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                      {catServices.map(service => {
-                        const isSelected = selectedServices.find(s => s.serviceId === service.serviceId)
-                        const addons = getAddons(service.serviceId)
-                        return (
-                          <ServiceTile key={service.serviceId} service={service} isSelected={isSelected} addons={addons} onToggle={toggleService} />
-                        )
-                      })}
-                    </div>
-                  </FadeIn>
+                  <CategoryBlock key={category} category={category} catServices={catServices} selectedServices={selectedServices} getAddons={getAddons} toggleService={toggleService} />
                 ))}
               </div>
             )}

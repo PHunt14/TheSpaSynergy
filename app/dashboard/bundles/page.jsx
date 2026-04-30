@@ -5,6 +5,28 @@ import { fetchAuthSession } from 'aws-amplify/auth'
 
 const ALL_DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
 
+function VendorServiceCheckboxes({ vendor, services, selectedServices, onToggle }) {
+  const vendorServices = services.filter(s => s.vendorId === vendor.vendorId)
+  if (vendorServices.length === 0) return null
+
+  return (
+    <div style={{ marginBottom: '1.5rem' }}>
+      <h4 style={{ marginBottom: '0.75rem', color: 'var(--color-primary)' }}>{vendor.name}</h4>
+      {vendorServices.map(service => (
+        <label key={service.serviceId} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={selectedServices.includes(service.serviceId)}
+            onChange={(e) => onToggle(service.serviceId, e.target.checked)}
+            style={{ width: '18px', height: '18px' }}
+          />
+          <span>{service.name} - ${service.price} ({service.duration} min)</span>
+        </label>
+      ))}
+    </div>
+  )
+}
+
 export default function BundlesManagement() {
   const [bundles, setBundles] = useState([])
   const [services, setServices] = useState([])
@@ -362,33 +384,20 @@ export default function BundlesManagement() {
           <div style={{ marginBottom: '1rem' }}>
             <label style={{ display: 'block', marginBottom: '0.5rem' }}>Select Services *</label>
             <div style={{ maxHeight: '300px', overflowY: 'auto', border: '1px solid var(--color-border)', borderRadius: '8px', padding: '1rem' }}>
-              {vendors.map(vendor => {
-                const vendorServices = services.filter(s => s.vendorId === vendor.vendorId)
-                if (vendorServices.length === 0) return null
-                
-                return (
-                  <div key={vendor.vendorId} style={{ marginBottom: '1.5rem' }}>
-                    <h4 style={{ marginBottom: '0.75rem', color: 'var(--color-primary)' }}>{vendor.name}</h4>
-                    {vendorServices.map(service => (
-                      <label key={service.serviceId} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', cursor: 'pointer' }}>
-                        <input
-                          type="checkbox"
-                          checked={newBundle.selectedServices.includes(service.serviceId)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setNewBundle({ ...newBundle, selectedServices: [...newBundle.selectedServices, service.serviceId] })
-                            } else {
-                              setNewBundle({ ...newBundle, selectedServices: newBundle.selectedServices.filter(id => id !== service.serviceId) })
-                            }
-                          }}
-                          style={{ width: '18px', height: '18px' }}
-                        />
-                        <span>{service.name} - ${service.price} ({service.duration} min)</span>
-                      </label>
-                    ))}
-                  </div>
-                )
-              })}
+              {vendors.map(vendor => (
+                <VendorServiceCheckboxes
+                  key={vendor.vendorId}
+                  vendor={vendor}
+                  services={services}
+                  selectedServices={newBundle.selectedServices}
+                  onToggle={(serviceId, checked) => {
+                    const updated = checked
+                      ? [...newBundle.selectedServices, serviceId]
+                      : newBundle.selectedServices.filter(id => id !== serviceId)
+                    setNewBundle({ ...newBundle, selectedServices: updated })
+                  }}
+                />
+              ))}
             </div>
           </div>
 
