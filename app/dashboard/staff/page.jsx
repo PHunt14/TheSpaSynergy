@@ -137,7 +137,7 @@ export default function Staff() {
   // --- Schedule management handlers ---
   const startNewSchedule = () => {
     const vendorId = currentUserRole === 'vendor' ? currentUserVendorId : (vendors[0]?.vendorId || '')
-    setScheduleForm({ staffName: '', staffEmail: '', vendorId, schedule: emptySchedule(), autoAssignDays: [], recurrenceDays: {}, smsAlertsEnabled: false, smsAlertPhone: '', emailAlertsEnabled: false })
+    setScheduleForm({ staffName: '', staffEmail: '', vendorId, linkedUser: '', schedule: emptySchedule(), autoAssignDays: [], recurrenceDays: {}, smsAlertsEnabled: false, smsAlertPhone: '', emailAlertsEnabled: false })
     setEditingSchedule('new')
   }
 
@@ -145,7 +145,6 @@ export default function Staff() {
     const schedule = typeof s.schedule === 'string' ? JSON.parse(s.schedule) : (s.schedule || emptySchedule())
     const rules = s.autoAssignRules ? (typeof s.autoAssignRules === 'string' ? JSON.parse(s.autoAssignRules) : s.autoAssignRules) : []
     const autoAssignDays = rules.length > 0 && rules[0].days ? rules[0].days : []
-    // Extract recurrence info per day
     const recurrenceDays = {}
     DAYS.forEach(day => {
       if (schedule[day]?.recurrence) {
@@ -155,7 +154,7 @@ export default function Staff() {
         }
       }
     })
-    setScheduleForm({ staffName: s.staffName || '', staffEmail: s.staffEmail || '', vendorId: s.vendorId, schedule, autoAssignDays, recurrenceDays, smsAlertsEnabled: s.smsAlertsEnabled || false, smsAlertPhone: s.smsAlertPhone || '', emailAlertsEnabled: s.emailAlertsEnabled || false })
+    setScheduleForm({ staffName: s.staffName || '', staffEmail: s.staffEmail || '', vendorId: s.vendorId, linkedUser: '', schedule, autoAssignDays, recurrenceDays, smsAlertsEnabled: s.smsAlertsEnabled || false, smsAlertPhone: s.smsAlertPhone || '', emailAlertsEnabled: s.emailAlertsEnabled || false })
     setEditingSchedule(s.visibleId)
   }
 
@@ -185,6 +184,20 @@ export default function Staff() {
       return { ...prev, autoAssignDays: days }
     })
   }
+
+  const handleLinkUser = (username) => {
+    if (!username) {
+      setScheduleForm(p => ({ ...p, linkedUser: '' }))
+      return
+    }
+    const user = users.find(u => u.username === username)
+    if (user) {
+      const name = [user.firstName, user.lastName].filter(Boolean).join(' ') || ''
+      setScheduleForm(p => ({ ...p, linkedUser: username, staffName: name || p.staffName, staffEmail: user.email || p.staffEmail }))
+    }
+  }
+
+  const vendorUsers = users.filter(u => u.vendorId === scheduleForm.vendorId)
 
   const saveSchedule = async () => {
     if (!scheduleForm.staffName || !scheduleForm.vendorId) { alert('Name and vendor required'); return }
@@ -406,6 +419,21 @@ export default function Staff() {
           <div style={{ background: 'var(--color-accent)', padding: '2rem', borderRadius: '12px', marginBottom: '2rem' }}>
             <h3>{editingSchedule === 'new' ? 'New Staff Schedule' : 'Edit Schedule'}</h3>
 
+            {vendorUsers.length > 0 && editingSchedule === 'new' && (
+              <div style={{ marginBottom: '1.5rem', maxWidth: '500px' }}>
+                <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: 600 }}>Link to User Account</label>
+                <select value={scheduleForm.linkedUser || ''} onChange={(e) => handleLinkUser(e.target.value)} style={{ width: '100%', ...inputStyle }}>
+                  <option value="">— Select a user to auto-fill —</option>
+                  {vendorUsers.map(u => (
+                    <option key={u.username} value={u.username}>
+                      {[u.firstName, u.lastName].filter(Boolean).join(' ') || u.email} ({u.email})
+                    </option>
+                  ))}
+                </select>
+                <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.25rem' }}>Auto-fills name and email from the user's dashboard account.</p>
+              </div>
+            )}
+
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem', maxWidth: '500px' }}>
               <div>
                 <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: 600 }}>Staff Name *</label>
@@ -414,13 +442,16 @@ export default function Staff() {
               <div>
                 <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: 600 }}>Email</label>
                 <input type="email" value={scheduleForm.staffEmail} onChange={(e) => setScheduleForm(p => ({ ...p, staffEmail: e.target.value }))} style={{ width: '100%', ...inputStyle }} />
+                {!scheduleForm.staffEmail && (
+                  <p style={{ fontSize: '0.85rem', color: '#c33', marginTop: '0.25rem' }}>⚠ Without an email, this staff member won't be able to access My Settings (Square, SMS alerts).</p>
+                )}
               </div>
             </div>
 
             {currentUserRole === 'admin' && (
               <div style={{ marginBottom: '1.5rem', maxWidth: '250px' }}>
                 <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: 600 }}>Vendor *</label>
-                <select value={scheduleForm.vendorId} onChange={(e) => setScheduleForm(p => ({ ...p, vendorId: e.target.value }))} style={{ width: '100%', ...inputStyle }}>
+                <select value={scheduleForm.vendorId} onChange={(e) => setScheduleForm(p => ({ ...p, vendorId: e.target.value, linkedUser: '' }))} style={{ width: '100%', ...inputStyle }}>
                   {vendors.map(v => <option key={v.vendorId} value={v.vendorId}>{v.name}</option>)}
                 </select>
               </div>
