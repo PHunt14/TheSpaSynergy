@@ -33,7 +33,7 @@ export default function MySettings({ currentUser, showMessage }) {
     try {
       const res = await fetch(`/api/staff-schedules?vendorId=${currentUser.vendorId}`)
       const data = await res.json()
-      const mine = (data.schedules || []).find(s => s.staffEmail === currentUser.email)
+      const mine = (data.schedules || []).find(s => s.staffEmail?.toLowerCase() === currentUser.email?.toLowerCase())
       if (mine) {
         setMyStaffSchedule(mine)
         setStaffSquareConnected(!!mine.squareAccessToken)
