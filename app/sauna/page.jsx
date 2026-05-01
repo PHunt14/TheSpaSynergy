@@ -32,16 +32,20 @@ export default function SaunaPage() {
     <div style={{ padding: '2rem', maxWidth: '800px', margin: '0 auto' }}>
       <div style={{
         height: '300px',
-        backgroundImage: 'url(https://the-spa-synergy-public.s3.us-east-1.amazonaws.com/vendorPictures/sauna-00.JPEG)',
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
         borderRadius: '16px',
         marginBottom: '2rem',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
+        overflow: 'hidden',
         backgroundColor: 'var(--color-accent)',
-      }} />
+      }}>
+        <div style={{
+          width: '100%',
+          height: '100%',
+          backgroundImage: 'url(https://the-spa-synergy-public.s3.us-east-1.amazonaws.com/vendorPictures/sauna_on-00.JPEG)',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center 35%',
+          transform: 'rotate(2.4deg) scale(1.15)',
+        }} />
+      </div>
 
       <h1 style={{ textAlign: 'center' }}>Book the Sauna</h1>
       <p style={{ color: 'var(--color-text-light)', textAlign: 'center', marginBottom: '2rem' }}>
