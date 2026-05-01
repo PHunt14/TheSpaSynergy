@@ -9,7 +9,6 @@ export default function VendorsPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    document.title = 'Our Practitioners | The Spa Synergy'
     fetch('/api/vendors')
       .then(res => res.json())
       .then(data => {

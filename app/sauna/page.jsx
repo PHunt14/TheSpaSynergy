@@ -10,7 +10,6 @@ export default function SaunaPage() {
   const [selected, setSelected] = useState(null)
 
   useEffect(() => {
-    document.title = 'Book the Sauna | The Spa Synergy'
     fetch('/api/services')
       .then(r => r.json())
       .then(data => {

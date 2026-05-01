@@ -7,7 +7,6 @@ export default function ContactPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    document.title = 'Contact Us | The Spa Synergy'
     fetch('/api/vendors')
       .then(res => res.json())
       .then(data => {
@@ -27,7 +26,7 @@ export default function ContactPage() {
 
       <div style={{ marginBottom: '2rem' }}>
         <h3>Our Location</h3>
-        <p>14310 Castle Dr.<br/>Fort Ritchie, MD 21719</p>
+        <p>14310 Castle Dr.<br/>Cascade (Fort Ritchie), MD 21719</p>
       </div>
 
       {loading ? (

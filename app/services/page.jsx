@@ -102,7 +102,6 @@ export default function ServicesPage() {
   const [allServicesRaw, setAllServicesRaw] = useState([])
 
   useEffect(() => {
-    document.title = 'Our Services | The Spa Synergy'
     Promise.all([
       fetch('/api/vendors').then(r => r.json()),
       fetch('/api/services').then(r => r.json())
