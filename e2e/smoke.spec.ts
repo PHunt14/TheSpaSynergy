@@ -32,7 +32,7 @@ test.describe('Public pages smoke tests', () => {
 
   test('footer contains address and links', async ({ page }) => {
     await page.goto('/')
-    await expect(page.locator('text=Fort Ritchie, MD 21719')).toBeVisible()
+    await expect(page.locator('footer').locator('text=Cascade (Fort Ritchie), MD 21719')).toBeVisible()
     await expect(page.locator('footer a[href="/dashboard"]')).toBeVisible()
   })
 })
