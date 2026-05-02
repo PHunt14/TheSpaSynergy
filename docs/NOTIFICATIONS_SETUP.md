@@ -13,7 +13,7 @@ The Spa Synergy sends SMS and email notifications to both customers and vendors 
 ## Architecture
 
 All notifications flow through two shared utilities:
-- `lib/sms.ts` — pluggable SMS (SNS, Twilio, or Console)
+- `lib/sms.ts` — pluggable SMS (AWS End User Messaging, Twilio, or Console)
 - `lib/email.ts` — pluggable email (SES or Console)
 
 Both support test overrides to route all messages to your personal phone/email during development.
@@ -52,7 +52,7 @@ Subject: Booking Confirmation - The Spa Synergy
 
 | Provider | `SMS_PROVIDER` | Best For |
 |----------|---------------|----------|
-| AWS SNS | `sns` (default) | Production |
+| AWS End User Messaging | `sns` (default) | Production |
 | Twilio | `twilio` | Dev with real texts |
 | Console | `console` | Quick local testing |
 
@@ -78,24 +78,24 @@ TWILIO_PHONE_NUMBER=+1234567890
 SMS_TEST_PHONE=2401234567
 ```
 
-### Option C: AWS SNS (Production)
+### Option C: AWS End User Messaging SMS (Production)
 
-SNS requires an **originator** (sending number) for US SMS. Steps:
+Uses the AWS End User Messaging SMS API (`@aws-sdk/client-pinpoint-sms-voice-v2`) with a registered toll-free number. Steps:
 
-1. **Register a toll-free number or 10DLC** in the [AWS SNS Console → Text messaging](https://console.aws.amazon.com/sns/v3/home#/mobile/text-messaging)
-   - Toll-free: ~$2/month, faster approval
-   - 10DLC: ~$0.50/month + brand registration ($4 one-time), higher throughput
+1. **Register a toll-free number** in the [AWS End User Messaging SMS Console](https://console.aws.amazon.com/sms-voice/home#/phone-numbers)
+   - Toll-free: ~$2/month, requires verification (see `docs/SMS_PHONE_NUMBER.md`)
 2. **Request production access** (exit SMS sandbox):
-   - SNS Console → Text messaging → Edit account settings
+   - End User Messaging SMS Console → Account overview → Request production access
    - Provide use case: "Appointment booking confirmations for spa customers"
    - Approval takes ~24 hours
+   - While in sandbox, add verified destination numbers to test
 3. Set in `.env.local`:
 ```env
 SMS_PROVIDER=sns
-SNS_ORIGINATION_NUMBER=+18005551234
+SNS_ORIGINATION_NUMBER=+18883313877
 ```
 
-`SNS_ORIGINATION_NUMBER` is the toll-free or 10DLC number you registered. Without it, SNS will reject US SMS.
+`SNS_ORIGINATION_NUMBER` is the toll-free number you registered. Without it, SMS will be rejected.
 
 **Pricing**: ~$0.00645 per SMS in the US.
 
@@ -190,7 +190,7 @@ Emails will include a banner showing the original recipient.
 - [ ] Verify SMS on your phone and email in your inbox
 
 ### Production
-- [ ] SNS originator registered and production access approved
+- [ ] Toll-free number registered and verified, production access approved
 - [ ] SES domain verified and production access approved
 - [ ] Remove `SMS_TEST_PHONE` and `EMAIL_TEST_ADDRESS` from `.env.local`
 - [ ] Set `SMS_PROVIDER=sns` and `EMAIL_PROVIDER=ses`
@@ -202,7 +202,7 @@ Emails will include a banner showing the original recipient.
 
 ### SMS not received
 - Check `SMS_PROVIDER` value in `.env.local`
-- **SNS**: Verify originator is registered, account is out of sandbox
+- **AWS**: Verify toll-free number is registered and verified, account is out of SMS sandbox
 - **Twilio**: Check credentials, verify trial number can send to recipient
 - Check the assigned staff member has `smsAlertsEnabled: true` and `smsAlertPhone` set in Dashboard → Settings → My Settings
 
@@ -236,7 +236,7 @@ Set these in `.env.local` for local development and in **Amplify Console → App
 | Variable | Default | Description | Production? |
 |----------|---------|-------------|-------------|
 | `SMS_PROVIDER` | `sns` | SMS provider: `sns`, `twilio`, or `console` | `sns` |
-| `SNS_ORIGINATION_NUMBER` | _(none)_ | Registered toll-free or 10DLC number for SNS | ✅ Required |
+| `SNS_ORIGINATION_NUMBER` | _(none)_ | Registered toll-free number (`+18883313877`) | ✅ Required |
 | `EMAIL_PROVIDER` | `ses` | Email provider: `ses` or `console` | `ses` |
 | `SES_FROM_EMAIL` | `noreply@thespasynergy.com` | Sender email address | ✅ Required |
 | `SMS_TEST_PHONE` | _(none)_ | Override: route all SMS here | ❌ Do not set |

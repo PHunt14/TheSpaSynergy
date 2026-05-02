@@ -111,10 +111,10 @@ Separately from toll-free verification, your AWS account may be in the **SMS san
 Once approved, set the env var in Amplify:
 
 ```
-SNS_ORIGINATION_NUMBER=+18005551234
+SNS_ORIGINATION_NUMBER=+18883313877
 ```
 
-Replace with your actual toll-free number. Redeploy after setting the variable.
+The app uses the AWS End User Messaging SMS API (`@aws-sdk/client-pinpoint-sms-voice-v2`) to send messages via this number. Redeploy after setting the variable.
 
 ---
 

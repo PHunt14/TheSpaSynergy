@@ -1,5 +1,3 @@
-import { SNSClient, PublishCommand } from '@aws-sdk/client-sns'
-
 const SMS_PROVIDER = process.env.SMS_PROVIDER || 'sns' // 'sns' | 'twilio' | 'console'
 
 function formatPhone(phone: string): string {
@@ -7,18 +5,14 @@ function formatPhone(phone: string): string {
 }
 
 async function sendViaSns(phoneNumber: string, message: string) {
-  const snsClient = new SNSClient({ region: process.env.AWS_REGION || 'us-east-1' })
-  await snsClient.send(new PublishCommand({
-    PhoneNumber: formatPhone(phoneNumber),
-    Message: message,
-    // Required for US SMS — your registered toll-free or 10DLC number
+  const { PinpointSMSVoiceV2Client, SendTextMessageCommand } = await import('@aws-sdk/client-pinpoint-sms-voice-v2')
+  const client = new PinpointSMSVoiceV2Client({ region: process.env.AWS_REGION || 'us-east-1' })
+  await client.send(new SendTextMessageCommand({
+    DestinationPhoneNumber: formatPhone(phoneNumber),
+    MessageBody: message,
+    MessageType: 'TRANSACTIONAL',
     ...(process.env.SNS_ORIGINATION_NUMBER && {
-      MessageAttributes: {
-        'AWS.SNS.SMS.OriginationNumber': {
-          DataType: 'String',
-          StringValue: process.env.SNS_ORIGINATION_NUMBER,
-        },
-      },
+      OriginationIdentity: process.env.SNS_ORIGINATION_NUMBER,
     }),
   }))
 }
