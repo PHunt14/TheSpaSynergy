@@ -18,7 +18,7 @@ describe('Footer', () => {
   })
 
   test('renders address', () => {
-    expect(screen.getByText(/Fort Ritchie, MD 21719/)).toBeInTheDocument()
+    expect(screen.getByText(/Cascade.*Fort Ritchie.*MD 21719/)).toBeInTheDocument()
   })
 
   test('renders navigation links', () => {
