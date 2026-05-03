@@ -1,0 +1,212 @@
+{
+  "widgets": [
+    {
+      "type": "text",
+      "x": 0,
+      "y": 0,
+      "width": 24,
+      "height": 1,
+      "properties": {
+        "markdown": "# Uptime & Performance"
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 1,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "title": "Uptime (Health Check Status)",
+        "metrics": [["AWS/Route53", "HealthCheckStatus", "HealthCheckId", "2441ec3e-c3f9-4414-ad4c-93acf57728ed", {"stat": "Minimum", "label": "Healthy (1=up, 0=down)"}]],
+        "period": 300,
+        "view": "timeSeries",
+        "region": "us-east-1",
+        "yAxis": {"left": {"min": 0, "max": 1}}
+      }
+    },
+    {
+      "type": "metric",
+      "x": 8,
+      "y": 1,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "title": "Uptime % (30-day)",
+        "metrics": [["AWS/Route53", "HealthCheckPercentageHealthy", "HealthCheckId", "2441ec3e-c3f9-4414-ad4c-93acf57728ed", {"stat": "Average", "label": "% Healthy"}]],
+        "period": 86400,
+        "view": "singleValue",
+        "region": "us-east-1"
+      }
+    },
+    {
+      "type": "metric",
+      "x": 16,
+      "y": 1,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "title": "Response Time (ms)",
+        "metrics": [
+          ["AWS/Route53", "TimeToFirstByte", "HealthCheckId", "2441ec3e-c3f9-4414-ad4c-93acf57728ed", {"stat": "Average", "label": "Avg"}],
+          ["AWS/Route53", "TimeToFirstByte", "HealthCheckId", "2441ec3e-c3f9-4414-ad4c-93acf57728ed", {"stat": "p95", "label": "p95"}]
+        ],
+        "period": 300,
+        "view": "timeSeries",
+        "region": "us-east-1"
+      }
+    },
+    {
+      "type": "text",
+      "x": 0,
+      "y": 7,
+      "width": 24,
+      "height": 1,
+      "properties": {
+        "markdown": "# SMS (End User Messaging)"
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 8,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "title": "SMS Sent vs Delivered",
+        "metrics": [
+          ["AWS/SMSVoice", "NumberOfTextMessagePartsSent", {"stat": "Sum", "label": "Sent", "color": "#2ca02c"}],
+          ["AWS/SMSVoice", "NumberOfTextMessagePartsDelivered", {"stat": "Sum", "label": "Delivered", "color": "#1f77b4"}]
+        ],
+        "period": 86400,
+        "view": "timeSeries",
+        "region": "us-east-1",
+        "yAxis": {"left": {"min": 0}}
+      }
+    },
+    {
+      "type": "metric",
+      "x": 8,
+      "y": 8,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "title": "SMS Monthly Spend ($)",
+        "metrics": [["AWS/SMSVoice", "TextMessageMonthlySpend", {"stat": "Maximum", "label": "Spend", "color": "#d62728"}]],
+        "period": 86400,
+        "view": "singleValue",
+        "region": "us-east-1"
+      }
+    },
+    {
+      "type": "metric",
+      "x": 16,
+      "y": 8,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "title": "SMS Delivery Rate",
+        "metrics": [["AWS/SNS", "SMSSuccessRate", {"stat": "Average", "label": "Success %", "color": "#2ca02c"}]],
+        "period": 86400,
+        "view": "singleValue",
+        "region": "us-east-1"
+      }
+    },
+    {
+      "type": "text",
+      "x": 0,
+      "y": 14,
+      "width": 24,
+      "height": 1,
+      "properties": {
+        "markdown": "# Email (SES)"
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 15,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "title": "Emails Sent / Delivered / Bounced",
+        "metrics": [
+          ["AWS/SES", "Send", {"stat": "Sum", "label": "Sent", "color": "#1f77b4"}],
+          ["AWS/SES", "Delivery", {"stat": "Sum", "label": "Delivered", "color": "#2ca02c"}],
+          ["AWS/SES", "Bounce", {"stat": "Sum", "label": "Bounced", "color": "#d62728"}]
+        ],
+        "period": 86400,
+        "view": "timeSeries",
+        "region": "us-east-1",
+        "yAxis": {"left": {"min": 0}}
+      }
+    },
+    {
+      "type": "metric",
+      "x": 8,
+      "y": 15,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "title": "SES Bounce Rate",
+        "metrics": [["AWS/SES", "Reputation.BounceRate", {"stat": "Average", "label": "Bounce Rate %", "color": "#d62728"}]],
+        "period": 86400,
+        "view": "singleValue",
+        "region": "us-east-1"
+      }
+    },
+    {
+      "type": "metric",
+      "x": 16,
+      "y": 15,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "title": "SES Complaint Rate",
+        "metrics": [["AWS/SES", "Reputation.ComplaintRate", {"stat": "Average", "label": "Complaint Rate %", "color": "#ff7f0e"}]],
+        "period": 86400,
+        "view": "singleValue",
+        "region": "us-east-1"
+      }
+    },
+    {
+      "type": "text",
+      "x": 0,
+      "y": 21,
+      "width": 24,
+      "height": 1,
+      "properties": {
+        "markdown": "# Deployments & Health"
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 22,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "title": "Amplify Deployments",
+        "metrics": [["SpaSynergy", "DeploymentEvent", "AppId", "d16a4tljua629i", {"stat": "Sum", "label": "Deployments", "color": "#2ca02c"}]],
+        "period": 86400,
+        "view": "timeSeries",
+        "region": "us-east-1",
+        "yAxis": {"left": {"min": 0}}
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12,
+      "y": 22,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "title": "API Key Days Until Expiry",
+        "metrics": [["SpaSynergy", "ApiKeyDaysUntilExpiry", {"stat": "Minimum", "label": "Days Left", "color": "#ff7f0e"}]],
+        "period": 86400,
+        "view": "singleValue",
+        "region": "us-east-1"
+      }
+    }
+  ]
+}

@@ -415,6 +415,11 @@ export default function Appointments() {
                         📦 Bundle
                       </div>
                     )}
+                    {apt.paymentId && (
+                      <div style={{ fontSize: '0.75rem', color: '#155724', marginTop: '0.25rem' }}>
+                        💳 Paid
+                      </div>
+                    )}
                   </td>
                   <td style={{ padding: '1rem' }}>
                     {apt.status !== 'cancelled' && (

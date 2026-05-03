@@ -214,6 +214,7 @@ function ConfirmPageContent() {
             customer: formData,
             status,
             paymentId,
+            ...(paymentId ? { paymentStatus: 'paid', paymentAmount: totalPrice } : {}),
             ...(people ? { people } : {})
           })
         }).then(r => r.json())
