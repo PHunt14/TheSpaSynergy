@@ -47,6 +47,7 @@ function BookingContent() {
           const vendorImages = {
             'vendor-kera-studio': 'https://the-spa-synergy-public.s3.amazonaws.com/vendorPictures/Kera_Logo00.jpg',
             'vendor-winsome-woods': 'https://the-spa-synergy-public.s3.amazonaws.com/vendorPictures/Winsome_Hero00.jpg',
+            'vendor-selene-glow-studio': 'https://the-spa-synergy-public.s3.amazonaws.com/vendorPictures/JylianHafer_SeleneGlow_Profile00.jpeg',
           }
           const imageUrl = vendorImages[vendor.vendorId]
 
@@ -68,7 +69,7 @@ function BookingContent() {
                 height: '250px',
                 backgroundImage: imageUrl ? `url(${imageUrl})` : 'linear-gradient(135deg, var(--color-primary), var(--color-secondary))',
                 backgroundSize: 'cover',
-                backgroundPosition: 'center',
+                backgroundPosition: vendor.vendorId === 'vendor-selene-glow-studio' ? 'center 30%' : 'center',
               }} />
               <div style={{ padding: '1.5rem' }}>
                 <h3>{vendor.name}</h3>
