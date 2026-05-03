@@ -1,12 +1,10 @@
 export default function CherryBlossomHeading({ text = "Experience Luxury & Wellness" }) {
   return (
-    <div style={{ position: 'relative', display: 'inline-block', margin: '0 auto' }}>
+    <div style={{ position: 'relative', display: 'block', width: '100%', maxWidth: '700px', margin: '0 auto' }}>
       <svg
-        width="700"
-        height="180"
         viewBox="0 0 700 180"
         xmlns="http://www.w3.org/2000/svg"
-        style={{ display: 'block' }}
+        style={{ display: 'block', width: '100%', height: 'auto' }}
       >
         {/* Left branch - extended inward toward text */}
         <path d="M10 90 Q 80 65, 180 85" fill="none" stroke="#4A3428" strokeWidth="4" strokeLinecap="round"/>
