@@ -323,11 +323,11 @@ function ConfirmPageContent() {
         <div style={{
           background: '#fff3cd', border: '1px solid #ffc107', borderRadius: '8px', padding: '1rem', marginBottom: '1rem'
         }}>
-          <strong>⚠️ {bundleId ? 'Vendor Confirmation Required' : 'Consultation Required'}</strong>
+          <strong>⚠️ {bundleId ? 'Vendor Confirmation Required' : 'Confirmation Required'}</strong>
           <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.9rem' }}>
             {bundleId
               ? 'This bundle requires confirmation from each vendor before your appointment is finalized. You will be notified once confirmed.'
-              : 'The vendor will contact you to confirm your preferred date and time.'}
+              : 'This service requires confirmation. The vendor will contact you to confirm your preferred date and time.'}
           </p>
         </div>
       )}
