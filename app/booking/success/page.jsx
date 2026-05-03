@@ -1,7 +1,7 @@
 'use client'
 
 import { useSearchParams } from 'next/navigation'
-import { Suspense } from 'react'
+import { Suspense, useEffect } from 'react'
 import Link from 'next/link'
 
 function SuccessContent() {
@@ -13,6 +13,18 @@ function SuccessContent() {
   const confirmation = params.get('confirmation')
   const staffName = params.get('staffName')
   const people = params.get('people')
+  const total = params.get('total')
+
+  useEffect(() => {
+    if (!appointmentId || typeof window === 'undefined' || !window.gtag) return
+    window.gtag('event', 'purchase', {
+      transaction_id: appointmentId,
+      value: parseFloat(total) || 0,
+      currency: 'USD',
+      payment_type: paymentMethod === 'card' ? 'card' : 'in-person',
+      items: serviceName ? serviceName.split(', ').map(name => ({ item_name: name })) : [],
+    })
+  }, [appointmentId])
 
   return (
     <main style={{ textAlign: 'center', maxWidth: '600px', margin: '0 auto', padding: '2rem' }}>

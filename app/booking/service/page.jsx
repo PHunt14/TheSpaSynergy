@@ -104,9 +104,18 @@ function ServicePageContent() {
       fetch('/api/vendors').then(res => res.json())
     ])
       .then(([servicesData, vendorsData]) => {
-        setServices(groupServicesByCategory(servicesData.services || []))
-        setVendorInfo(vendorsData.vendors?.find(v => v.vendorId === vendor))
+        const grouped = groupServicesByCategory(servicesData.services || [])
+        setServices(grouped)
+        const vnd = vendorsData.vendors?.find(v => v.vendorId === vendor)
+        setVendorInfo(vnd)
         setLoading(false)
+        if (typeof window !== 'undefined' && window.gtag) {
+          const allServices = Object.values(grouped).flat()
+          window.gtag('event', 'view_item_list', {
+            item_list_name: vnd?.name || vendor,
+            items: allServices.map(s => ({ item_id: s.serviceId, item_name: s.name, price: s.price }))
+          })
+        }
       })
       .catch(err => {
         console.error('Error loading services:', err)
@@ -140,7 +149,12 @@ function ServicePageContent() {
 
   const handleServiceClick = (service) => {
     if (!isBookingEnabled) { setShowDisabled(true); return }
-    // If service has addons, expand/collapse instead of navigating
+    if (typeof window !== 'undefined' && window.gtag) {
+      window.gtag('event', 'select_item', {
+        item_list_name: vendorInfo?.name || vendor,
+        items: [{ item_id: service.serviceId, item_name: service.name, price: service.price }]
+      })
+    }
     if (service._addons?.length > 0) {
       setExpandedService(prev => prev === service.serviceId ? null : service.serviceId)
       return
