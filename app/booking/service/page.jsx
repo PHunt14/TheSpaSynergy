@@ -182,15 +182,8 @@ function ServicePageContent() {
             height: '80px',
             borderRadius: '12px',
             background: 'linear-gradient(135deg, var(--color-primary), var(--color-secondary))',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'white',
-            fontSize: '0.8rem',
-            fontWeight: 'bold',
             flexShrink: 0
           }}>
-            [Icon]
           </div>
           <div>
             <h2 style={{ margin: '0 0 0.25rem 0' }}>{vendorInfo.name}</h2>
