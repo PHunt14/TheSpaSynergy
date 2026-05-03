@@ -41,7 +41,7 @@ export async function PATCH(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { vendorId, serviceId, bundleId, dateTime, customer, status, paymentId, staffId } = body;
+    const { vendorId, serviceId, bundleId, dateTime, customer, status, paymentId, paymentStatus, paymentAmount, staffId } = body;
 
     if (!vendorId || !serviceId || !dateTime || !customer) {
       return Response.json({ error: 'Missing required fields' }, { status: 400 });
@@ -72,6 +72,8 @@ export async function POST(request: Request) {
       customer: JSON.stringify(customer),
       status: status || 'pending-confirmation',
       paymentId,
+      paymentStatus: paymentStatus || undefined,
+      paymentAmount: paymentAmount || undefined,
       createdAt: new Date().toISOString(),
     } as any);
 

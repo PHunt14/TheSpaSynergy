@@ -54,7 +54,15 @@ function BookingContent() {
           return (
             <div
               key={vendor.vendorId}
-              onClick={() => router.push(`/booking/service?vendor=${vendor.vendorId}`)}
+              onClick={() => {
+                if (typeof window !== 'undefined' && window.gtag) {
+                  window.gtag('event', 'select_item', {
+                    item_list_name: 'Vendors',
+                    items: [{ item_name: vendor.name, item_id: vendor.vendorId }]
+                  })
+                }
+                router.push(`/booking/service?vendor=${vendor.vendorId}`)
+              }}
               style={{
                 borderRadius: '12px',
                 overflow: 'hidden',

@@ -116,9 +116,9 @@ function TimePageContent() {
               padding: '1rem',
               marginBottom: '1rem'
             }}>
-              <strong>⚠️ Consultation Required</strong>
+              <strong>⚠️ Confirmation Required</strong>
               <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.9rem' }}>
-                This service requires a consultation. Select your preferred date and time below, and the vendor will contact you to confirm.
+                This service requires confirmation. Select your preferred date and time below, and the vendor will contact you to confirm.
               </p>
             </div>
           )}

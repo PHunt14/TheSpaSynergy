@@ -71,6 +71,13 @@ function ConfirmPageContent() {
         const selected = (data.services || []).filter(s => serviceIds.includes(s.serviceId))
         setAllServiceDetails(selected)
         if (selected.some(s => s.cardPaymentDisabled)) setPaymentMethod('in-person')
+        if (typeof window !== 'undefined' && window.gtag && selected.length > 0) {
+          window.gtag('event', 'begin_checkout', {
+            value: selected.reduce((sum, s) => sum + (s.price || 0), 0) * (people || 1),
+            currency: 'USD',
+            items: selected.map(s => ({ item_id: s.serviceId, item_name: s.name, price: s.price }))
+          })
+        }
       })
 
     // Fetch staff Square status if a staff member is assigned
@@ -214,6 +221,7 @@ function ConfirmPageContent() {
             customer: formData,
             status,
             paymentId,
+            ...(paymentId ? { paymentStatus: 'paid', paymentAmount: totalPrice } : {}),
             ...(people ? { people } : {})
           })
         }).then(r => r.json())
@@ -246,7 +254,8 @@ function ConfirmPageContent() {
         id: firstSuccess.appointmentId,
         dateTime: dateTimeISO,
         service: allServiceDetails.map(s => s.name).join(', '),
-        payment: pMethod
+        payment: pMethod,
+        total: totalPrice.toFixed(2)
       })
       if (requiresConfirmation) successUrl.set('confirmation', 'required')
       if (staffName) successUrl.set('staffName', staffName)
@@ -314,11 +323,11 @@ function ConfirmPageContent() {
         <div style={{
           background: '#fff3cd', border: '1px solid #ffc107', borderRadius: '8px', padding: '1rem', marginBottom: '1rem'
         }}>
-          <strong>⚠️ {bundleId ? 'Vendor Confirmation Required' : 'Consultation Required'}</strong>
+          <strong>⚠️ {bundleId ? 'Vendor Confirmation Required' : 'Confirmation Required'}</strong>
           <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.9rem' }}>
             {bundleId
               ? 'This bundle requires confirmation from each vendor before your appointment is finalized. You will be notified once confirmed.'
-              : 'The vendor will contact you to confirm your preferred date and time.'}
+              : 'This service requires confirmation. The vendor will contact you to confirm your preferred date and time.'}
           </p>
         </div>
       )}
