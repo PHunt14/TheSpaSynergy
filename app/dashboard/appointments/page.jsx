@@ -133,7 +133,7 @@ export default function Appointments() {
           alert('Failed to confirm: ' + (data.error || ''))
         }
       } catch (error) {
-        alert('Error confirming bundle')
+        alert('Error confirming bundle: ' + (error.message || ''))
       }
       return
     }
@@ -179,7 +179,7 @@ export default function Appointments() {
           alert('Failed to cancel bundle')
         }
       } catch (error) {
-        alert('Error cancelling bundle')
+        alert('Error cancelling bundle: ' + (error.message || ''))
       }
       return
     }
@@ -287,7 +287,7 @@ export default function Appointments() {
         alert('Failed: ' + (data.error || 'Unknown error'))
       }
     } catch (error) {
-      alert('Error blocking time')
+      alert('Error blocking time: ' + (error.message || ''))
     } finally { setBlockLoading(false) }
   }
 
@@ -321,7 +321,7 @@ export default function Appointments() {
         alert('Failed: ' + (data.error || 'Unknown error'))
       }
     } catch (error) {
-      alert('Error adding appointment')
+      alert('Error adding appointment: ' + (error.message || ''))
     } finally { setManualLoading(false) }
   }
 
@@ -353,10 +353,11 @@ export default function Appointments() {
 
       {userRole === 'admin' && vendors.length > 0 && (
         <div style={{ marginBottom: '2rem' }}>
-          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+          <label htmlFor="vendor-select" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
             Select Vendor:
           </label>
           <select
+            id="vendor-select"
             value={userVendorId || ''}
             onChange={(e) => setUserVendorId(e.target.value)}
             style={{
@@ -390,8 +391,9 @@ export default function Appointments() {
         <>
           <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <label style={{ marginRight: '0.5rem' }}>Show:</label>
+              <label htmlFor="items-per-page" style={{ marginRight: '0.5rem' }}>Show:</label>
               <select
+                id="items-per-page"
                 value={itemsPerPage}
                 onChange={(e) => {
                   setItemsPerPage(Number(e.target.value))
@@ -648,13 +650,14 @@ export default function Appointments() {
                     marginBottom: '1.5rem'
                   }}>
                     {rescheduleSlots.map(slot => (
-                      <div
+                      <button
                         key={slot.time}
                         onClick={() => setRescheduleTime(slot.time)}
                         style={{
                           padding: '0.75rem',
                           borderRadius: '8px',
                           cursor: 'pointer',
+                          border: 'none',
                           background: rescheduleTime === slot.time ? 'var(--color-primary)' : 'var(--color-accent)',
                           color: rescheduleTime === slot.time ? 'white' : 'var(--color-text)',
                           textAlign: 'center',
@@ -663,7 +666,7 @@ export default function Appointments() {
                         }}
                       >
                         {slot.display}
-                      </div>
+                      </button>
                     ))}
                   </div>
                 )}
@@ -717,15 +720,15 @@ export default function Appointments() {
             </p>
 
             <div style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Date & Time *</label>
-              <input type="datetime-local" value={manualForm.dateTime}
+              <label htmlFor="manual-datetime" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Date & Time *</label>
+              <input id="manual-datetime" type="datetime-local" value={manualForm.dateTime}
                 onChange={(e) => setManualForm({ ...manualForm, dateTime: e.target.value })}
                 style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />
             </div>
 
             <div style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Service</label>
-              <select value={manualServiceId} onChange={(e) => setManualServiceId(e.target.value)}
+              <label htmlFor="manual-service" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Service</label>
+              <select id="manual-service" value={manualServiceId} onChange={(e) => setManualServiceId(e.target.value)}
                 style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }}>
                 <option value="">None (time block)</option>
                 {services.map(s => <option key={s.serviceId} value={s.serviceId}>{s.name} ({s.duration} min - ${s.price})</option>)}
@@ -733,8 +736,8 @@ export default function Appointments() {
             </div>
 
             <div style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Staff Member</label>
-              <select value={manualStaffId} onChange={(e) => setManualStaffId(e.target.value)}
+              <label htmlFor="manual-staff" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Staff Member</label>
+              <select id="manual-staff" value={manualStaffId} onChange={(e) => setManualStaffId(e.target.value)}
                 style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }}>
                 <option value="">None</option>
                 {staffList.map(s => <option key={s.visibleId} value={s.visibleId}>{s.staffName}</option>)}
@@ -742,23 +745,23 @@ export default function Appointments() {
             </div>
 
             <div style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Customer Name</label>
-              <input type="text" value={manualForm.customerName}
+              <label htmlFor="manual-customer" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Customer Name</label>
+              <input id="manual-customer" type="text" value={manualForm.customerName}
                 onChange={(e) => setManualForm({ ...manualForm, customerName: e.target.value })}
                 placeholder="e.g. Vagaro booking, Walk-in"
                 style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />
             </div>
 
             <div style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Phone</label>
-              <input type="tel" value={manualForm.customerPhone}
+              <label htmlFor="manual-phone" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Phone</label>
+              <input id="manual-phone" type="tel" value={manualForm.customerPhone}
                 onChange={(e) => setManualForm({ ...manualForm, customerPhone: e.target.value })}
                 style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />
             </div>
 
             <div style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Notes</label>
-              <textarea value={manualForm.notes}
+              <label htmlFor="manual-notes" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Notes</label>
+              <textarea id="manual-notes" value={manualForm.notes}
                 onChange={(e) => setManualForm({ ...manualForm, notes: e.target.value })}
                 placeholder="e.g. Booked via Vagaro, walk-in client"
                 rows="2"
@@ -794,15 +797,15 @@ export default function Appointments() {
             </p>
 
             <div style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Date & Time *</label>
-              <input type="datetime-local" value={blockForm.dateTime}
+              <label htmlFor="block-datetime" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Date & Time *</label>
+              <input id="block-datetime" type="datetime-local" value={blockForm.dateTime}
                 onChange={(e) => setBlockForm({ ...blockForm, dateTime: e.target.value })}
                 style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />
             </div>
 
             <div style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Duration (minutes) *</label>
-              <select value={blockForm.duration} onChange={(e) => setBlockForm({ ...blockForm, duration: Number(e.target.value) })}
+              <label htmlFor="block-duration" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Duration (minutes) *</label>
+              <select id="block-duration" value={blockForm.duration} onChange={(e) => setBlockForm({ ...blockForm, duration: Number(e.target.value) })}
                 style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }}>
                 <option value={30}>30 min</option>
                 <option value={60}>1 hour</option>
@@ -815,8 +818,8 @@ export default function Appointments() {
             </div>
 
             <div style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Staff Member</label>
-              <select value={blockStaffId} onChange={(e) => setBlockStaffId(e.target.value)}
+              <label htmlFor="block-staff" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Staff Member</label>
+              <select id="block-staff" value={blockStaffId} onChange={(e) => setBlockStaffId(e.target.value)}
                 style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }}>
                 <option value="">All staff</option>
                 {staffList.map(s => <option key={s.visibleId} value={s.visibleId}>{s.staffName}</option>)}
@@ -824,8 +827,8 @@ export default function Appointments() {
             </div>
 
             <div style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Reason (optional)</label>
-              <input type="text" value={blockForm.notes}
+              <label htmlFor="block-reason" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Reason (optional)</label>
+              <input id="block-reason" type="text" value={blockForm.notes}
                 onChange={(e) => setBlockForm({ ...blockForm, notes: e.target.value })}
                 placeholder="e.g. Lunch break, Personal appointment"
                 style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />
