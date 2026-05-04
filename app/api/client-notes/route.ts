@@ -42,10 +42,9 @@ export async function GET(request: Request) {
   if (!clientId) return Response.json({ error: 'clientId required' }, { status: 400 });
 
   try {
-    const { data: notes } = await client.models.ClientNote.listClientNoteByClientId(
-      { clientId },
-      { sortDirection: 'DESC' }
-    );
+    const { data: notes } = await client.models.ClientNote.list({
+      filter: { clientId: { eq: clientId } },
+    });
     return Response.json({ notes: notes || [] });
   } catch (error) {
     console.error('Error fetching notes:', error);

@@ -97,13 +97,17 @@ export async function PATCH(request: Request) {
 async function findExistingClient(phone?: string, email?: string) {
   const normalizedPhone = normalizePhone(phone);
   if (normalizedPhone) {
-    const { data } = await client.models.Client.listClientByPhone({ phone: normalizedPhone });
+    const { data } = await client.models.Client.list({
+      filter: { phone: { eq: normalizedPhone } },
+    });
     if (data && data.length > 0) return data[0];
   }
 
   const normalizedEmail = normalizeEmail(email);
   if (normalizedEmail) {
-    const { data } = await client.models.Client.listClientByEmail({ email: normalizedEmail });
+    const { data } = await client.models.Client.list({
+      filter: { email: { eq: normalizedEmail } },
+    });
     if (data && data.length > 0) return data[0];
   }
 
