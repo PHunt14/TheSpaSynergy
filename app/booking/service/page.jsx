@@ -4,6 +4,7 @@ import { useSearchParams } from 'next/navigation'
 import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter } from 'next/navigation'
 import BookingDisabled, { isBookingEnabled } from '../../components/BookingDisabled'
+import PropTypes from 'prop-types'
 
 function ServiceCard({ service, isExpanded, selectedAddons, onServiceClick, onToggleAddon, onBook }) {
   const addons = service._addons || []
@@ -70,6 +71,15 @@ function ServiceCard({ service, isExpanded, selectedAddons, onServiceClick, onTo
       )}
     </div>
   )
+}
+
+ServiceCard.propTypes = {
+  service: PropTypes.object.isRequired,
+  isExpanded: PropTypes.bool,
+  selectedAddons: PropTypes.object,
+  onServiceClick: PropTypes.func.isRequired,
+  onToggleAddon: PropTypes.func.isRequired,
+  onBook: PropTypes.func.isRequired,
 }
 
 function ServicePageContent() {

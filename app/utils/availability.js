@@ -76,7 +76,7 @@ export function getDayHoursSync(vendor, service, dayOfWeek, date, ctx) {
 }
 
 export function hasAnySlot(startTime, endTime, duration, buffer, ctx) {
-  const { appointments, dateStr, date, staff } = ctx
+  const { appointments, dateStr, staff } = ctx
   const [startHour, startMin] = startTime.split(':').map(Number)
   const [endHour, endMin] = endTime.split(':').map(Number)
 

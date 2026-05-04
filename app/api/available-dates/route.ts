@@ -72,8 +72,7 @@ export async function GET(request: Request) {
 
     const availableDates = buildAvailableDates(
       firstDay, lastDay, minDate, isSauna, vendor, service,
-      staffList || [], workingHours, saunaHours, allowedStaffIds,
-      monthAppointments || []
+      { staffList: staffList || [], workingHours, saunaHours, allowedStaffIds, monthAppointments: monthAppointments || [] }
     );
 
     return Response.json({ availableDates });
@@ -85,9 +84,9 @@ export async function GET(request: Request) {
 
 function buildAvailableDates(
   firstDay: Date, lastDay: Date, minDate: Date, isSauna: boolean,
-  vendor: any, service: any, staffList: any[], workingHours: any,
-  saunaHours: any, allowedStaffIds: string[] | null, monthAppointments: any[]
+  vendor: any, service: any, ctx: { staffList: any[]; workingHours: any; saunaHours: any; allowedStaffIds: string[] | null; monthAppointments: any[] }
 ): string[] {
+  const { staffList, workingHours, saunaHours, allowedStaffIds, monthAppointments } = ctx;
   const availableDates: string[] = [];
 
   for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {

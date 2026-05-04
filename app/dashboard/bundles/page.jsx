@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { fetchAuthSession } from 'aws-amplify/auth'
+import PropTypes from 'prop-types'
 
 const ALL_DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
 
@@ -25,6 +26,13 @@ function VendorServiceCheckboxes({ vendor, services, selectedServices, onToggle 
       ))}
     </div>
   )
+}
+
+VendorServiceCheckboxes.propTypes = {
+  vendor: PropTypes.object.isRequired,
+  services: PropTypes.array.isRequired,
+  selectedServices: PropTypes.array.isRequired,
+  onToggle: PropTypes.func.isRequired,
 }
 
 export default function BundlesManagement() {

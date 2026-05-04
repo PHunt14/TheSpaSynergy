@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import BookingDisabled, { isBookingEnabled } from '../components/BookingDisabled'
+import PropTypes from 'prop-types'
 
 function FadeIn({ children, style }) {
   const ref = useRef(null)
@@ -63,6 +64,14 @@ function CategoryBlock({ category, catServices, selectedServices, getAddons, tog
   )
 }
 
+CategoryBlock.propTypes = {
+  category: PropTypes.string.isRequired,
+  catServices: PropTypes.array.isRequired,
+  selectedServices: PropTypes.array.isRequired,
+  getAddons: PropTypes.func.isRequired,
+  toggleService: PropTypes.func.isRequired,
+}
+
 function ServiceTile({ service, isSelected, addons, onToggle }) {
   return (
     <div>
@@ -89,6 +98,13 @@ function ServiceTile({ service, isSelected, addons, onToggle }) {
       )}
     </div>
   )
+}
+
+ServiceTile.propTypes = {
+  service: PropTypes.object.isRequired,
+  isSelected: PropTypes.object,
+  addons: PropTypes.array.isRequired,
+  onToggle: PropTypes.func.isRequired,
 }
 
 export default function ServicesPage() {

@@ -3,6 +3,7 @@
 import { useSearchParams } from 'next/navigation'
 import { useState, useEffect, Suspense } from 'react'
 import BookingDisabled, { isBookingEnabled } from '../../components/BookingDisabled'
+import PropTypes from 'prop-types'
 
 function AppointmentSummary({ allServiceDetails, totalPrice, totalDuration, date, time, staffName, people }) {
   return (
@@ -26,6 +27,16 @@ function AppointmentSummary({ allServiceDetails, totalPrice, totalDuration, date
       {!!people && <p><strong>Group Size:</strong> {people} people</p>}
     </div>
   )
+}
+
+AppointmentSummary.propTypes = {
+  allServiceDetails: PropTypes.array.isRequired,
+  totalPrice: PropTypes.number.isRequired,
+  totalDuration: PropTypes.number.isRequired,
+  date: PropTypes.string,
+  time: PropTypes.string,
+  staffName: PropTypes.string,
+  people: PropTypes.number,
 }
 
 function ConfirmPageContent() {
