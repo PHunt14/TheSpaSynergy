@@ -112,6 +112,7 @@ Deployed via AWS Amplify with automatic CI/CD from Git. See `AMPLIFY_SETUP.md`.
 | `docs/CUSTOMER_FEEDBACK_MARCH_2025.md` | March 2025 customer feedback: schedules, auto-routing, add-ons, sauna separation |
 | `docs/VISIT_NOTES_APRIL_2025.md` | April 2025 on-site visit notes: group bookings, intake forms, CRM, calendar invites |
 | `docs/GOOGLE_ANALYTICS.md` | Google Analytics (GA4) setup: property creation, env var, what's tracked |
+| `docs/MONTHLY_REPORT.md` | Planned: automated monthly operations report via Lambda + SES |
 | `docs/UPTIME_MONITORING.md` | Uptime monitoring: Route 53 health checks, CloudWatch dashboard, SNS alerts |
 
 ---

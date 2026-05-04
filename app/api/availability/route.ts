@@ -14,6 +14,7 @@ export async function GET(request: Request) {
   const vendorId = searchParams.get('vendorId');
   const serviceId = searchParams.get('serviceId');
   const date = searchParams.get('date'); // YYYY-MM-DD format
+  const excludeAppointmentId = searchParams.get('excludeAppointmentId');
 
   if (!vendorId || !serviceId || !date) {
     return Response.json({ error: 'Missing required parameters' }, { status: 400 });
@@ -73,7 +74,7 @@ export async function GET(request: Request) {
     });
 
     // Filter by resource type — sauna appointments don't block staff and vice versa
-    const relevantAppointments = await filterRelevantAppointments(allAppointments || [], isSauna, assignedStaff, serviceId);
+    const relevantAppointments = await filterRelevantAppointments(allAppointments || [], isSauna, assignedStaff, serviceId, excludeAppointmentId);
 
     const slots = generateTimeSlots(
       dayHours.start,
@@ -94,10 +95,11 @@ export async function GET(request: Request) {
   }
 }
 
-async function filterRelevantAppointments(appointments: any[], isSauna: boolean, assignedStaff: any, serviceId: string) {
+async function filterRelevantAppointments(appointments: any[], isSauna: boolean, assignedStaff: any, serviceId: string, excludeAppointmentId?: string | null) {
   const relevant = [];
   for (const apt of appointments) {
     if (apt.status === 'cancelled') continue;
+    if (excludeAppointmentId && apt.appointmentId === excludeAppointmentId) continue;
     const { data: aptService } = await client.models.Service.get({ serviceId: apt.serviceId });
     const aptIsSauna = (aptService?.resourceType || 'staff') === 'sauna';
     if (isSauna && aptIsSauna) {

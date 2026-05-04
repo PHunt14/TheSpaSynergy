@@ -42,7 +42,7 @@ export default function Appointments() {
     setRescheduleSlotsLoading(true)
     const dateStr = rescheduleDate.toISOString().split('T')[0]
 
-    fetch(`/api/availability?vendorId=${apt.vendorId}&serviceId=${apt.serviceId}&date=${dateStr}`)
+    fetch(`/api/availability?vendorId=${apt.vendorId}&serviceId=${apt.serviceId}&date=${dateStr}&excludeAppointmentId=${apt.appointmentId}`)
       .then(res => res.json())
       .then(data => {
         setRescheduleSlots(data.availableSlots || [])

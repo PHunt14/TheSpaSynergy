@@ -91,20 +91,6 @@
       "width": 8,
       "height": 6,
       "properties": {
-        "title": "SMS Monthly Spend ($)",
-        "metrics": [["AWS/SMSVoice", "TextMessageMonthlySpend", {"stat": "Maximum", "label": "Spend", "color": "#d62728"}]],
-        "period": 86400,
-        "view": "singleValue",
-        "region": "us-east-1"
-      }
-    },
-    {
-      "type": "metric",
-      "x": 16,
-      "y": 8,
-      "width": 8,
-      "height": 6,
-      "properties": {
         "title": "SMS Delivery Rate",
         "metrics": [["AWS/SNS", "SMSSuccessRate", {"stat": "Average", "label": "Success %", "color": "#2ca02c"}]],
         "period": 86400,
