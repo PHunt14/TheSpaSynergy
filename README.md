@@ -115,6 +115,7 @@ Deployed via AWS Amplify with automatic CI/CD from Git. See `AMPLIFY_SETUP.md`.
 | `docs/MONTHLY_REPORT.md` | Planned: automated monthly operations report via Lambda + SES |
 | `docs/UPTIME_MONITORING.md` | Uptime monitoring: Route 53 health checks, CloudWatch dashboard, SNS alerts |
 | `docs/BACKUP_RETENTION.md` | Backup & retention: DynamoDB PITR, Cognito deletion protection, S3 versioning |
+| `docs/CLIENT_CRM.md` | Client catalog: auto-population, appointment history, cross-vendor notes |
 
 ---
 
@@ -217,7 +218,7 @@ The following bounded contexts are candidates for extraction from the Next.js mo
 - [ ] **New client flag**: checkbox at booking for first-time clients (triggers consultation scheduling)
 - [ ] **Liability/waiver form**: acceptance required at booking, stored on appointment
 - [ ] **Calendar invites**: iCal attachments in booking/confirmation/cancellation/reschedule emails
-- [ ] **Client CRM**: customer profiles with notes, booking history, cross-vendor visibility
+- [x] **Client CRM**: ~~customer profiles with notes, booking history, cross-vendor visibility~~ ✅ Implemented — auto-populates from bookings, see `docs/CLIENT_CRM.md`
 - [ ] **No-show tracking**: flag repeat offenders, require prepayment
 - [ ] **Membership option**: explore recurring membership model
 - [ ] **Sound room rental**: bookable resource like sauna

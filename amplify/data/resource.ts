@@ -106,6 +106,7 @@ const schema = a.schema({
       paymentAmount: a.float(),
       paymentStatus: a.string(),
       paymentRaw: a.json(),
+      clientId: a.string(),
       createdAt: a.datetime(),
     })
     .identifier(['appointmentId'])
@@ -145,6 +146,32 @@ const schema = a.schema({
     })
     .identifier(['visibleId'])
     .secondaryIndexes((index) => [index('vendorId')])
+    .authorization((allow) => [allow.publicApiKey()]),
+
+  Client: a
+    .model({
+      clientId: a.id().required(),
+      name: a.string().required(),
+      phone: a.string(),
+      email: a.string(),
+      createdAt: a.datetime(),
+    })
+    .identifier(['clientId'])
+    .secondaryIndexes((index) => [index('phone'), index('email')])
+    .authorization((allow) => [allow.publicApiKey()]),
+
+  ClientNote: a
+    .model({
+      noteId: a.id().required(),
+      clientId: a.string().required(),
+      authorId: a.string().required(),
+      authorName: a.string().required(),
+      content: a.string().required(),
+      createdAt: a.datetime(),
+      updatedAt: a.datetime(),
+    })
+    .identifier(['noteId'])
+    .secondaryIndexes((index) => [index('clientId').sortKeys(['createdAt'])])
     .authorization((allow) => [allow.publicApiKey()]),
 });
 

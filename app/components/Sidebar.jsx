@@ -13,6 +13,7 @@ export default function Sidebar() {
         <Link href="/dashboard/bundles">Packages</Link>
         <Link href="/dashboard/vendors">Practitioners</Link>
         <Link href="/dashboard/staff">Staff</Link>
+        <Link href="/dashboard/clients">Clients</Link>
         <Link href="/dashboard/settings">Settings</Link>
         <Link href="/dashboard/help">Help</Link>
       </nav>
