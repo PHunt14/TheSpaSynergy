@@ -114,7 +114,26 @@ export default function Appointments() {
     }
   }, [userVendorId])
 
-  const handleConfirm = async (appointmentId, bundleId) => {
+    const callAppointmentAction = async (url, appointmentId, successMsg, failMsg) => {
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ appointmentId })
+      })
+      if (response.ok) {
+        alert(successMsg)
+        loadAppointments()
+      } else {
+        alert(failMsg)
+      }
+    } catch (error) {
+      console.error(failMsg + ':', error)
+      alert(failMsg)
+    }
+  }
+
+const handleConfirm = async (appointmentId, bundleId) => {
     if (bundleId) {
       if (!confirm('Confirm your portion of this bundle?')) return
       try {
@@ -139,24 +158,7 @@ export default function Appointments() {
     }
 
     if (!confirm('Confirm this appointment?')) return
-
-    try {
-      const response = await fetch('/api/appointments/confirm', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ appointmentId })
-      })
-
-      if (response.ok) {
-        alert('Appointment confirmed! Customer has been notified.')
-        loadAppointments()
-      } else {
-        alert('Failed to confirm appointment')
-      }
-    } catch (error) {
-      console.error('Error confirming appointment:', error)
-      alert('Error confirming appointment')
-    }
+    await callAppointmentAction('/api/appointments/confirm', appointmentId, 'Appointment confirmed! Customer has been notified.', 'Failed to confirm appointment')
   }
 
   const handleCancel = async (appointmentId, bundleId) => {
@@ -185,24 +187,7 @@ export default function Appointments() {
     }
 
     if (!confirm('Are you sure you want to cancel this appointment?')) return
-
-    try {
-      const response = await fetch('/api/appointments/cancel', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ appointmentId })
-      })
-
-      if (response.ok) {
-        alert('Appointment cancelled successfully!')
-        loadAppointments()
-      } else {
-        alert('Failed to cancel appointment')
-      }
-    } catch (error) {
-      console.error('Error cancelling appointment:', error)
-      alert('Error cancelling appointment')
-    }
+    await callAppointmentAction('/api/appointments/cancel', appointmentId, 'Appointment cancelled successfully!', 'Failed to cancel appointment')
   }
 
   const handleReschedule = async (appointmentId) => {
