@@ -5,7 +5,8 @@
 Two features that work together to support the Vagaro-to-Spa-Synergy calendar transition:
 
 1. **Booking Blackout** — Temporarily disable online booking per-vendor or globally, so no one can book while Vagaro is the active scheduling system
-2. **Manual Appointments** — Dashboard users can add appointments directly to the calendar (e.g. to mirror Vagaro bookings, record walk-ins, or block time)
+2. **Manual Appointments** — Dashboard users can add appointments directly to the calendar (e.g. to mirror Vagaro bookings, record walk-ins)
+3. **Blocked Time** — Staff can block off personal time on the calendar to prevent customer bookings
 
 ---
 
@@ -95,6 +96,43 @@ Dashboard users can add appointments directly without going through the customer
    - **Notes** (optional) — e.g. "Booked via Vagaro", "recurring client"
 4. Click **Add Appointment**
 
+---
+
+## Blocked Time
+
+### How It Works
+
+Staff members can block off personal time on the calendar. Blocked time:
+- Prevents customers from booking during that window
+- Shows on the dashboard calendar with a gray "🚫 Blocked Time" label
+- Can be assigned to a specific staff member or all staff
+- Can be cancelled like any appointment to free the time back up
+- Does **not** send any notifications (no emails or SMS)
+
+### Blocking Time
+
+1. Go to **Dashboard → Appointments**
+2. Click **🚫 Block Time**
+3. Fill in:
+   - **Date & Time** (required) — when the block starts
+   - **Duration** (required) — 30 min, 1 hour, 1.5 hours, 2 hours, 3 hours, 4 hours, or full day
+   - **Staff Member** (optional) — assign to a specific person, or leave as "All staff"
+   - **Reason** (optional) — e.g. "Lunch break", "Personal appointment"
+4. Click **Block Time**
+
+### How Blocked Time Appears
+
+| Column | Display |
+|--------|---------|
+| Service | 🚫 Blocked Time |
+| Customer | The reason (if provided), or "—" |
+| Status | 🚫 Blocked (gray badge) |
+| Row background | Light gray |
+
+### Removing a Block
+
+Click **Cancel** on the blocked time row, same as cancelling any appointment. The time becomes available again immediately.
+
 ### Manual Appointment API
 
 ```bash
@@ -171,7 +209,7 @@ Body:
 
 ### POST /api/appointments/manual
 
-Body:
+**Manual appointment:**
 ```json
 {
   "vendorId": "vendor-kera-studio",
@@ -185,7 +223,19 @@ Body:
 }
 ```
 
-Required: `vendorId`, `dateTime`. All other fields optional.
+**Blocked time:**
+```json
+{
+  "vendorId": "vendor-kera-studio",
+  "staffId": "staff-kera-stacey",
+  "dateTime": "2025-07-15T12:00:00",
+  "isBlockedTime": true,
+  "duration": 60,
+  "notes": "Lunch break"
+}
+```
+
+Required: `vendorId`, `dateTime`. For blocked time, also send `isBlockedTime: true` and `duration`.
 
 ---
 
@@ -218,6 +268,15 @@ Required: `vendorId`, `dateTime`. All other fields optional.
 - [ ] Vendor role can only add to their own vendor
 - [ ] Admin can add to any vendor
 - [ ] Unauthenticated request → 401
+
+**Blocked Time**
+- [ ] Block time with staff member → appears with gray styling and "🚫 Blocked Time" label
+- [ ] Block time without staff member → appears as block for all staff
+- [ ] Blocked time prevents customer from booking that slot via availability API
+- [ ] Cancel blocked time → time becomes available again
+- [ ] No notifications sent for blocked time (no email, no SMS)
+- [ ] Block time with reason → reason shows in customer column
+- [ ] Block time without reason → shows "—" in customer column
 
 ### Automated Testing
 
@@ -257,8 +316,8 @@ assert(manualRes.status === 200)
 | `app/api/availability/route.ts` | Check global + vendor blackout before generating slots |
 | `app/api/appointments/route.ts` | Reject bookings during blackout |
 | `app/api/booking-blackout/route.ts` | New — GET/POST blackout settings |
-| `app/api/appointments/manual/route.ts` | New — POST manual appointments |
+| `app/api/appointments/manual/route.ts` | Manual appointments + blocked time (`isBlockedTime` flag) |
 | `app/components/BookingDisabled.jsx` | Added `disabledUntil` prop to show resume date |
 | `app/booking/time/page.jsx` | Handle `bookingDisabled` response from availability API |
 | `app/dashboard/settings/page.jsx` | Added blackout controls (vendor + global) |
-| `app/dashboard/appointments/page.jsx` | Added "Add Appointment" button + modal form |
+| `app/dashboard/appointments/page.jsx` | "Add Appointment" + "🚫 Block Time" buttons + modal forms |
