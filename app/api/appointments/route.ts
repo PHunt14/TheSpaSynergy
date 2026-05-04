@@ -82,6 +82,20 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Failed to create appointment' }, { status: 500 });
     }
 
+    // Auto-populate client catalog
+    try {
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+      const clientRes = await fetch(`${appUrl}/api/clients`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: customer.name, phone: customer.phone, email: customer.email })
+      });
+      const clientData = await clientRes.json();
+      if (clientData.client?.clientId) {
+        await client.models.Appointment.update({ appointmentId, clientId: clientData.client.clientId } as any);
+      }
+    } catch (e) { console.error('Client auto-populate failed:', e); }
+
     await sendBookingNotifications({ appointmentId, vendorId, serviceId, staffId, dateTime, customer });
 
     return Response.json({ success: true, appointmentId });

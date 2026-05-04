@@ -37,14 +37,36 @@ const getCurrentUser = async () => {
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const vendorId = searchParams.get('vendorId');
+  const clientId = searchParams.get('clientId');
 
-  if (!vendorId) {
-    return Response.json({ error: 'vendorId required' }, { status: 400 });
+  if (!vendorId && !clientId) {
+    return Response.json({ error: 'vendorId or clientId required' }, { status: 400 });
   }
 
   const currentUser = await getCurrentUser();
   if (!currentUser) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // Client lookup — return appointments for a specific client across all vendors
+  if (clientId) {
+    try {
+      const { data: allAppointments } = await client.models.Appointment.list({
+        filter: { clientId: { eq: clientId } }
+      });
+      const appointments = allAppointments || [];
+      const serviceIds = [...new Set(appointments.map(a => a.serviceId).filter(Boolean))];
+      const services: Record<string, any> = {};
+      await Promise.all(serviceIds.map(async (sid) => {
+        const { data } = await client.models.Service.get({ serviceId: sid });
+        if (data) services[sid] = data;
+      }));
+      return Response.json({
+        appointments: appointments.map(a => ({ ...a, service: services[a.serviceId] || null, customer: typeof a.customer === 'string' ? JSON.parse(a.customer) : a.customer }))
+      });
+    } catch (error) {
+      return Response.json({ error: 'Failed to fetch client appointments' }, { status: 500 });
+    }
   }
 
   // Vendor/owner can only access their own vendor's appointments
