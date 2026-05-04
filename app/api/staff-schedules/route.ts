@@ -132,8 +132,11 @@ function buildScheduleUpdateData(visibleId: string, body: any): any {
     updateData.schedule = typeof body.schedule === 'string' ? body.schedule : JSON.stringify(body.schedule);
   }
   if (body.autoAssignRules !== undefined) {
-    updateData.autoAssignRules = body.autoAssignRules === null ? null
-      : typeof body.autoAssignRules === 'string' ? body.autoAssignRules : JSON.stringify(body.autoAssignRules);
+    if (body.autoAssignRules === null) {
+      updateData.autoAssignRules = null;
+    } else {
+      updateData.autoAssignRules = typeof body.autoAssignRules === 'string' ? body.autoAssignRules : JSON.stringify(body.autoAssignRules);
+    }
   }
   return updateData;
 }

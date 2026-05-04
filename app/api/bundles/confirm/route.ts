@@ -85,7 +85,7 @@ export async function POST(request: Request) {
     }
 
     const { data: bundle } = await client.models.Bundle.get({ bundleId });
-    if (!bundle || !bundle.status) return Response.json({ error: 'Bundle booking not found' }, { status: 404 });
+    if (!bundle?.status) return Response.json({ error: 'Bundle booking not found' }, { status: 404 });
 
     const confirmations = parseJsonField(bundle.vendorConfirmations);
     if (!(vendorId in confirmations)) return Response.json({ error: 'Vendor not part of this bundle' }, { status: 400 });

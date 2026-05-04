@@ -217,10 +217,9 @@ describe('timeOverlaps', () => {
 describe('hasAnySlot', () => {
   // Use a future date to avoid "today" filtering
   const futureDate = '2099-01-15'
-  const date = new Date('2099-01-15T00:00:00')
 
   test('returns true when no appointments', () => {
-    expect(hasAnySlot('09:00', '17:00', 60, 15, { appointments: [], dateStr: futureDate, date, staff: null })).toBe(true)
+    expect(hasAnySlot('09:00', '17:00', 60, 15, { appointments: [], dateStr: futureDate, staff: null })).toBe(true)
   })
 
   test('returns false when fully booked', () => {
@@ -230,7 +229,7 @@ describe('hasAnySlot', () => {
       { dateTime: `${futureDate}T09:00:00`, staffId: null },
       { dateTime: `${futureDate}T09:30:00`, staffId: null },
     ]
-    expect(hasAnySlot('09:00', '10:30', 60, 15, { appointments, dateStr: futureDate, date, staff: null })).toBe(false)
+    expect(hasAnySlot('09:00', '10:30', 60, 15, { appointments, dateStr: futureDate, staff: null })).toBe(false)
   })
 
   test('returns true when one slot remains', () => {
@@ -238,7 +237,7 @@ describe('hasAnySlot', () => {
       { dateTime: `${futureDate}T09:00:00`, staffId: null },
     ]
     // 09:00 blocked, but 10:00 should be open (09:00 + 60 + 15 = 10:15, so 10:30 is free)
-    expect(hasAnySlot('09:00', '12:00', 60, 15, { appointments: [], dateStr: futureDate, date, staff: null })).toBe(true)
+    expect(hasAnySlot('09:00', '12:00', 60, 15, { appointments: [], dateStr: futureDate, staff: null })).toBe(true)
   })
 
   test('filters appointments by staff', () => {
@@ -246,11 +245,11 @@ describe('hasAnySlot', () => {
     const appointments = [
       { dateTime: `${futureDate}T09:00:00`, staffId: 'staff-2' }, // different staff
     ]
-    expect(hasAnySlot('09:00', '10:00', 60, 0, { appointments, dateStr: futureDate, date, staff })).toBe(true)
+    expect(hasAnySlot('09:00', '10:00', 60, 0, { appointments, dateStr: futureDate, staff })).toBe(true)
   })
 
   test('returns false when window too small for service', () => {
-    expect(hasAnySlot('09:00', '09:30', 60, 15, { appointments: [], dateStr: futureDate, date, staff: null })).toBe(false)
+    expect(hasAnySlot('09:00', '09:30', 60, 15, { appointments: [], dateStr: futureDate, staff: null })).toBe(false)
   })
 })
 
