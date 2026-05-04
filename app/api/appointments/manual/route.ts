@@ -108,7 +108,7 @@ export async function POST(request: Request) {
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await request.json();
-    const { vendorId, serviceId, staffId, dateTime, customerName, customerPhone, customerEmail, notes } = body;
+    const { vendorId, serviceId, staffId, dateTime, customerName, customerPhone, customerEmail, notes, isBlockedTime, duration } = body;
 
     if (!vendorId || !dateTime) return Response.json({ error: 'vendorId and dateTime are required' }, { status: 400 });
     if (user.role === 'vendor' && vendorId !== user.vendorId) {
@@ -116,6 +116,22 @@ export async function POST(request: Request) {
     }
 
     const appointmentId = randomUUID();
+
+    if (isBlockedTime) {
+      const { errors } = await client.models.Appointment.create({
+        appointmentId, vendorId, serviceId: 'blocked', staffId: staffId || undefined, dateTime,
+        customer: JSON.stringify({ name: 'Blocked Time', notes: notes || '', isBlockedTime: true, duration: duration || 60 }),
+        status: 'blocked', createdAt: new Date().toISOString(),
+      } as any);
+
+      if (errors) {
+        console.error('Error creating blocked time:', errors);
+        return Response.json({ error: 'Failed to block time' }, { status: 500 });
+      }
+
+      return Response.json({ success: true, appointmentId });
+    }
+
     const { errors } = await client.models.Appointment.create({
       appointmentId, vendorId, serviceId: serviceId || 'manual', staffId: staffId || undefined, dateTime,
       customer: JSON.stringify({ name: customerName || 'Manual Entry', phone: customerPhone || '', email: customerEmail || '', notes: notes || '', isManual: true }),

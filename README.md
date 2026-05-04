@@ -114,6 +114,7 @@ Deployed via AWS Amplify with automatic CI/CD from Git. See `AMPLIFY_SETUP.md`.
 | `docs/GOOGLE_ANALYTICS.md` | Google Analytics (GA4) setup: property creation, env var, what's tracked |
 | `docs/MONTHLY_REPORT.md` | Planned: automated monthly operations report via Lambda + SES |
 | `docs/UPTIME_MONITORING.md` | Uptime monitoring: Route 53 health checks, CloudWatch dashboard, SNS alerts |
+| `docs/BACKUP_RETENTION.md` | Backup & retention: DynamoDB PITR, Cognito deletion protection, S3 versioning |
 
 ---
 

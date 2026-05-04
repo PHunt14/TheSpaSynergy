@@ -29,6 +29,12 @@ export default function Appointments() {
   const [manualServiceId, setManualServiceId] = useState('')
   const [manualStaffId, setManualStaffId] = useState('')
 
+  // Block time
+  const [showBlockForm, setShowBlockForm] = useState(false)
+  const [blockForm, setBlockForm] = useState({ dateTime: '', duration: 60, notes: '' })
+  const [blockStaffId, setBlockStaffId] = useState('')
+  const [blockLoading, setBlockLoading] = useState(false)
+
   useEffect(() => {
     loadUserVendor()
   }, [])
@@ -237,6 +243,7 @@ export default function Appointments() {
       case 'pending': return '#FF9800'
       case 'pending-confirmation': return '#FF9800'
       case 'cancelled': return '#F44336'
+      case 'blocked': return '#607D8B'
       default: return '#999'
     }
   }
@@ -247,8 +254,41 @@ export default function Appointments() {
       case 'pending': return 'Pending'
       case 'pending-confirmation': return 'Awaiting Confirmation'
       case 'cancelled': return 'Cancelled'
+      case 'blocked': return '🚫 Blocked'
       default: return status
     }
+  }
+
+  const handleBlockTime = async () => {
+    if (!blockForm.dateTime) { alert('Please select a date and time'); return }
+    setBlockLoading(true)
+    try {
+      const res = await fetch('/api/appointments/manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vendorId: userVendorId,
+          staffId: blockStaffId || undefined,
+          dateTime: blockForm.dateTime,
+          customerName: 'Blocked Time',
+          notes: blockForm.notes,
+          isBlockedTime: true,
+          duration: blockForm.duration,
+        })
+      })
+      if (res.ok) {
+        alert('Time blocked!')
+        setShowBlockForm(false)
+        setBlockForm({ dateTime: '', duration: 60, notes: '' })
+        setBlockStaffId('')
+        loadAppointments()
+      } else {
+        const data = await res.json()
+        alert('Failed: ' + (data.error || 'Unknown error'))
+      }
+    } catch (error) {
+      alert('Error blocking time')
+    } finally { setBlockLoading(false) }
   }
 
   const handleAddManual = async () => {
@@ -298,9 +338,18 @@ export default function Appointments() {
         View and manage your bookings.
       </p>
 
-      <button onClick={() => setShowManualForm(true)} className="cta" style={{ marginBottom: '2rem' }}>
-        + Add Appointment
-      </button>
+      <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem', flexWrap: 'wrap' }}>
+        <button onClick={() => setShowManualForm(true)} className="cta" style={{ margin: 0 }}>
+          + Add Appointment
+        </button>
+        <button onClick={() => setShowBlockForm(true)} style={{
+          padding: '0.9rem 1.6rem', background: '#607D8B', color: 'white', borderRadius: '10px',
+          border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '1rem',
+          fontFamily: 'var(--font-quicksand), sans-serif'
+        }}>
+          🚫 Block Time
+        </button>
+      </div>
 
       {userRole === 'admin' && vendors.length > 0 && (
         <div style={{ marginBottom: '2rem' }}>
@@ -385,16 +434,24 @@ export default function Appointments() {
               </tr>
             </thead>
             <tbody>
-              {currentAppointments.map(apt => (
-                <tr key={apt.appointmentId} style={{ borderBottom: '1px solid var(--color-border)' }}>
+              {currentAppointments.map(apt => {
+                const isBlocked = apt.customer?.isBlockedTime || apt.status === 'blocked'
+                return (
+                <tr key={apt.appointmentId} style={{ borderBottom: '1px solid var(--color-border)', background: isBlocked ? '#f0f0f0' : 'transparent' }}>
                   <td style={{ padding: '1rem' }}>{apt.dateTime}</td>
                   <td style={{ padding: '1rem' }}>
-                    {apt.service?.name || 'N/A'}
-                    <div style={{ fontSize: '0.85rem', color: 'var(--color-text-light)' }}>
-                      {apt.service?.duration} min
-                    </div>
+                    {isBlocked ? (
+                      <span style={{ color: '#607D8B', fontWeight: 600 }}>🚫 Blocked Time</span>
+                    ) : (
+                      <>
+                        {apt.service?.name || 'N/A'}
+                        <div style={{ fontSize: '0.85rem', color: 'var(--color-text-light)' }}>
+                          {apt.service?.duration} min
+                        </div>
+                      </>
+                    )}
                   </td>
-                  <td style={{ padding: '1rem' }}>{apt.customer?.name || 'N/A'}</td>
+                  <td style={{ padding: '1rem' }}>{isBlocked ? (apt.customer?.notes || '—') : (apt.customer?.name || 'N/A')}</td>
                   <td style={{ padding: '1rem' }}>
                     <div style={{ fontSize: '0.9rem' }}>{apt.customer?.email}</div>
                     <div style={{ fontSize: '0.85rem', color: 'var(--color-text-light)' }}>
@@ -713,6 +770,73 @@ export default function Appointments() {
                 {manualLoading ? 'Adding...' : 'Add Appointment'}
               </button>
               <button onClick={() => setShowManualForm(false)}
+                style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', background: 'white', cursor: 'pointer' }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Block Time Modal */}
+      {showBlockForm && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
+        }}>
+          <div style={{
+            background: 'white', padding: '2rem', borderRadius: '8px',
+            maxWidth: '480px', width: '90%', maxHeight: '90vh', overflowY: 'auto'
+          }}>
+            <h3>🚫 Block Time</h3>
+            <p style={{ marginBottom: '1rem', color: 'var(--color-text-light)' }}>
+              Block off personal time on the calendar. This prevents customers from booking during this time.
+            </p>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Date & Time *</label>
+              <input type="datetime-local" value={blockForm.dateTime}
+                onChange={(e) => setBlockForm({ ...blockForm, dateTime: e.target.value })}
+                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Duration (minutes) *</label>
+              <select value={blockForm.duration} onChange={(e) => setBlockForm({ ...blockForm, duration: Number(e.target.value) })}
+                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }}>
+                <option value={30}>30 min</option>
+                <option value={60}>1 hour</option>
+                <option value={90}>1.5 hours</option>
+                <option value={120}>2 hours</option>
+                <option value={180}>3 hours</option>
+                <option value={240}>4 hours</option>
+                <option value={480}>Full day (8 hours)</option>
+              </select>
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Staff Member</label>
+              <select value={blockStaffId} onChange={(e) => setBlockStaffId(e.target.value)}
+                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }}>
+                <option value="">All staff</option>
+                {staffList.map(s => <option key={s.visibleId} value={s.visibleId}>{s.staffName}</option>)}
+              </select>
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Reason (optional)</label>
+              <input type="text" value={blockForm.notes}
+                onChange={(e) => setBlockForm({ ...blockForm, notes: e.target.value })}
+                placeholder="e.g. Lunch break, Personal appointment"
+                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />
+            </div>
+
+            <div style={{ display: 'flex', gap: '1rem' }}>
+              <button onClick={handleBlockTime} disabled={blockLoading}
+                style={{ flex: 1, padding: '0.9rem', background: '#607D8B', color: 'white', borderRadius: '10px', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '1rem' }}>
+                {blockLoading ? 'Blocking...' : 'Block Time'}
+              </button>
+              <button onClick={() => { setShowBlockForm(false); setBlockForm({ dateTime: '', duration: 60, notes: '' }); setBlockStaffId('') }}
                 style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', background: 'white', cursor: 'pointer' }}>
                 Cancel
               </button>
