@@ -531,7 +531,7 @@ export default function Appointments() {
                     )}
                   </td>
                 </tr>
-              )})
+              )})}
             </tbody>
           </table>
         </div>
