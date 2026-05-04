@@ -16,6 +16,7 @@ export default function Appointments() {
   const [rescheduleTime, setRescheduleTime] = useState(null)
   const [rescheduleSlots, setRescheduleSlots] = useState([])
   const [rescheduleSlotsLoading, setRescheduleSlotsLoading] = useState(false)
+  const [rescheduleCustomMode, setRescheduleCustomMode] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(20)
 
@@ -34,7 +35,7 @@ export default function Appointments() {
 
   // Load available time slots when reschedule date changes
   useEffect(() => {
-    if (!showReschedule) return
+    if (!showReschedule || rescheduleCustomMode) return
     const apt = appointments.find(a => a.appointmentId === showReschedule)
     if (!apt) return
 
@@ -219,6 +220,7 @@ export default function Appointments() {
         alert('Appointment rescheduled successfully!')
         setShowReschedule(null)
         setRescheduleTime(null)
+        setRescheduleCustomMode(false)
         loadAppointments()
       } else {
         alert('Failed to reschedule appointment')
@@ -537,8 +539,23 @@ export default function Appointments() {
           }}>
             <h3>Reschedule Appointment</h3>
             <p style={{ marginBottom: '1rem', color: 'var(--color-text-light)' }}>
-              Select a new date and available time.
+              Select a new date and time.
             </p>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={rescheduleCustomMode}
+                  onChange={(e) => {
+                    setRescheduleCustomMode(e.target.checked)
+                    setRescheduleTime(null)
+                  }}
+                  style={{ width: '18px', height: '18px' }}
+                />
+                <span style={{ fontWeight: 500 }}>Override — pick any time</span>
+              </label>
+            </div>
 
             <div className="spa-datepicker" style={{ marginBottom: '1.5rem' }}>
               <DatePicker
@@ -549,37 +566,51 @@ export default function Appointments() {
               />
             </div>
 
-            <h4 style={{ marginBottom: '0.75rem' }}>Available Times</h4>
-            {rescheduleSlotsLoading && <p>Loading times...</p>}
-            {!rescheduleSlotsLoading && rescheduleSlots.length === 0 && (
-              <p style={{ color: 'var(--color-text-light)' }}>No available times for this date.</p>
-            )}
-            {!rescheduleSlotsLoading && rescheduleSlots.length > 0 && (
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: '0.5rem',
-                marginBottom: '1.5rem'
-              }}>
-                {rescheduleSlots.map(slot => (
-                  <div
-                    key={slot.time}
-                    onClick={() => setRescheduleTime(slot.time)}
-                    style={{
-                      padding: '0.75rem',
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                      background: rescheduleTime === slot.time ? 'var(--color-primary)' : 'var(--color-accent)',
-                      color: rescheduleTime === slot.time ? 'white' : 'var(--color-text)',
-                      textAlign: 'center',
-                      fontWeight: '500',
-                      transition: '0.2s ease'
-                    }}
-                  >
-                    {slot.display}
-                  </div>
-                ))}
+            {rescheduleCustomMode ? (
+              <div style={{ marginBottom: '1.5rem' }}>
+                <h4 style={{ marginBottom: '0.75rem' }}>Enter Time</h4>
+                <input
+                  type="time"
+                  value={rescheduleTime || ''}
+                  onChange={(e) => setRescheduleTime(e.target.value)}
+                  style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem', width: '100%' }}
+                />
               </div>
+            ) : (
+              <>
+                <h4 style={{ marginBottom: '0.75rem' }}>Available Times</h4>
+                {rescheduleSlotsLoading && <p>Loading times...</p>}
+                {!rescheduleSlotsLoading && rescheduleSlots.length === 0 && (
+                  <p style={{ color: 'var(--color-text-light)' }}>No available times for this date.</p>
+                )}
+                {!rescheduleSlotsLoading && rescheduleSlots.length > 0 && (
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(3, 1fr)',
+                    gap: '0.5rem',
+                    marginBottom: '1.5rem'
+                  }}>
+                    {rescheduleSlots.map(slot => (
+                      <div
+                        key={slot.time}
+                        onClick={() => setRescheduleTime(slot.time)}
+                        style={{
+                          padding: '0.75rem',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          background: rescheduleTime === slot.time ? 'var(--color-primary)' : 'var(--color-accent)',
+                          color: rescheduleTime === slot.time ? 'white' : 'var(--color-text)',
+                          textAlign: 'center',
+                          fontWeight: '500',
+                          transition: '0.2s ease'
+                        }}
+                      >
+                        {slot.display}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
 
             <div style={{ display: 'flex', gap: '1rem' }}>
@@ -595,6 +626,7 @@ export default function Appointments() {
                 onClick={() => {
                   setShowReschedule(null)
                   setRescheduleTime(null)
+                  setRescheduleCustomMode(false)
                 }}
                 style={{
                   flex: 1,
