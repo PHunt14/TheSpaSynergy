@@ -31,11 +31,14 @@ This means a customer who books as "Stacey" with phone 240-329-6537 and later bo
 - Name, phone, email, and "client since" date
 - Search by name, phone, or email (debounced, searches as you type)
 - Click any row to view the client detail
+- **"+ Add Client"** button to manually create a client
 
 ### Client Detail
 
 Clicking a client shows:
 - **Contact info** — name, phone (clickable), email (clickable)
+- **Edit** button — inline edit of name, phone, email
+- **Delete** button — removes the client and all their notes (with confirmation)
 - **Appointment history** — all appointments across all vendors, with date, service, and status
 - **Notes** — comment thread with author name and timestamp
 
@@ -106,6 +109,10 @@ Update client info.
 { "clientId": "client-abc123", "name": "Jane M. Doe" }
 ```
 
+### DELETE /api/clients?clientId=...
+
+Deletes the client and all their notes.
+
 ### GET /api/client-notes?clientId=...
 
 Returns notes for a client, sorted newest-first.
@@ -125,6 +132,16 @@ Edit your own note (requires auth, enforces ownership).
 ```json
 { "noteId": "note-xyz789", "content": "Updated: Prefers eucalyptus oil now." }
 ```
+
+## Backfilling Existing Data
+
+To populate the client catalog from existing appointments (run once after first deploy):
+
+```bash
+node scripts/backfill-clients.js
+```
+
+This scans all appointments, creates client records for unique customers (matched by phone/email), and links appointments to their client records.
 
 ## Files
 
