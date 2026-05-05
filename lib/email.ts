@@ -66,7 +66,11 @@ export async function sendEmail(to: string, subject: string, htmlBody: string) {
 }
 
 export function formatDateTime(dateTime: string): string {
-  return new Date(dateTime).toLocaleString('en-US', {
+  // Stored times are Eastern local (no timezone suffix) — append offset to prevent UTC interpretation
+  const dt = dateTime.includes('Z') || dateTime.includes('+') || dateTime.includes('-', 10)
+    ? dateTime
+    : dateTime + '-04:00' // Eastern Daylight Time offset
+  return new Date(dt).toLocaleString('en-US', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
     hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York',
   })

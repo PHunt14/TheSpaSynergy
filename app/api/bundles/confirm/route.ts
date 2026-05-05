@@ -66,7 +66,11 @@ async function confirmVendorPortion(bundleId: string, vendorId: string, bundle: 
 
   if (allConfirmed && customer?.phone && customer?.smsOptIn) {
     const formattedDateTime = bundle.dateTime
-      ? new Date(bundle.dateTime).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
+      ? (() => {
+          const dt = bundle.dateTime.includes('Z') || bundle.dateTime.includes('+') || bundle.dateTime.includes('-', 10)
+            ? bundle.dateTime : bundle.dateTime + '-04:00'
+          return new Date(dt).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/New_York' })
+        })()
       : '';
     snsClient.send(new PublishCommand({
       PhoneNumber: formatPhone(customer.phone),
