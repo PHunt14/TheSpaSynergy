@@ -94,6 +94,28 @@ export async function PATCH(request: Request) {
   }
 }
 
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const clientId = searchParams.get('clientId');
+    if (!clientId) return Response.json({ error: 'clientId required' }, { status: 400 });
+
+    // Delete all notes for this client
+    const { data: notes } = await client.models.ClientNote.list({
+      filter: { clientId: { eq: clientId } },
+    });
+    if (notes) {
+      await Promise.all(notes.map(n => client.models.ClientNote.delete({ noteId: n.noteId } as any)));
+    }
+
+    const { errors } = await client.models.Client.delete({ clientId } as any);
+    if (errors) return Response.json({ error: 'Failed to delete client' }, { status: 500 });
+    return Response.json({ success: true });
+  } catch (error) {
+    return Response.json({ error: 'Failed to delete client' }, { status: 500 });
+  }
+}
+
 async function findExistingClient(phone?: string, email?: string) {
   const normalizedPhone = normalizePhone(phone);
   if (normalizedPhone) {

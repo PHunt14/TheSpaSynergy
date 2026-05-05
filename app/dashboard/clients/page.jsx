@@ -15,6 +15,11 @@ export default function ClientsPage() {
   const [editContent, setEditContent] = useState('')
   const [currentUserEmail, setCurrentUserEmail] = useState('')
   const [savingNote, setSavingNote] = useState(false)
+  const [showAddClient, setShowAddClient] = useState(false)
+  const [newClient, setNewClient] = useState({ name: '', phone: '', email: '' })
+  const [addingClient, setAddingClient] = useState(false)
+  const [editingClient, setEditingClient] = useState(false)
+  const [editClient, setEditClient] = useState({ name: "", phone: "", email: "" })
 
   useEffect(() => {
     fetchAuthSession().then(session => {
@@ -100,6 +105,58 @@ export default function ClientsPage() {
     })
   }
 
+  
+  const handleAddClient = async () => {
+    if (!newClient.name.trim()) { alert('Name is required'); return }
+    setAddingClient(true)
+    try {
+      const res = await fetch('/api/clients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newClient)
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setShowAddClient(false)
+        setNewClient({ name: '', phone: '', email: '' })
+        loadClients()
+        if (data.created) alert('Client added!')
+        else alert('Client already exists — matched by phone or email.')
+      } else {
+        alert('Failed: ' + (data.error || 'Unknown error'))
+      }
+    } catch (error) {
+      alert('Error adding client: ' + (error.message || ''))
+    } finally { setAddingClient(false) }
+  }
+
+  const handleEditClient = async () => {
+    try {
+      const res = await fetch('/api/clients', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId: selectedClient.clientId, ...editClient })
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setSelectedClient(data.client)
+        setEditingClient(false)
+        loadClients()
+      } else { alert('Failed to update client') }
+    } catch (error) { alert('Error updating client: ' + (error.message || '')) }
+  }
+
+  const handleDeleteClient = async () => {
+    if (!confirm('Delete this client and all their notes? This cannot be undone.')) return
+    try {
+      const res = await fetch('/api/clients?clientId=' + selectedClient.clientId, { method: 'DELETE' })
+      if (res.ok) {
+        setSelectedClient(null)
+        loadClients()
+      } else { alert('Failed to delete client') }
+    } catch (error) { alert('Error deleting client: ' + (error.message || '')) }
+  }
+
   const inputStyle = { width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }
 
   if (selectedClient) {
@@ -113,12 +170,44 @@ export default function ClientsPage() {
         </button>
 
         <div style={{ background: 'var(--color-accent)', borderRadius: '12px', padding: '1.5rem', marginBottom: '2rem' }}>
-          <h2 style={{ marginTop: 0 }}>{selectedClient.name}</h2>
-          {selectedClient.phone && <p style={{ margin: '0.25rem 0' }}>📞 <a href={`tel:${selectedClient.phone}`}>{selectedClient.phone}</a></p>}
-          {selectedClient.email && <p style={{ margin: '0.25rem 0' }}>✉️ <a href={`mailto:${selectedClient.email}`}>{selectedClient.email}</a></p>}
-          <p style={{ margin: '0.25rem 0', color: 'var(--color-text-light)', fontSize: '0.9rem' }}>
-            Client since {selectedClient.createdAt ? new Date(selectedClient.createdAt).toLocaleDateString() : 'N/A'}
-          </p>
+          {editingClient ? (
+            <div>
+              <div style={{ marginBottom: '1rem' }}>
+                <label htmlFor="edit-name" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: 500 }}>Name</label>
+                <input id="edit-name" type="text" value={editClient.name} onChange={(e) => setEditClient({ ...editClient, name: e.target.value })}
+                  style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />
+              </div>
+              <div style={{ marginBottom: '1rem' }}>
+                <label htmlFor="edit-phone" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: 500 }}>Phone</label>
+                <input id="edit-phone" type="tel" value={editClient.phone} onChange={(e) => setEditClient({ ...editClient, phone: e.target.value })}
+                  style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />
+              </div>
+              <div style={{ marginBottom: '1rem' }}>
+                <label htmlFor="edit-email" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: 500 }}>Email</label>
+                <input id="edit-email" type="email" value={editClient.email} onChange={(e) => setEditClient({ ...editClient, email: e.target.value })}
+                  style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button onClick={handleEditClient} className="cta" style={{ margin: 0, padding: '0.5rem 1rem', fontSize: '0.9rem' }}>Save</button>
+                <button onClick={() => setEditingClient(false)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid var(--color-border)', background: 'white', cursor: 'pointer' }}>Cancel</button>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <h2 style={{ marginTop: 0 }}>{selectedClient.name}</h2>
+              {selectedClient.phone && <p style={{ margin: '0.25rem 0' }}>📞 <a href={`tel:${selectedClient.phone}`}>{selectedClient.phone}</a></p>}
+              {selectedClient.email && <p style={{ margin: '0.25rem 0' }}>✉️ <a href={`mailto:${selectedClient.email}`}>{selectedClient.email}</a></p>}
+              <p style={{ margin: '0.25rem 0', color: 'var(--color-text-light)', fontSize: '0.9rem' }}>
+                Client since {selectedClient.createdAt ? new Date(selectedClient.createdAt).toLocaleDateString() : 'N/A'}
+              </p>
+              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
+                <button onClick={() => { setEditingClient(true); setEditClient({ name: selectedClient.name || '', phone: selectedClient.phone || '', email: selectedClient.email || '' }) }}
+                  style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: 'none', background: '#2196F3', color: 'white', cursor: 'pointer', fontSize: '0.85rem' }}>Edit</button>
+                <button onClick={handleDeleteClient}
+                  style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: 'none', background: '#F44336', color: 'white', cursor: 'pointer', fontSize: '0.85rem' }}>Delete</button>
+              </div>
+            </div>
+          )}
         </div>
 
         <h3>Appointment History ({appointments.length})</h3>
@@ -220,6 +309,10 @@ export default function ClientsPage() {
         View client profiles, appointment history, and notes.
       </p>
 
+      <button onClick={() => setShowAddClient(true)} className="cta" style={{ marginBottom: '2rem' }}>
+        + Add Client
+      </button>
+
       <div style={{ marginBottom: '2rem' }}>
         <label htmlFor="client-search" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Search</label>
         <input
@@ -270,6 +363,47 @@ export default function ClientsPage() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {showAddClient && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
+        }}>
+          <div style={{
+            background: 'white', padding: '2rem', borderRadius: '8px',
+            maxWidth: '480px', width: '90%', maxHeight: '90vh', overflowY: 'auto'
+          }}>
+            <h3>Add Client</h3>
+            <div style={{ marginBottom: '1rem' }}>
+              <label htmlFor="add-client-name" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Name *</label>
+              <input id="add-client-name" type="text" value={newClient.name}
+                onChange={(e) => setNewClient({ ...newClient, name: e.target.value })}
+                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />
+            </div>
+            <div style={{ marginBottom: '1rem' }}>
+              <label htmlFor="add-client-phone" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Phone</label>
+              <input id="add-client-phone" type="tel" value={newClient.phone}
+                onChange={(e) => setNewClient({ ...newClient, phone: e.target.value })}
+                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />
+            </div>
+            <div style={{ marginBottom: '1rem' }}>
+              <label htmlFor="add-client-email" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Email</label>
+              <input id="add-client-email" type="email" value={newClient.email}
+                onChange={(e) => setNewClient({ ...newClient, email: e.target.value })}
+                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />
+            </div>
+            <div style={{ display: 'flex', gap: '1rem' }}>
+              <button onClick={handleAddClient} disabled={addingClient} className="cta" style={{ flex: 1 }}>
+                {addingClient ? 'Adding...' : 'Add Client'}
+              </button>
+              <button onClick={() => { setShowAddClient(false); setNewClient({ name: '', phone: '', email: '' }) }}
+                style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', background: 'white', cursor: 'pointer' }}>
+                Cancel
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
