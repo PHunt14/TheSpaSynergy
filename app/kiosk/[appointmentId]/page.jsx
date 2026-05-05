@@ -24,8 +24,18 @@ function PaymentContent() {
         const apt = (data.appointments || [])[0] || null
         setAppointment(apt)
         setLoading(false)
-        // Fetch the appointment's vendor for Square location
-        if (apt?.vendorId) {
+        // Fetch the appointment's staff for Square location
+        if (apt?.staffId) {
+          fetch(`/api/staff-schedules?visibleId=${apt.staffId}`)
+            .then(res => res.json())
+            .then(sData => {
+              const staff = sData.schedule
+              if (staff?.squareLocationId && staff?.squareOAuthStatus === 'connected') {
+                setVendor({ squareLocationId: staff.squareLocationId })
+              }
+            })
+            .catch(() => {})
+        } else if (apt?.vendorId) {
           fetch(`/api/vendors?vendorId=${apt.vendorId}`)
             .then(res => res.json())
             .then(vData => setVendor(vData.vendor))
