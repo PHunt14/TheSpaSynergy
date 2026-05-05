@@ -90,9 +90,14 @@ function sendManualApptNotifications(ctx: ManualApptContext): Promise<void>[] {
   }
 
   if (staffRecord?.smsAlertsEnabled && staffRecord?.smsAlertPhone) {
-    const formattedDateTime = new Date(dateTime).toLocaleString('en-US', {
-      month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true,
-    });
+    const formattedDateTime = (() => {
+      const dt = dateTime.includes('Z') || dateTime.includes('+') || dateTime.includes('-', 10)
+        ? dateTime : dateTime + '-04:00'
+      return new Date(dt).toLocaleString('en-US', {
+        month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true,
+        timeZone: 'America/New_York',
+      })
+    })();
     notifications.push(
       sendSms(staffRecord.smsAlertPhone, `Manual Appointment Added\n\nService: ${serviceName}\nCustomer: ${customerName || 'Manual Entry'}\nDate/Time: ${formattedDateTime}\n\nThe Spa Synergy\nReply STOP to opt out`)
         .catch(err => console.error('Manual appt staff SMS failed:', err)) as Promise<void>

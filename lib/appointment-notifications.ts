@@ -240,10 +240,15 @@ export async function sendAppointmentNotifications(params: NotificationParams) {
   const dateTimeDisplay = event === 'rescheduled' && newDateTime ? newDateTime : appointment.dateTime;
 
   const formattedDateTime = dateTimeDisplay
-    ? new Date(dateTimeDisplay).toLocaleString('en-US', {
-        month: 'short', day: 'numeric', year: 'numeric',
-        hour: 'numeric', minute: '2-digit', hour12: true
-      })
+    ? (() => {
+        const dt = dateTimeDisplay.includes('Z') || dateTimeDisplay.includes('+') || dateTimeDisplay.includes('-', 10)
+          ? dateTimeDisplay : dateTimeDisplay + '-04:00'
+        return new Date(dt).toLocaleString('en-US', {
+          month: 'short', day: 'numeric', year: 'numeric',
+          hour: 'numeric', minute: '2-digit', hour12: true,
+          timeZone: 'America/New_York'
+        })
+      })()
     : 'Not specified';
 
   const notifications: Promise<void>[] = [];
