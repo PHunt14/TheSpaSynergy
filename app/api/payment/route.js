@@ -93,7 +93,7 @@ async function processSinglePayment(sourceId, amount, vendorId, staffId, service
       sourceId,
       idempotencyKey: randomUUID(),
       amountMoney: {
-        amount: Math.round(amount * 100),
+        amount: BigInt(Math.round(amount * 100)),
         currency: 'USD'
       },
       locationId,
@@ -176,7 +176,7 @@ async function processBundlePayment(sourceId, totalAmount, bundlePayments) {
       return {
         locationId: vendor.squareLocationId,
         amountMoney: {
-          amount: Math.round(amount * 100),
+          amount: BigInt(Math.round(amount * 100)),
           currency: 'USD'
         },
         description: 'Bundle service payment'
@@ -192,7 +192,7 @@ async function processBundlePayment(sourceId, totalAmount, bundlePayments) {
       return {
         locationId: vendor.squareLocationId,
         amountMoney: {
-          amount: Math.round(amount * 100),
+          amount: BigInt(Math.round(amount * 100)),
           currency: 'USD'
         },
         description: 'Bundle service payment'
@@ -211,7 +211,7 @@ async function processBundlePayment(sourceId, totalAmount, bundlePayments) {
     sourceId,
     idempotencyKey: randomUUID(),
     amountMoney: {
-      amount: Math.round(totalAmount * 100),
+      amount: BigInt(Math.round(totalAmount * 100)),
       currency: 'USD'
     },
     locationId: primaryVendor.squareLocationId,
