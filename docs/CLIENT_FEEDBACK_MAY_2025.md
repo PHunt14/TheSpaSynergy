@@ -97,6 +97,17 @@ Feedback collected from client on May 6, 2025. Items triaged and sorted by prior
 
 ---
 
+---
+
+## Completed
+
+### ✅ Kiosk Tipping
+**Source**: Identified as open question in kiosk checkout design
+**Implementation**: Added tip selection screen (15%, 20%, 25%, custom, no tip) to kiosk checkout flow. Tips sent to Square via `tipMoney` field, tracked independently in Square reporting. Stored on appointment record.
+**Files changed**: `app/kiosk/[appointmentId]/page.jsx`, `app/api/payment/route.js`, `docs/KIOSK_CHECKOUT.md`
+
+---
+
 ## Open Questions
 - [ ] Deposit amount — fixed dollar amount or percentage of service price?
 - [ ] Predefined category list — who defines the initial list? Need the list from client.

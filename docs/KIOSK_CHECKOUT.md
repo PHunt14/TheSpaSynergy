@@ -91,18 +91,20 @@ Uses the same Square Web Payments SDK already integrated for online booking chec
 ## Page Flow
 
 ```
-┌─────────────────────┐     ┌──────────────────────────┐     ┌─────────────────────┐
-│  Kiosk Home         │     │  Appointment Detail       │     │  Payment Complete    │
-│  /kiosk             │     │  /kiosk/[id]              │     │                     │
-│                     │     │                           │     │  ✓ Payment received │
-│  Today's Unpaid:    │     │  Customer: Jane D.        │     │                     │
-│                     │────▶│  Service: 60min Massage   │────▶│  Total: $65.00      │
-│  Jane D.    $65     │     │  Vendor: Winsome Woods    │     │  Jane D.            │
-│  Winsome Woods      │     │  With: Makaila            │     │  Winsome Woods      │
-│                     │     │  Total: $65.00            │     │                     │
-│  John S.    $65     │     │                           │     │  [Back to list]     │
-│  The Kera Studio    │     │  [Pay Now]                │     │                     │
-└─────────────────────┘     └──────────────────────────┘     └─────────────────────┘
+┌─────────────────────┐     ┌──────────────────────────┐     ┌─────────────────────┐     ┌─────────────────────┐
+│  Kiosk Home         │     │  Appointment Detail       │     │  Tip + Payment       │     │  Payment Complete    │
+│  /kiosk             │     │  /kiosk/[id]              │     │                      │     │                     │
+│                     │     │                           │     │  Add a Tip?          │     │  ✓ Payment received │
+│  Today's Unpaid:    │     │  Customer: Jane D.        │     │                      │     │                     │
+│                     │────▶│  Service: 60min Massage   │────▶│  [15%] [20%] [25%]   │────▶│  Total: $78.00      │
+│  Jane D.    $65     │     │  Vendor: Winsome Woods    │     │  [Custom] [No Tip]   │     │  (incl. $13 tip)    │
+│  Winsome Woods      │     │  With: Makaila            │     │                      │     │  Jane D.            │
+│                     │     │  Total: $65.00            │     │  Total: $78.00       │     │  Winsome Woods      │
+│  John S.    $65     │     │                           │     │  (Service $65 + $13) │     │                     │
+│  The Kera Studio    │     │  [Continue to Payment]    │     │                      │     │  [Back to list]     │
+└─────────────────────┘     └──────────────────────────┘     │  [Card Input]        │     └─────────────────────┘
+                                                              │  [Pay $78.00]        │
+                                                              └──────────────────────┘
 ```
 
 ## API
@@ -152,10 +154,56 @@ Updates appointment payment fields after successful kiosk payment.
 
 | Question | Options | Impact |
 |----------|---------|--------|
-| **Tipping?** | Tip screen before payment (%, custom amount) | UI complexity, tip splitting logic |
+| ~~**Tipping?**~~ | ~~Tip screen before payment (%, custom amount)~~ | ✅ Implemented — see Tipping section below |
 | **Receipts** | Email, SMS, printed, or none | May need receipt email/text input at checkout |
 | **Partial payments** | Can a customer pay for only some services in a bundle? | Payment splitting complexity |
 | **Walk-ins** | Can staff create an appointment + pay in one flow? | Needs inline appointment creation |
+
+---
+
+## Tipping
+
+Tipping is supported at the kiosk checkout. After viewing the appointment summary, customers see a tip selection screen before entering card details.
+
+### How It Works
+
+1. Customer taps an appointment from the kiosk list
+2. Appointment summary is displayed (service, price, vendor, staff)
+3. **Tip selection** — preset percentages (15%, 20%, 25%), custom dollar amount, or "No Tip"
+4. Total updates to reflect service price + tip
+5. Customer enters card and pays
+6. Tip is sent to Square as a separate `tipMoney` field — tracked independently from the service amount
+
+### Tip Handling in Square
+
+- Tips are passed via the `tipMoney` field on `createPayment` (Square's recommended approach)
+- Square tracks tips separately from the service amount in reporting
+- Tips are attributed to the staff member whose Square account processes the payment
+- Vendors can view tip totals in their Square Dashboard without any extra configuration
+- For bundle/multi-vendor payments, the tip is included on the primary payment
+
+### UI Details
+
+- **Presets**: 15%, 20%, 25% — shown as buttons with calculated dollar amounts
+- **Custom**: Opens a dollar amount input field
+- **No Tip**: Explicitly selectable, no tip sent to Square
+- **Total Due** display updates in real-time as tip selection changes
+- **Success screen** shows total paid including tip breakdown
+
+### Data Flow
+
+```
+Kiosk UI                    POST /api/payment              Square API
+─────────                   ─────────────────              ──────────
+tipAmount: 13.00    →       tipMoney: {                →   Payment recorded with
+amount: 65.00               amount: 1300,                  amountMoney: $65.00
+                            currency: 'USD'                tipMoney: $13.00
+                           }                               totalMoney: $78.00
+```
+
+### Appointment Record
+
+After payment, the appointment PATCH includes `tipAmount` so the tip is stored alongside the payment record for internal reporting.
 
 ## Future: Square Terminal Hardware
 
