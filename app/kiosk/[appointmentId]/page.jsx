@@ -111,7 +111,7 @@ function PaymentContent() {
       const payData = await payRes.json()
 
       if (!payData.success) {
-        setError('Payment failed: ' + (payData.error || 'Unknown error'))
+        setError('Payment failed: ' + (payData.details || payData.error || 'Unknown error'))
         setPaying(false)
         return
       }
