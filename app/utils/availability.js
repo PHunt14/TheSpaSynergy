@@ -95,7 +95,10 @@ export function hasAnySlot(startTime, endTime, duration, buffer, ctx) {
       const aptTime = apt.dateTime.includes('T') ? apt.dateTime.split('T')[1].substring(0, 5) : apt.dateTime.split(' ')[1]
       const [aH, aM] = aptTime.split(':').map(Number)
       const aStart = aH * 60 + aM
-      const aEnd = aStart + duration + buffer
+      // Use blocked time's actual duration if available, otherwise use new service duration
+      const customer = typeof apt.customer === 'string' ? JSON.parse(apt.customer) : apt.customer
+      const aptDuration = (customer?.isBlockedTime && customer?.duration) ? customer.duration : duration
+      const aEnd = aStart + aptDuration + buffer
       const nStart = current
       const nEnd = nStart + duration + buffer
       return nStart < aEnd && nEnd > aStart
@@ -108,14 +111,14 @@ export function hasAnySlot(startTime, endTime, duration, buffer, ctx) {
   return false
 }
 
-export function timeOverlaps(newTime, bookedTime, duration, buffer) {
+export function timeOverlaps(newTime, bookedTime, duration, buffer, bookedDuration) {
   const [newHour, newMin] = newTime.split(':').map(Number)
   const newStart = newHour * 60 + newMin
   const newEnd = newStart + duration + buffer
 
   const [bookedHour, bookedMin] = bookedTime.split(':').map(Number)
   const bookedStart = bookedHour * 60 + bookedMin
-  const bookedEnd = bookedStart + duration + buffer
+  const bookedEnd = bookedStart + (bookedDuration || duration) + buffer
 
   return (newStart < bookedEnd && newEnd > bookedStart)
 }
@@ -148,7 +151,9 @@ export function generateTimeSlots(startTime, endTime, serviceDuration, bufferMin
       const appointmentTime = appointmentDateTime.includes('T')
         ? appointmentDateTime.split('T')[1].substring(0, 5)
         : appointmentDateTime.split(' ')[1]
-      return timeOverlaps(timeString, appointmentTime, serviceDuration, bufferMinutes)
+      const customer = typeof appointment.customer === 'string' ? JSON.parse(appointment.customer) : appointment.customer
+      const aptDuration = (customer?.isBlockedTime && customer?.duration) ? customer.duration : serviceDuration
+      return timeOverlaps(timeString, appointmentTime, serviceDuration, bufferMinutes, aptDuration)
     })
 
     if (!isBooked) {
