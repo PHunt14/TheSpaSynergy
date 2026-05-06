@@ -9,20 +9,23 @@ Amplify.configure(config, { ssr: true });
 
 export async function POST(request) {
   try {
-    const { sourceId, amount, vendorId, staffId, bundlePayments, serviceIds, people } = await request.json();
+    const { sourceId, amount, tipAmount, vendorId, staffId, bundlePayments, serviceIds, people } = await request.json();
 
     if (!sourceId || !amount) {
       return Response.json({ error: 'Missing payment details' }, { status: 400 });
     }
 
+    // Validate tipAmount if provided
+    const tip = typeof tipAmount === 'number' && tipAmount > 0 ? tipAmount : 0;
+
     // Single vendor payment
     if (vendorId && !bundlePayments) {
-      return await processSinglePayment(sourceId, amount, vendorId, staffId, serviceIds, people);
+      return await processSinglePayment(sourceId, amount, vendorId, staffId, serviceIds, people, tip);
     }
 
     // Multi-vendor bundle payment
     if (bundlePayments && bundlePayments.length > 0) {
-      return await processBundlePayment(sourceId, amount, bundlePayments);
+      return await processBundlePayment(sourceId, amount, bundlePayments, tip);
     }
 
     return Response.json({ error: 'Invalid payment configuration' }, { status: 400 });
@@ -50,7 +53,7 @@ async function resolveSquareCredentials(dataClient, vendorId, staffId) {
   return { accessToken: staff.squareAccessToken, locationId: staff.squareLocationId };
 }
 
-async function processSinglePayment(sourceId, amount, vendorId, staffId, serviceIds, people) {
+async function processSinglePayment(sourceId, amount, vendorId, staffId, serviceIds, people, tipAmount = 0) {
   const dataClient = generateClient();
   const creds = await resolveSquareCredentials(dataClient, vendorId, staffId);
 
@@ -89,7 +92,7 @@ async function processSinglePayment(sourceId, amount, vendorId, staffId, service
       }
     }
 
-    const { result } = await client.paymentsApi.createPayment({
+    const paymentRequest = {
       sourceId,
       idempotencyKey: randomUUID(),
       amountMoney: {
@@ -98,12 +101,23 @@ async function processSinglePayment(sourceId, amount, vendorId, staffId, service
       },
       locationId,
       orderId,
-    });
+    };
+
+    // Include tip as a separate field so Square tracks it independently
+    if (tipAmount > 0) {
+      paymentRequest.tipMoney = {
+        amount: BigInt(Math.round(tipAmount * 100)),
+        currency: 'USD'
+      };
+    }
+
+    const { result } = await client.paymentsApi.createPayment(paymentRequest);
 
     return Response.json({
       success: true,
       paymentId: result.payment.id,
-      status: result.payment.status
+      status: result.payment.status,
+      tipAmount: tipAmount || 0,
     });
   } catch (error) {
     console.error('Square API error:', JSON.stringify(error, null, 2));
@@ -115,7 +129,7 @@ async function processSinglePayment(sourceId, amount, vendorId, staffId, service
   }
 }
 
-async function processBundlePayment(sourceId, totalAmount, bundlePayments) {
+async function processBundlePayment(sourceId, totalAmount, bundlePayments, tipAmount = 0) {
   const dataClient = generateClient();
   
   // Get house vendor
@@ -208,7 +222,7 @@ async function processBundlePayment(sourceId, totalAmount, bundlePayments) {
       : Environment.Sandbox
   });
 
-  const { result } = await client.paymentsApi.createPayment({
+  const paymentRequest = {
     sourceId,
     idempotencyKey: randomUUID(),
     amountMoney: {
@@ -217,12 +231,23 @@ async function processBundlePayment(sourceId, totalAmount, bundlePayments) {
     },
     locationId: primaryVendor.squareLocationId,
     additionalRecipients: additionalRecipients.length > 0 ? additionalRecipients : undefined
-  });
+  };
+
+  // Include tip as a separate field so Square tracks it independently
+  if (tipAmount > 0) {
+    paymentRequest.tipMoney = {
+      amount: BigInt(Math.round(tipAmount * 100)),
+      currency: 'USD'
+    };
+  }
+
+  const { result } = await client.paymentsApi.createPayment(paymentRequest);
 
   return Response.json({
     success: true,
     paymentId: result.payment.id,
     status: result.payment.status,
-    splitPayments: consolidatedPayments
+    splitPayments: consolidatedPayments,
+    tipAmount: tipAmount || 0,
   });
 }

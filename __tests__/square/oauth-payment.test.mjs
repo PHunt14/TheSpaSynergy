@@ -579,4 +579,190 @@ describe('POST /api/payment (integration — staff-level auth)', () => {
     const body = await res.json()
     expect(body.error).toContain('failed')
   })
+
+  // ─── Tipping Tests ────────────────────────────────────────────
+
+  test('includes tipMoney in Square payment when tipAmount is provided', async () => {
+    seedStaff({
+      squareAccessToken: 'staff-tok',
+      squareLocationId: 'SLOC1',
+      squareOAuthStatus: 'connected',
+    })
+    mockCreatePayment.mockResolvedValueOnce({
+      result: { payment: { id: 'pay-tip', status: 'COMPLETED' } },
+    })
+
+    const req = {
+      json: async () => ({
+        sourceId: 'cnon:card-nonce-ok',
+        amount: 65,
+        tipAmount: 13,
+        vendorId: 'vendor-1',
+        staffId: 'staff-1',
+      }),
+    }
+    const res = await handler.POST(req)
+    const body = await res.json()
+
+    expect(body.success).toBe(true)
+    expect(body.tipAmount).toBe(13)
+
+    // Verify tipMoney was passed to Square
+    const paymentArg = mockCreatePayment.mock.calls[0][0]
+    expect(paymentArg.tipMoney).toEqual({
+      amount: BigInt(1300),
+      currency: 'USD',
+    })
+    expect(paymentArg.amountMoney).toEqual({
+      amount: BigInt(6500),
+      currency: 'USD',
+    })
+  })
+
+  test('does not include tipMoney when tipAmount is 0', async () => {
+    seedStaff({
+      squareAccessToken: 'staff-tok',
+      squareLocationId: 'SLOC1',
+      squareOAuthStatus: 'connected',
+    })
+    mockCreatePayment.mockResolvedValueOnce({
+      result: { payment: { id: 'pay-notip', status: 'COMPLETED' } },
+    })
+
+    const req = {
+      json: async () => ({
+        sourceId: 'cnon:card-nonce-ok',
+        amount: 65,
+        tipAmount: 0,
+        vendorId: 'vendor-1',
+        staffId: 'staff-1',
+      }),
+    }
+    const res = await handler.POST(req)
+    const body = await res.json()
+
+    expect(body.success).toBe(true)
+    expect(body.tipAmount).toBe(0)
+
+    const paymentArg = mockCreatePayment.mock.calls[0][0]
+    expect(paymentArg.tipMoney).toBeUndefined()
+  })
+
+  test('does not include tipMoney when tipAmount is not provided', async () => {
+    seedStaff({
+      squareAccessToken: 'staff-tok',
+      squareLocationId: 'SLOC1',
+      squareOAuthStatus: 'connected',
+    })
+    mockCreatePayment.mockResolvedValueOnce({
+      result: { payment: { id: 'pay-none', status: 'COMPLETED' } },
+    })
+
+    const req = {
+      json: async () => ({
+        sourceId: 'cnon:card-nonce-ok',
+        amount: 65,
+        vendorId: 'vendor-1',
+        staffId: 'staff-1',
+      }),
+    }
+    const res = await handler.POST(req)
+    const body = await res.json()
+
+    expect(body.success).toBe(true)
+    expect(body.tipAmount).toBe(0)
+
+    const paymentArg = mockCreatePayment.mock.calls[0][0]
+    expect(paymentArg.tipMoney).toBeUndefined()
+  })
+
+  test('ignores negative tipAmount', async () => {
+    seedStaff({
+      squareAccessToken: 'staff-tok',
+      squareLocationId: 'SLOC1',
+      squareOAuthStatus: 'connected',
+    })
+    mockCreatePayment.mockResolvedValueOnce({
+      result: { payment: { id: 'pay-neg', status: 'COMPLETED' } },
+    })
+
+    const req = {
+      json: async () => ({
+        sourceId: 'cnon:card-nonce-ok',
+        amount: 65,
+        tipAmount: -5,
+        vendorId: 'vendor-1',
+        staffId: 'staff-1',
+      }),
+    }
+    const res = await handler.POST(req)
+    const body = await res.json()
+
+    expect(body.success).toBe(true)
+    expect(body.tipAmount).toBe(0)
+
+    const paymentArg = mockCreatePayment.mock.calls[0][0]
+    expect(paymentArg.tipMoney).toBeUndefined()
+  })
+
+  test('ignores non-numeric tipAmount', async () => {
+    seedStaff({
+      squareAccessToken: 'staff-tok',
+      squareLocationId: 'SLOC1',
+      squareOAuthStatus: 'connected',
+    })
+    mockCreatePayment.mockResolvedValueOnce({
+      result: { payment: { id: 'pay-str', status: 'COMPLETED' } },
+    })
+
+    const req = {
+      json: async () => ({
+        sourceId: 'cnon:card-nonce-ok',
+        amount: 65,
+        tipAmount: 'ten',
+        vendorId: 'vendor-1',
+        staffId: 'staff-1',
+      }),
+    }
+    const res = await handler.POST(req)
+    const body = await res.json()
+
+    expect(body.success).toBe(true)
+    expect(body.tipAmount).toBe(0)
+
+    const paymentArg = mockCreatePayment.mock.calls[0][0]
+    expect(paymentArg.tipMoney).toBeUndefined()
+  })
+
+  test('handles fractional tip amounts correctly (rounds to cents)', async () => {
+    seedStaff({
+      squareAccessToken: 'staff-tok',
+      squareLocationId: 'SLOC1',
+      squareOAuthStatus: 'connected',
+    })
+    mockCreatePayment.mockResolvedValueOnce({
+      result: { payment: { id: 'pay-frac', status: 'COMPLETED' } },
+    })
+
+    const req = {
+      json: async () => ({
+        sourceId: 'cnon:card-nonce-ok',
+        amount: 65,
+        tipAmount: 9.75,
+        vendorId: 'vendor-1',
+        staffId: 'staff-1',
+      }),
+    }
+    const res = await handler.POST(req)
+    const body = await res.json()
+
+    expect(body.success).toBe(true)
+    expect(body.tipAmount).toBe(9.75)
+
+    const paymentArg = mockCreatePayment.mock.calls[0][0]
+    expect(paymentArg.tipMoney).toEqual({
+      amount: BigInt(975),
+      currency: 'USD',
+    })
+  })
 })

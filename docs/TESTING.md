@@ -39,7 +39,7 @@ npm run test:e2e:headed
 | File | Tests | What's Covered |
 |------|-------|----------------|
 | `square/catalog.test.mjs` | 28 | `buildCategoryObject` — temp ID generation, multi-word names; `buildItemObject` — price/duration BigInt conversion, categories, descriptions, zero/fractional prices; `getStaffServices` — allowedStaff filtering, inactive exclusion, empty arrays; `groupByCategory` — grouping, null category fallback; `buildUpsertBatches` — full batch construction, existing category/item reuse, idempotency keys; `parseSyncResponse` — item/category counting, null handling; `buildOrderLineItems` — named line item construction, group quantity |
-| `square/oauth-payment.test.mjs` | 37 | OAuth URL generation, state encoding/decoding, webhook signature verification, webhook event processing + idempotency, vendor token builders (legacy), staff token builders, disconnect builders, payment validation (staff-level only), token expiry detection, payment route integration (POST /api/payment with staff-level Square auth) |
+| `square/oauth-payment.test.mjs` | 43 | OAuth URL generation, state encoding/decoding, webhook signature verification, webhook event processing + idempotency, vendor token builders (legacy), staff token builders, disconnect builders, payment validation (staff-level only), token expiry detection, payment route integration (POST /api/payment with staff-level Square auth, tipping support) |
 | `utils/payment.test.mjs` | 23 | `calculatePaymentSplits` — single/multi vendor, house fees, aggregation, edge cases; `calculateVendorNet` — fee subtraction; `formatPaymentSplits` — display formatting |
 | `utils/availability.test.mjs` | 39 | `getRecurrenceHours` — every-other-week (with/without anchor), 2nd-of-month, standard fallback; `resolveStaffSync` — auto-assign rules, schedule-based resolution, allowedStaff filtering, recurrence in schedules; `getDayHoursSync` — sauna hours, staff schedule priority, vendor fallback; `hasAnySlot` — open/fully-booked detection, staff filtering, window-too-small; `timeOverlaps` — overlap with buffer, adjacent, identical, zero-buffer; `generateTimeSlots` — slot generation, booked exclusion, dateTime formats; `formatTime` — 12-hour display; `DAY_NAMES` constant |
 | `utils/client.test.mjs` | 12 | `normalizePhone` — formatting, +1 prefix, too-short, null/empty; `normalizeEmail` — case/trim, null/empty; `isMatchingClient` — phone match, email match, no match, empty fields, phone priority |
@@ -57,7 +57,7 @@ npm run test:e2e:headed
 |------|-------|----------------|
 | `smoke.spec.ts` | 6 | Homepage load + title + CTA, booking page loads, vendors page loads, contact page loads, navbar links, footer content |
 
-**Current totals: 168 Jest tests passing, 6 E2E tests ready**
+**Current totals: 174 Jest tests passing, 6 E2E tests ready**
 
 ## Architecture
 
