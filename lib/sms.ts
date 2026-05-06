@@ -5,15 +5,11 @@ function formatPhone(phone: string): string {
 }
 
 async function sendViaSns(phoneNumber: string, message: string) {
-  const { PinpointSMSVoiceV2Client, SendTextMessageCommand } = await import('@aws-sdk/client-pinpoint-sms-voice-v2')
-  const client = new PinpointSMSVoiceV2Client({ region: process.env.AWS_REGION || 'us-east-1' })
-  await client.send(new SendTextMessageCommand({
-    DestinationPhoneNumber: formatPhone(phoneNumber),
-    MessageBody: message,
-    MessageType: 'TRANSACTIONAL',
-    ...(process.env.SNS_ORIGINATION_NUMBER && {
-      OriginationIdentity: process.env.SNS_ORIGINATION_NUMBER,
-    }),
+  const { SNSClient, PublishCommand } = await import('@aws-sdk/client-sns')
+  const client = new SNSClient({ region: process.env.AWS_REGION || 'us-east-1' })
+  await client.send(new PublishCommand({
+    PhoneNumber: formatPhone(phoneNumber),
+    Message: message,
   }))
 }
 
