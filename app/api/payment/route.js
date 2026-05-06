@@ -106,10 +106,11 @@ async function processSinglePayment(sourceId, amount, vendorId, staffId, service
       status: result.payment.status
     });
   } catch (error) {
-    console.error('Square API error:', error);
+    console.error('Square API error:', JSON.stringify(error, null, 2));
+    const details = error?.errors?.[0]?.detail || error?.message || 'Unknown Square error';
     return Response.json({ 
       error: 'Payment processing failed',
-      details: error.message
+      details
     }, { status: 500 });
   }
 }
