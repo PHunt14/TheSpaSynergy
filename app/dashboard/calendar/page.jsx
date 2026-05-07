@@ -170,7 +170,7 @@ function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onResche
 
 // ── Time Block Day Column ─────────────────────────────────────
 
-function TimeBlockColumn({ date, appointments, startHour, endHour, onAppointmentClick }) {
+function TimeBlockColumn({ date, appointments, startHour, endHour, onAppointmentClick, onSlotClick }) {
   const slots = generateTimeSlots(startHour, endHour)
   const dayAppointments = appointments.filter(apt => {
     const d = parseAppointmentDate(apt.rawDateTime)
@@ -180,12 +180,25 @@ function TimeBlockColumn({ date, appointments, startHour, endHour, onAppointment
   // Compute overlap layout for side-by-side rendering
   const layout = computeOverlapLayout(dayAppointments, startHour)
 
+  const handleSlotClick = (e, slot) => {
+    // Only fire if clicking the background, not an appointment block
+    if (e.target !== e.currentTarget) return
+    const dateTime = new Date(date)
+    dateTime.setHours(slot.hour, slot.minute, 0, 0)
+    onSlotClick(dateTime)
+  }
+
   return (
     <div style={{ position: 'relative', minHeight: `${slots.length * 40}px` }}>
-      {/* Grid lines */}
+      {/* Grid lines (clickable) */}
       {slots.map((slot, i) => (
         <div
           key={i}
+          onClick={(e) => handleSlotClick(e, slot)}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); const dateTime = new Date(date); dateTime.setHours(slot.hour, slot.minute, 0, 0); onSlotClick(dateTime) } }}
+          role="button"
+          tabIndex={0}
+          aria-label={`Add appointment at ${slot.hour === 0 ? 12 : slot.hour > 12 ? slot.hour - 12 : slot.hour}:${String(slot.minute).padStart(2, '0')} ${slot.hour < 12 ? 'AM' : 'PM'}`}
           style={{
             position: 'absolute',
             top: `${i * 40}px`,
@@ -194,6 +207,7 @@ function TimeBlockColumn({ date, appointments, startHour, endHour, onAppointment
             height: '40px',
             borderBottom: '1px solid var(--color-border)',
             background: slot.minute === 0 ? 'transparent' : 'rgba(0,0,0,0.01)',
+            cursor: 'cell',
           }}
         />
       ))}
@@ -296,6 +310,160 @@ function MonthView({ currentDate, appointments, onAppointmentClick }) {
   )
 }
 
+// ── New Appointment / Block Time Modal ────────────────────────
+
+function NewAppointmentModal({ dateTime, vendorId, onClose, onCreated }) {
+  const [mode, setMode] = useState('appointment') // 'appointment' or 'block'
+  const [form, setForm] = useState({
+    customerName: '',
+    customerPhone: '',
+    customerEmail: '',
+    notes: '',
+    dateTime: dateTime ? dateTime.toISOString().slice(0, 16) : '',
+  })
+  const [services, setServices] = useState([])
+  const [staffList, setStaffList] = useState([])
+  const [serviceId, setServiceId] = useState('')
+  const [staffId, setStaffId] = useState('')
+  const [duration, setDuration] = useState(60)
+  const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (!vendorId) return
+    fetch(`/api/services?vendorId=${vendorId}`).then(r => r.json()).then(d => setServices((d.services || []).filter(s => s.vendorId === vendorId && s.isActive !== false)))
+    fetch(`/api/staff-schedules?vendorId=${vendorId}`).then(r => r.json()).then(d => setStaffList((d.schedules || []).filter(s => s.isActive !== false)))
+  }, [vendorId])
+
+  const handleSubmit = async () => {
+    if (!form.dateTime) { alert('Please select a date and time'); return }
+    setSubmitting(true)
+    try {
+      const body = mode === 'block'
+        ? { vendorId, staffId: staffId || undefined, dateTime: form.dateTime, customerName: 'Blocked Time', notes: form.notes, isBlockedTime: true, duration }
+        : { vendorId, serviceId: serviceId || undefined, staffId: staffId || undefined, dateTime: form.dateTime, customerName: form.customerName, customerPhone: form.customerPhone, customerEmail: form.customerEmail, notes: form.notes }
+
+      const res = await fetch('/api/appointments/manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      })
+      if (res.ok) {
+        onCreated()
+        onClose()
+      } else {
+        const data = await res.json()
+        alert('Failed: ' + (data.error || 'Unknown error'))
+      }
+    } catch (error) {
+      alert('Error: ' + (error.message || 'Unknown error'))
+    } finally { setSubmitting(false) }
+  }
+
+  return (
+    <div
+      onClick={onClose}
+      onKeyDown={(e) => { if (e.key === 'Escape') onClose() }}
+      role="dialog"
+      aria-modal="true"
+      tabIndex={-1}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+        role="document"
+        style={{ background: 'white', borderRadius: '12px', padding: '2rem', maxWidth: '440px', width: '90%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+          <h3 style={{ margin: 0 }}>{mode === 'block' ? 'Block Time' : 'New Appointment'}</h3>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: 'var(--color-text-light)' }}>×</button>
+        </div>
+
+        {/* Mode toggle */}
+        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
+          <button onClick={() => setMode('appointment')} style={{ flex: 1, padding: '0.5rem', borderRadius: '6px', border: 'none', background: mode === 'appointment' ? 'var(--color-primary)' : 'var(--color-accent)', color: mode === 'appointment' ? 'white' : 'var(--color-text)', cursor: 'pointer', fontWeight: '500' }}>
+            Appointment
+          </button>
+          <button onClick={() => setMode('block')} style={{ flex: 1, padding: '0.5rem', borderRadius: '6px', border: 'none', background: mode === 'block' ? '#607D8B' : 'var(--color-accent)', color: mode === 'block' ? 'white' : 'var(--color-text)', cursor: 'pointer', fontWeight: '500' }}>
+            🚫 Block Time
+          </button>
+        </div>
+
+        {/* Date/Time */}
+        <div style={{ marginBottom: '1rem' }}>
+          <label htmlFor="new-apt-datetime" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Date & Time</label>
+          <input id="new-apt-datetime" type="datetime-local" value={form.dateTime} onChange={(e) => setForm({ ...form, dateTime: e.target.value })}
+            style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', boxSizing: 'border-box' }} />
+        </div>
+
+        {/* Staff */}
+        <div style={{ marginBottom: '1rem' }}>
+          <label htmlFor="new-apt-staff" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Staff Member</label>
+          <select id="new-apt-staff" value={staffId} onChange={(e) => setStaffId(e.target.value)}
+            style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem' }}>
+            <option value="">None</option>
+            {staffList.map(s => <option key={s.visibleId} value={s.visibleId}>{s.staffName}</option>)}
+          </select>
+        </div>
+
+        {mode === 'appointment' ? (
+          <>
+            {/* Service */}
+            <div style={{ marginBottom: '1rem' }}>
+              <label htmlFor="new-apt-service" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Service</label>
+              <select id="new-apt-service" value={serviceId} onChange={(e) => setServiceId(e.target.value)}
+                style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem' }}>
+                <option value="">Select a service</option>
+                {services.map(s => <option key={s.serviceId} value={s.serviceId}>{s.name} ({s.duration} min — ${s.price})</option>)}
+              </select>
+            </div>
+            {/* Customer */}
+            <div style={{ marginBottom: '1rem' }}>
+              <label htmlFor="new-apt-name" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Customer Name</label>
+              <input id="new-apt-name" type="text" value={form.customerName} onChange={(e) => setForm({ ...form, customerName: e.target.value })}
+                style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', boxSizing: 'border-box' }} />
+            </div>
+            <div style={{ marginBottom: '1rem' }}>
+              <label htmlFor="new-apt-phone" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Phone</label>
+              <input id="new-apt-phone" type="tel" value={form.customerPhone} onChange={(e) => setForm({ ...form, customerPhone: e.target.value })}
+                style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', boxSizing: 'border-box' }} />
+            </div>
+            <div style={{ marginBottom: '1rem' }}>
+              <label htmlFor="new-apt-email" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Email</label>
+              <input id="new-apt-email" type="email" value={form.customerEmail} onChange={(e) => setForm({ ...form, customerEmail: e.target.value })}
+                style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', boxSizing: 'border-box' }} />
+            </div>
+          </>
+        ) : (
+          /* Block time — duration */
+          <div style={{ marginBottom: '1rem' }}>
+            <label htmlFor="new-apt-duration" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Duration (minutes)</label>
+            <input id="new-apt-duration" type="number" min="15" step="15" value={duration} onChange={(e) => setDuration(Number(e.target.value))}
+              style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', boxSizing: 'border-box' }} />
+          </div>
+        )}
+
+        {/* Notes */}
+        <div style={{ marginBottom: '1.5rem' }}>
+          <label htmlFor="new-apt-notes" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Notes</label>
+          <input id="new-apt-notes" type="text" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}
+            style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', boxSizing: 'border-box' }} />
+        </div>
+
+        {/* Submit */}
+        <div style={{ display: 'flex', gap: '0.75rem' }}>
+          <button onClick={handleSubmit} disabled={submitting} className="cta" style={{ flex: 1, opacity: submitting ? 0.6 : 1 }}>
+            {submitting ? 'Saving...' : mode === 'block' ? 'Block Time' : 'Add Appointment'}
+          </button>
+          <button onClick={onClose} style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', background: 'white', cursor: 'pointer' }}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Main Calendar Component ───────────────────────────────────
 
 export default function Calendar() {
@@ -309,6 +477,7 @@ export default function Calendar() {
   const [selectedAppointment, setSelectedAppointment] = useState(null)
   const [startHour, setStartHour] = useState(DEFAULT_START_HOUR)
   const [endHour, setEndHour] = useState(DEFAULT_END_HOUR)
+  const [newAppointmentDateTime, setNewAppointmentDateTime] = useState(null)
 
   // Action handlers
   const handleConfirm = async (appointment) => {
@@ -448,7 +617,12 @@ export default function Calendar() {
     <div>
       {/* Top bar: title + vendor selector + view toggle */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
-        <h1 style={{ margin: 0 }}>Calendar</h1>
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+          <h1 style={{ margin: 0 }}>Calendar</h1>
+          <button onClick={() => setNewAppointmentDateTime(new Date())} className="cta" style={{ margin: 0, padding: '0.4rem 1rem', fontSize: '0.85rem' }}>
+            + New
+          </button>
+        </div>
         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
           {userRole === 'admin' && vendors.length > 0 && (
             <select
@@ -532,6 +706,7 @@ export default function Calendar() {
               startHour={startHour}
               endHour={endHour}
               onAppointmentClick={setSelectedAppointment}
+              onSlotClick={setNewAppointmentDateTime}
             />
           </div>
         </div>
@@ -574,6 +749,7 @@ export default function Calendar() {
                 startHour={startHour}
                 endHour={endHour}
                 onAppointmentClick={setSelectedAppointment}
+                onSlotClick={setNewAppointmentDateTime}
               />
             </div>
           ))}
@@ -597,6 +773,16 @@ export default function Calendar() {
           onConfirm={handleConfirm}
           onCancel={handleCancel}
           onReschedule={handleReschedule}
+        />
+      )}
+
+      {/* New Appointment / Block Time Modal */}
+      {newAppointmentDateTime && (
+        <NewAppointmentModal
+          dateTime={newAppointmentDateTime}
+          vendorId={userVendorId}
+          onClose={() => setNewAppointmentDateTime(null)}
+          onCreated={loadAppointments}
         />
       )}
     </div>
