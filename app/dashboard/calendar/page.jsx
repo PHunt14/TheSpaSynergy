@@ -5,8 +5,6 @@ import { fetchAuthSession } from 'aws-amplify/auth'
 import {
   DEFAULT_START_HOUR,
   DEFAULT_END_HOUR,
-  SLOT_MINUTES,
-  getWeekStart,
   getWeekDates,
   getMonthDates,
   isSameDay,
@@ -91,7 +89,7 @@ function AppointmentBlock({ appointment, startHour, onClick, column = 0, totalCo
 
 // ── Appointment Detail Modal ──────────────────────────────────
 
-function AppointmentDetail({ appointment, onClose }) {
+function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onReschedule }) {
   if (!appointment) return null
   const aptDate = parseAppointmentDate(appointment.rawDateTime)
 
@@ -139,6 +137,32 @@ function AppointmentDetail({ appointment, onClose }) {
           }}>{appointment.paymentStatus === 'paid' ? 'Paid' : 'Unpaid'}</span></p>
           {appointment.customer?.phone && <p style={{ margin: 0 }}><strong>Phone:</strong> {appointment.customer.phone}</p>}
         </div>
+
+        {/* Action buttons */}
+        {appointment.status !== 'cancelled' && (
+          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.5rem', flexWrap: 'wrap' }}>
+            {(appointment.status === 'pending' || appointment.status === 'pending-confirmation') && (
+              <button
+                onClick={() => { onConfirm(appointment); onClose() }}
+                style={{ flex: 1, padding: '0.6rem 1rem', borderRadius: '6px', border: 'none', background: '#4CAF50', color: 'white', cursor: 'pointer', fontWeight: '500', fontSize: '0.85rem' }}
+              >
+                Confirm
+              </button>
+            )}
+            <button
+              onClick={() => { onReschedule(appointment); onClose() }}
+              style={{ flex: 1, padding: '0.6rem 1rem', borderRadius: '6px', border: 'none', background: '#2196F3', color: 'white', cursor: 'pointer', fontWeight: '500', fontSize: '0.85rem' }}
+            >
+              Reschedule
+            </button>
+            <button
+              onClick={() => { onCancel(appointment); onClose() }}
+              style={{ flex: 1, padding: '0.6rem 1rem', borderRadius: '6px', border: 'none', background: '#F44336', color: 'white', cursor: 'pointer', fontWeight: '500', fontSize: '0.85rem' }}
+            >
+              Cancel
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -285,6 +309,48 @@ export default function Calendar() {
   const [selectedAppointment, setSelectedAppointment] = useState(null)
   const [startHour, setStartHour] = useState(DEFAULT_START_HOUR)
   const [endHour, setEndHour] = useState(DEFAULT_END_HOUR)
+
+  // Action handlers
+  const handleConfirm = async (appointment) => {
+    if (!confirm('Confirm this appointment?')) return
+    try {
+      const res = await fetch('/api/appointments/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ appointmentId: appointment.appointmentId })
+      })
+      if (res.ok) {
+        loadAppointments()
+      } else {
+        alert('Failed to confirm appointment')
+      }
+    } catch {
+      alert('Error confirming appointment')
+    }
+  }
+
+  const handleCancel = async (appointment) => {
+    if (!confirm('Are you sure you want to cancel this appointment?')) return
+    try {
+      const res = await fetch('/api/appointments/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ appointmentId: appointment.appointmentId })
+      })
+      if (res.ok) {
+        loadAppointments()
+      } else {
+        alert('Failed to cancel appointment')
+      }
+    } catch {
+      alert('Error cancelling appointment')
+    }
+  }
+
+  const handleReschedule = (appointment) => {
+    // Navigate to the appointments page with the reschedule modal open
+    window.location.href = `/dashboard/appointments?reschedule=${appointment.appointmentId}`
+  }
 
   useEffect(() => {
     loadUserVendor()
@@ -528,6 +594,9 @@ export default function Calendar() {
         <AppointmentDetail
           appointment={selectedAppointment}
           onClose={() => setSelectedAppointment(null)}
+          onConfirm={handleConfirm}
+          onCancel={handleCancel}
+          onReschedule={handleReschedule}
         />
       )}
     </div>
