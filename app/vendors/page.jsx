@@ -49,7 +49,10 @@ export default function VendorsPage() {
           return (
             <div
               key={vendor.vendorId}
+              role="button"
+              tabIndex={0}
               onClick={() => router.push(`/vendors/${vendor.vendorId}`)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); router.push(`/vendors/${vendor.vendorId}`); } }}
               style={{
                 borderRadius: '12px',
                 overflow: 'hidden',

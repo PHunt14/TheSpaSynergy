@@ -46,7 +46,10 @@ export default function BundlesPage() {
           return (
             <div
               key={bundle.bundleId}
+              role="button"
+              tabIndex={0}
               onClick={() => isBookingEnabled ? router.push(`/booking/bundle?id=${bundle.bundleId}`) : setShowDisabled(true)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); isBookingEnabled ? router.push(`/booking/bundle?id=${bundle.bundleId}`) : setShowDisabled(true); } }}
               style={{
                 background: 'var(--color-accent)',
                 borderRadius: '12px',

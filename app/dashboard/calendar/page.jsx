@@ -109,6 +109,7 @@ function AppointmentDetail({ appointment, onClose }) {
     >
       <div
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
         role="document"
         style={{
           background: 'white', borderRadius: '12px', padding: '2rem',

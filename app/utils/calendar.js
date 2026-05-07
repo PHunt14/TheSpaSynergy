@@ -38,8 +38,10 @@ export function getMonthDates(date) {
   const first = new Date(year, month, 1)
   const last = new Date(year, month + 1, 0)
   const dates = []
-  for (let d = new Date(first); d <= last; d.setDate(d.getDate() + 1)) {
-    dates.push(new Date(d))
+  let current = new Date(first)
+  while (current <= last) {
+    dates.push(new Date(current))
+    current.setDate(current.getDate() + 1)
   }
   return dates
 }

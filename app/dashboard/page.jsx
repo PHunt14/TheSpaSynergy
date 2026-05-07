@@ -128,7 +128,10 @@ export default function DashboardHome() {
             ].map(r => (
               <div
                 key={r.key}
+                role="button"
+                tabIndex={0}
                 onClick={() => setPeriod(r.key)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setPeriod(r.key); } }}
                 style={{
                   background: period === r.key ? 'var(--color-primary)' : 'var(--color-accent)',
                   color: period === r.key ? 'white' : 'var(--color-text)',

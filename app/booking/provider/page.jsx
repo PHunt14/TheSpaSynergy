@@ -39,7 +39,10 @@ function ProviderPageContent() {
         {vendors.map(v => (
           <div
             key={v.vendorId}
+            role="button"
+            tabIndex={0}
             onClick={() => setSelected(v.vendorId)}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(v.vendorId); } }}
             style={{
               padding: '1rem',
               marginBottom: '1rem',
