@@ -35,13 +35,10 @@ export function getWeekDates(date) {
 export function getMonthDates(date) {
   const year = date.getFullYear()
   const month = date.getMonth()
-  const first = new Date(year, month, 1)
-  const last = new Date(year, month + 1, 0)
+  const lastDay = new Date(year, month + 1, 0).getDate()
   const dates = []
-  let current = new Date(first)
-  while (current <= last) {
-    dates.push(new Date(current))
-    current.setDate(current.getDate() + 1)
+  for (let day = 1; day <= lastDay; day++) {
+    dates.push(new Date(year, month, day))
   }
   return dates
 }
