@@ -75,14 +75,31 @@ export async function GET(request: Request) {
   }
 
   try {
-    // Get all appointments for this vendor
-    const { data: appointments, errors } = await client.models.Appointment.list({
-      filter: { vendorId: { eq: vendorId } }
-    });
+    // Get appointments for this vendor, optionally filtered by date range
+    const startDate = searchParams.get('startDate');
+    const endDate = searchParams.get('endDate');
 
-    if (errors) {
-      console.error('Error fetching appointments:', errors);
-      return Response.json({ error: 'Failed to fetch appointments' }, { status: 500 });
+    let appointments;
+    if (startDate && endDate) {
+      // Use the vendorId + dateTime index for efficient range queries
+      const { data, errors: listErrors } = await client.models.Appointment.listAppointmentByVendorIdAndDateTime({
+        vendorId,
+        dateTime: { between: [startDate, endDate] }
+      });
+      if (listErrors) {
+        console.error('Error fetching appointments:', listErrors);
+        return Response.json({ error: 'Failed to fetch appointments' }, { status: 500 });
+      }
+      appointments = data || [];
+    } else {
+      const { data, errors: listErrors } = await client.models.Appointment.list({
+        filter: { vendorId: { eq: vendorId } }
+      });
+      if (listErrors) {
+        console.error('Error fetching appointments:', listErrors);
+        return Response.json({ error: 'Failed to fetch appointments' }, { status: 500 });
+      }
+      appointments = data || [];
     }
 
     // Enrich appointments with service details
@@ -141,6 +158,7 @@ export async function GET(request: Request) {
 
         return {
           ...appointment,
+          rawDateTime: appointment.dateTime,
           dateTime: formattedDateTime,
           customer,
           service,

@@ -57,7 +57,10 @@ export default function SaunaPage() {
           return (
             <div
               key={service.serviceId}
+              role="button"
+              tabIndex={0}
               onClick={() => setSelected(service)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(service); } }}
               style={{
                 padding: '1.25rem',
                 borderRadius: '12px',

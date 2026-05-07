@@ -173,7 +173,10 @@ function TimePageContent() {
           {!loading && availableSlots.map(slot => (
             <div
               key={slot.time}
+              role="button"
+              tabIndex={0}
               onClick={() => setSelectedTime(slot.display)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedTime(slot.display); } }}
               style={{
                 padding: '1rem',
                 borderRadius: '8px',

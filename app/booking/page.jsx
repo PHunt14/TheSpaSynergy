@@ -54,6 +54,8 @@ function BookingContent() {
           return (
             <div
               key={vendor.vendorId}
+              role="button"
+              tabIndex={0}
               onClick={() => {
                 if (typeof window !== 'undefined' && window.gtag) {
                   window.gtag('event', 'select_item', {
@@ -63,6 +65,7 @@ function BookingContent() {
                 }
                 router.push(`/booking/service?vendor=${vendor.vendorId}`)
               }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (typeof window !== 'undefined' && window.gtag) { window.gtag('event', 'select_item', { item_list_name: 'Vendors', items: [{ item_name: vendor.name, item_id: vendor.vendorId }] }); } router.push(`/booking/service?vendor=${vendor.vendorId}`); } }}
               style={{
                 borderRadius: '12px',
                 overflow: 'hidden',

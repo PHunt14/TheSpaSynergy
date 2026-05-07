@@ -232,7 +232,10 @@ export default function VendorDetailPage() {
                 <img
                   src={member.photo}
                   alt={member.alt}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => setSelectedProfile(member)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedProfile(member); } }}
                   style={{ width: '300px', height: '300px', objectFit: 'cover', borderRadius: '12px', border: '3px solid var(--color-primary)', cursor: 'pointer' }}
                 />
                 <div style={{ width: '3px', height: '20px', background: 'var(--color-primary)' }} />
@@ -298,7 +301,10 @@ export default function VendorDetailPage() {
       {/* Profile Overlay Modal */}
       {selectedProfile && (
         <div
+          role="button"
+          tabIndex={0}
           onClick={() => setSelectedProfile(null)}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedProfile(null); } }}
           style={{
             position: 'fixed',
             top: 0, left: 0, right: 0, bottom: 0,
@@ -311,7 +317,10 @@ export default function VendorDetailPage() {
           }}
         >
           <div
+            role="button"
+            tabIndex={0}
             onClick={e => e.stopPropagation()}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); } }}
             style={{
               background: 'white',
               borderRadius: '12px',
