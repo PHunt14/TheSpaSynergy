@@ -47,40 +47,45 @@ export default function DashboardHome() {
   }, [userVendorId])
 
   const now = new Date()
-  const startOfWeek = new Date(now)
-  startOfWeek.setDate(now.getDate() - now.getDay())
-  startOfWeek.setHours(0, 0, 0, 0)
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-  const startOfYear = new Date(now.getFullYear(), 0, 1)
 
   const parseDate = (dt) => {
     if (!dt) return null
     const d = new Date(dt)
-    return isNaN(d.getTime()) ? null : d
+    return Number.isNaN(d.getTime()) ? null : d
   }
 
-  const calcRevenue = (start) => {
-    return appointments
-      .filter(a => a.status === 'confirmed')
-      .filter(a => {
-        const d = parseDate(a.createdAt || a.dateTime)
-        return d && d >= start
-      })
-      .reduce((sum, a) => sum + (a.service?.price || a.paymentAmount || 0), 0)
+  const getPeriodRange = (p) => {
+    if (p === 'week') {
+      const start = new Date(now)
+      start.setDate(now.getDate() - now.getDay())
+      start.setHours(0, 0, 0, 0)
+      const end = new Date(start)
+      end.setDate(start.getDate() + 7)
+      return { start, end }
+    }
+    if (p === 'month') {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1)
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+      return { start, end }
+    }
+    // year
+    const start = new Date(now.getFullYear(), 0, 1)
+    const end = new Date(now.getFullYear() + 1, 0, 1)
+    return { start, end }
   }
 
-  const weekRevenue = calcRevenue(startOfWeek)
-  const monthRevenue = calcRevenue(startOfMonth)
-  const yearRevenue = calcRevenue(startOfYear)
-
-  const periodStart = period === 'week' ? startOfWeek : period === 'month' ? startOfMonth : startOfYear
+  const { start: periodStart, end: periodEnd } = getPeriodRange(period)
   const periodAppointments = appointments
-    .filter(a => a.status === 'confirmed')
-    .filter(a => { const d = parseDate(a.createdAt || a.dateTime); return d && d >= periodStart })
+    .filter(a => a.status === 'confirmed' || a.status === 'pending' || a.status === 'pending-confirmation')
+    .filter(a => {
+      const d = parseDate(a.rawDateTime)
+      return d && d >= periodStart && d < periodEnd
+    })
+    .sort((a, b) => new Date(a.rawDateTime) - new Date(b.rawDateTime))
 
   const totalCount = appointments.filter(a => a.status !== 'cancelled').length
   const confirmedCount = appointments.filter(a => a.status === 'confirmed').length
-  const pendingCount = appointments.filter(a => a.status === 'pending').length
+  const pendingCount = appointments.filter(a => a.status === 'pending' || a.status === 'pending-confirmation').length
 
   return (
     <div>
@@ -91,8 +96,9 @@ export default function DashboardHome() {
 
       {userRole === 'admin' && vendors.length > 0 && (
         <div style={{ marginBottom: '2rem' }}>
-          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Select Vendor:</label>
+          <label htmlFor="vendor-select-overview" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Select Vendor:</label>
           <select
+            id="vendor-select-overview"
             value={userVendorId || ''}
             onChange={(e) => setUserVendorId(e.target.value)}
             style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem', minWidth: '250px' }}
@@ -118,40 +124,34 @@ export default function DashboardHome() {
             ))}
           </div>
 
-          {/* Revenue Cards */}
-          <h2 style={{ marginBottom: '1rem' }}>Revenue</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
-            {[
-              { label: 'This Week', value: weekRevenue, key: 'week' },
-              { label: 'This Month', value: monthRevenue, key: 'month' },
-              { label: 'This Year', value: yearRevenue, key: 'year' },
-            ].map(r => (
-              <div
-                key={r.key}
-                role="button"
-                tabIndex={0}
-                onClick={() => setPeriod(r.key)}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setPeriod(r.key); } }}
+          {/* Period Toggle */}
+          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
+            {['week', 'month', 'year'].map(p => (
+              <button
+                key={p}
+                onClick={() => setPeriod(p)}
                 style={{
-                  background: period === r.key ? 'var(--color-primary)' : 'var(--color-accent)',
-                  color: period === r.key ? 'white' : 'var(--color-text)',
-                  borderRadius: '12px', padding: '1.5rem', cursor: 'pointer', transition: '0.2s'
+                  padding: '0.5rem 1.2rem',
+                  borderRadius: '6px',
+                  border: 'none',
+                  background: period === p ? 'var(--color-primary)' : 'var(--color-accent)',
+                  color: period === p ? 'white' : 'var(--color-text)',
+                  cursor: 'pointer',
+                  fontWeight: '500',
+                  fontSize: '0.9rem',
+                  textTransform: 'capitalize',
                 }}
               >
-                <div style={{ fontSize: '0.9rem', opacity: 0.8, marginBottom: '0.5rem' }}>{r.label}</div>
-                <div style={{ fontSize: '2rem', fontWeight: 'bold' }}>${r.value.toFixed(2)}</div>
-                <div style={{ fontSize: '0.85rem', opacity: 0.7, marginTop: '0.25rem' }}>
-                  {appointments.filter(a => a.status === 'confirmed').filter(a => { const d = parseDate(a.createdAt || a.dateTime); return d && d >= (r.key === 'week' ? startOfWeek : r.key === 'month' ? startOfMonth : startOfYear) }).length} paid appointments
-                </div>
-              </div>
+                This {p}
+              </button>
             ))}
           </div>
 
-          {/* Period Detail */}
-          {periodAppointments.length > 0 && (
+          {/* Period Appointments */}
+          {periodAppointments.length > 0 ? (
             <div style={{ background: 'var(--color-accent)', borderRadius: '12px', padding: '1.5rem' }}>
               <h3 style={{ marginBottom: '1rem' }}>
-                Confirmed Appointments — This {period.charAt(0).toUpperCase() + period.slice(1)}
+                Appointments — This {period.charAt(0).toUpperCase() + period.slice(1)} ({periodAppointments.length})
               </h3>
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -160,7 +160,7 @@ export default function DashboardHome() {
                       <th style={{ padding: '0.75rem', textAlign: 'left' }}>Date</th>
                       <th style={{ padding: '0.75rem', textAlign: 'left' }}>Service</th>
                       <th style={{ padding: '0.75rem', textAlign: 'left' }}>Customer</th>
-                      <th style={{ padding: '0.75rem', textAlign: 'right' }}>Amount</th>
+                      <th style={{ padding: '0.75rem', textAlign: 'left' }}>Status</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -169,13 +169,21 @@ export default function DashboardHome() {
                         <td style={{ padding: '0.75rem' }}>{a.dateTime}</td>
                         <td style={{ padding: '0.75rem' }}>{a.service?.name || 'N/A'}</td>
                         <td style={{ padding: '0.75rem' }}>{a.customer?.name || 'N/A'}</td>
-                        <td style={{ padding: '0.75rem', textAlign: 'right' }}>${a.service?.price || a.paymentAmount || 0}</td>
+                        <td style={{ padding: '0.75rem' }}>
+                          <span style={{
+                            padding: '0.2rem 0.6rem', borderRadius: '8px', fontSize: '0.8rem',
+                            background: a.status === 'confirmed' ? '#d4edda' : '#fff3cd',
+                            color: a.status === 'confirmed' ? '#155724' : '#856404',
+                          }}>{a.status}</span>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             </div>
+          ) : (
+            <p style={{ color: 'var(--color-text-light)' }}>No appointments this {period}.</p>
           )}
         </>
       )}
