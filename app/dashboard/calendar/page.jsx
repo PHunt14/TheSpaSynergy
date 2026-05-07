@@ -52,6 +52,9 @@ function AppointmentBlock({ appointment, startHour, onClick, column = 0, totalCo
   return (
     <div
       onClick={() => onClick(appointment)}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(appointment) } }}
+      role="button"
+      tabIndex={0}
       title={`${appointment.customer?.name || 'Walk-in'} — ${appointment.service?.name || 'Service'} (${duration} min)`}
       style={{
         position: 'absolute',
@@ -95,6 +98,10 @@ function AppointmentDetail({ appointment, onClose }) {
   return (
     <div
       onClick={onClose}
+      onKeyDown={(e) => { if (e.key === 'Escape') onClose() }}
+      role="dialog"
+      aria-modal="true"
+      tabIndex={-1}
       style={{
         position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)',
         display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
@@ -102,6 +109,7 @@ function AppointmentDetail({ appointment, onClose }) {
     >
       <div
         onClick={(e) => e.stopPropagation()}
+        role="document"
         style={{
           background: 'white', borderRadius: '12px', padding: '2rem',
           maxWidth: '400px', width: '90%', boxShadow: '0 8px 32px rgba(0,0,0,0.2)'
@@ -230,6 +238,9 @@ function MonthView({ currentDate, appointments, onAppointmentClick }) {
                   <div
                     key={apt.appointmentId}
                     onClick={() => onAppointmentClick(apt)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onAppointmentClick(apt) } }}
+                    role="button"
+                    tabIndex={0}
                     style={{
                       fontSize: '0.7rem',
                       padding: '2px 4px',
