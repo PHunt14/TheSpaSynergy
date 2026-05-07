@@ -257,7 +257,7 @@ function MonthView({ currentDate, appointments, onAppointmentClick }) {
                 background: isToday(date) ? '#e8f4fd' : 'white',
                 padding: '0.5rem',
                 minHeight: '100px',
-                overflow: 'hidden',
+                overflow: 'auto',
               }}
             >
               <div style={{
@@ -269,10 +269,12 @@ function MonthView({ currentDate, appointments, onAppointmentClick }) {
                 {date.getDate()}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                {dayApts.slice(0, 3).map(apt => {
+                {dayApts.map(apt => {
                   const color = apt.paymentStatus === 'paid' ? '#4CAF50'
                     : apt.status === 'confirmed' ? '#2196F3'
                     : '#FF9800'
+                  const aptDate = parseAppointmentDate(apt.rawDateTime)
+                  const timeStr = aptDate ? aptDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : ''
                   return (
                   <div
                     key={apt.appointmentId}
@@ -287,20 +289,16 @@ function MonthView({ currentDate, appointments, onAppointmentClick }) {
                       background: color + '22',
                       borderLeft: `2px solid ${color}`,
                       cursor: 'pointer',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      gap: '4px',
                     }}
                   >
-                    {apt.customer?.name || 'Walk-in'}
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{apt.customer?.name || 'Walk-in'}</span>
+                    <span style={{ flexShrink: 0, color: 'var(--color-text-light)' }}>{timeStr}</span>
                   </div>
                   )
                 })}
-                {dayApts.length > 3 && (
-                  <div style={{ fontSize: '0.7rem', color: 'var(--color-text-light)' }}>
-                    +{dayApts.length - 3} more
-                  </div>
-                )}
               </div>
             </div>
           )
