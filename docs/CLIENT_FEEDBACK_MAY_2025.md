@@ -26,6 +26,8 @@ Feedback collected from client on May 6, 2025. Items triaged and sorted by prior
 - Day view: single column with time blocks
 - Month view: card-list grid (compact overview)
 - Click any appointment block to see full details in a modal
+- Overlapping/double-booked appointments render side-by-side (50%/33% width each)
+- Color coding: 🟢 Green = paid, 🔵 Blue = confirmed (unpaid), 🟠 Orange = pending, 🔴 Red = cancelled
 
 ### 📋 Rebook Feature (Quick Forward Scheduling)
 **Source**: "Can we add a rebook feature with maybe 4, 6, 8 week suggested times to skip ahead?"

@@ -317,3 +317,113 @@ describe('calendar constants', () => {
     expect(DEFAULT_END_HOUR).toBe(18)
   })
 })
+
+
+// ─── computeOverlapLayout ─────────────────────────────────────
+
+import { computeOverlapLayout } from '../../app/utils/calendar.js'
+
+describe('computeOverlapLayout', () => {
+  const makeApt = (id, hour, minute, duration) => ({
+    appointmentId: id,
+    rawDateTime: new Date(2025, 4, 7, hour, minute).toISOString(),
+    service: { name: 'Test', duration },
+    customer: { name: 'Client' },
+    status: 'confirmed',
+  })
+
+  test('returns empty array for empty input', () => {
+    expect(computeOverlapLayout([], 6)).toEqual([])
+    expect(computeOverlapLayout(null, 6)).toEqual([])
+  })
+
+  test('single appointment gets column 0, totalColumns 1', () => {
+    const apts = [makeApt('a1', 10, 0, 60)]
+    const result = computeOverlapLayout(apts, 6)
+    expect(result).toHaveLength(1)
+    expect(result[0].column).toBe(0)
+    expect(result[0].totalColumns).toBe(1)
+  })
+
+  test('non-overlapping appointments each get column 0', () => {
+    const apts = [
+      makeApt('a1', 10, 0, 30), // 10:00-10:30
+      makeApt('a2', 11, 0, 30), // 11:00-11:30
+    ]
+    const result = computeOverlapLayout(apts, 6)
+    expect(result).toHaveLength(2)
+    expect(result[0].column).toBe(0)
+    expect(result[0].totalColumns).toBe(1)
+    expect(result[1].column).toBe(0)
+    expect(result[1].totalColumns).toBe(1)
+  })
+
+  test('two overlapping appointments get columns 0 and 1', () => {
+    const apts = [
+      makeApt('a1', 10, 0, 60), // 10:00-11:00
+      makeApt('a2', 10, 30, 30), // 10:30-11:00 (overlaps with a1)
+    ]
+    const result = computeOverlapLayout(apts, 6)
+    expect(result).toHaveLength(2)
+    expect(result[0].column).toBe(0)
+    expect(result[0].totalColumns).toBe(2)
+    expect(result[1].column).toBe(1)
+    expect(result[1].totalColumns).toBe(2)
+  })
+
+  test('three overlapping appointments get columns 0, 1, 2', () => {
+    const apts = [
+      makeApt('a1', 10, 0, 60),  // 10:00-11:00
+      makeApt('a2', 10, 0, 60),  // 10:00-11:00
+      makeApt('a3', 10, 30, 30), // 10:30-11:00
+    ]
+    const result = computeOverlapLayout(apts, 6)
+    expect(result).toHaveLength(3)
+    const columns = result.map(r => r.column).sort()
+    expect(columns).toEqual([0, 1, 2])
+    result.forEach(r => expect(r.totalColumns).toBe(3))
+  })
+
+  test('adjacent (non-overlapping) appointments share column 0', () => {
+    const apts = [
+      makeApt('a1', 10, 0, 30), // 10:00-10:30
+      makeApt('a2', 10, 30, 30), // 10:30-11:00 (starts exactly when a1 ends)
+    ]
+    const result = computeOverlapLayout(apts, 6)
+    expect(result[0].column).toBe(0)
+    expect(result[1].column).toBe(0)
+    expect(result[0].totalColumns).toBe(1)
+    expect(result[1].totalColumns).toBe(1)
+  })
+
+  test('partial overlap: one overlaps two non-overlapping ones', () => {
+    const apts = [
+      makeApt('a1', 10, 0, 30),  // 10:00-10:30
+      makeApt('a2', 10, 0, 90),  // 10:00-11:30 (overlaps both a1 and a3)
+      makeApt('a3', 11, 0, 30),  // 11:00-11:30
+    ]
+    const result = computeOverlapLayout(apts, 6)
+    expect(result).toHaveLength(3)
+    // a1 and a2 overlap → a1 col 0, a2 col 1
+    // a3 doesn't overlap a1 (10:30 end < 11:00 start) so a3 can reuse col 0
+    // But a3 overlaps a2, so a3 totalColumns should be 2
+    const a1 = result.find(r => r.appointment.appointmentId === 'a1')
+    const a2 = result.find(r => r.appointment.appointmentId === 'a2')
+    const a3 = result.find(r => r.appointment.appointmentId === 'a3')
+    expect(a1.column).toBe(0)
+    expect(a2.column).toBe(1)
+    expect(a3.column).toBe(0) // reuses col 0 since a1 ended
+    expect(a2.totalColumns).toBe(2)
+    expect(a3.totalColumns).toBe(2)
+  })
+
+  test('handles appointments with null rawDateTime gracefully', () => {
+    const apts = [
+      { appointmentId: 'bad', rawDateTime: null, service: { duration: 30 } },
+      makeApt('a1', 10, 0, 30),
+    ]
+    const result = computeOverlapLayout(apts, 6)
+    expect(result).toHaveLength(1)
+    expect(result[0].appointment.appointmentId).toBe('a1')
+  })
+})

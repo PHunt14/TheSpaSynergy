@@ -14,6 +14,7 @@ import {
   generateTimeSlots,
   getBlockPosition,
   getDateRangeForView,
+  computeOverlapLayout,
 } from '../../utils/calendar'
 
 // ── Constants ─────────────────────────────────────────────────
@@ -32,7 +33,7 @@ function formatTime(date) {
 
 // ── Appointment Block Component ───────────────────────────────
 
-function AppointmentBlock({ appointment, startHour, onClick }) {
+function AppointmentBlock({ appointment, startHour, onClick, column = 0, totalColumns = 1 }) {
   const aptDate = parseAppointmentDate(appointment.rawDateTime)
   if (!aptDate) return null
 
@@ -40,8 +41,13 @@ function AppointmentBlock({ appointment, startHour, onClick }) {
   const { top, height } = getBlockPosition(aptDate, duration, startHour)
 
   const statusColor = appointment.status === 'cancelled' ? '#dc3545'
-    : appointment.paymentStatus === 'paid' || appointment.status === 'confirmed' ? '#4CAF50'
+    : appointment.paymentStatus === 'paid' ? '#4CAF50'
+    : appointment.status === 'confirmed' ? '#2196F3'
     : '#FF9800'
+
+  // Calculate horizontal position for overlapping appointments
+  const widthPercent = 100 / totalColumns
+  const leftPercent = column * widthPercent
 
   return (
     <div
@@ -50,8 +56,8 @@ function AppointmentBlock({ appointment, startHour, onClick }) {
       style={{
         position: 'absolute',
         top: `${top}px`,
-        left: '4px',
-        right: '4px',
+        left: `calc(${leftPercent}% + 2px)`,
+        width: `calc(${widthPercent}% - 4px)`,
         height: `${height}px`,
         background: statusColor + '22',
         borderLeft: `3px solid ${statusColor}`,
@@ -63,6 +69,7 @@ function AppointmentBlock({ appointment, startHour, onClick }) {
         zIndex: 2,
         lineHeight: '1.2',
         transition: 'box-shadow 0.15s',
+        boxSizing: 'border-box',
       }}
       onMouseEnter={(e) => e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)'}
       onMouseLeave={(e) => e.currentTarget.style.boxShadow = 'none'}
@@ -116,7 +123,11 @@ function AppointmentDetail({ appointment, onClose }) {
             background: appointment.status === 'confirmed' ? '#d4edda' : appointment.status === 'cancelled' ? '#f8d7da' : '#fff3cd',
             color: appointment.status === 'confirmed' ? '#155724' : appointment.status === 'cancelled' ? '#721c24' : '#856404',
           }}>{appointment.status}</span></p>
-          {appointment.paymentStatus && <p style={{ margin: 0 }}><strong>Payment:</strong> {appointment.paymentStatus}</p>}
+          <p style={{ margin: 0 }}><strong>Payment:</strong> <span style={{
+            padding: '0.15rem 0.5rem', borderRadius: '8px', fontSize: '0.85rem',
+            background: appointment.paymentStatus === 'paid' ? '#d4edda' : '#fff3cd',
+            color: appointment.paymentStatus === 'paid' ? '#155724' : '#856404',
+          }}>{appointment.paymentStatus === 'paid' ? 'Paid' : 'Unpaid'}</span></p>
           {appointment.customer?.phone && <p style={{ margin: 0 }}><strong>Phone:</strong> {appointment.customer.phone}</p>}
         </div>
       </div>
@@ -132,6 +143,9 @@ function TimeBlockColumn({ date, appointments, startHour, endHour, onAppointment
     const d = parseAppointmentDate(apt.rawDateTime)
     return d && isSameDay(d, date) && apt.status !== 'cancelled'
   })
+
+  // Compute overlap layout for side-by-side rendering
+  const layout = computeOverlapLayout(dayAppointments, startHour)
 
   return (
     <div style={{ position: 'relative', minHeight: `${slots.length * 40}px` }}>
@@ -150,13 +164,15 @@ function TimeBlockColumn({ date, appointments, startHour, endHour, onAppointment
           }}
         />
       ))}
-      {/* Appointment blocks */}
-      {dayAppointments.map(apt => (
+      {/* Appointment blocks with overlap handling */}
+      {layout.map(({ appointment, column, totalColumns }) => (
         <AppointmentBlock
-          key={apt.appointmentId}
-          appointment={apt}
+          key={appointment.appointmentId}
+          appointment={appointment}
           startHour={startHour}
           onClick={onAppointmentClick}
+          column={column}
+          totalColumns={totalColumns}
         />
       ))}
     </div>
@@ -206,7 +222,11 @@ function MonthView({ currentDate, appointments, onAppointmentClick }) {
                 {date.getDate()}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                {dayApts.slice(0, 3).map(apt => (
+                {dayApts.slice(0, 3).map(apt => {
+                  const color = apt.paymentStatus === 'paid' ? '#4CAF50'
+                    : apt.status === 'confirmed' ? '#2196F3'
+                    : '#FF9800'
+                  return (
                   <div
                     key={apt.appointmentId}
                     onClick={() => onAppointmentClick(apt)}
@@ -214,8 +234,8 @@ function MonthView({ currentDate, appointments, onAppointmentClick }) {
                       fontSize: '0.7rem',
                       padding: '2px 4px',
                       borderRadius: '3px',
-                      background: (apt.paymentStatus === 'paid' || apt.status === 'confirmed') ? '#4CAF5022' : '#FF980022',
-                      borderLeft: `2px solid ${(apt.paymentStatus === 'paid' || apt.status === 'confirmed') ? '#4CAF50' : '#FF9800'}`,
+                      background: color + '22',
+                      borderLeft: `2px solid ${color}`,
                       cursor: 'pointer',
                       whiteSpace: 'nowrap',
                       overflow: 'hidden',
@@ -224,7 +244,8 @@ function MonthView({ currentDate, appointments, onAppointmentClick }) {
                   >
                     {apt.customer?.name || 'Walk-in'}
                   </div>
-                ))}
+                  )
+                })}
                 {dayApts.length > 3 && (
                   <div style={{ fontSize: '0.7rem', color: 'var(--color-text-light)' }}>
                     +{dayApts.length - 3} more
