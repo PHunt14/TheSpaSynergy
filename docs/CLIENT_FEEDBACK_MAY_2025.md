@@ -15,14 +15,17 @@ Feedback collected from client on May 6, 2025. Items triaged and sorted by prior
 ### 📋 Time-Block Calendar View (Planner Style)
 **Source**: "I find myself switching to Vagaro to book because it puts my schedule in front of me in time blocks so I can glance at the blocks while rebooking, versus just reading the dates"
 **Priority**: Highest — client's #1 pain point this session
+**Status**: ✅ Implemented
 **Context**: Current calendar (`app/dashboard/calendar/page.jsx`) uses a card-list layout. Appointments are stacked vertically without visual time positioning.
-**Implementation notes**:
-- Redesign the day/week view to use a vertical time-axis layout (like Google Calendar / Vagaro)
-- Each row = a time slot (e.g., 30-min increments from open to close)
-- Appointments render as blocks whose height represents duration
+**Implementation**:
+- Redesigned day/week views to use a vertical time-axis layout (planner style)
+- Each row = 30-min increment, appointments render as blocks with height proportional to duration
 - Empty gaps between blocks are visually obvious (white space = open slot)
-- Staff can glance at open slots while rebooking a client
-- This is the staff/dashboard view — not customer-facing booking flow
+- Default range: 6 AM – 6 PM, adjustable via dropdowns
+- Week view: 7 day-columns with time blocks (default view)
+- Day view: single column with time blocks
+- Month view: card-list grid (compact overview)
+- Click any appointment block to see full details in a modal
 
 ### 📋 Rebook Feature (Quick Forward Scheduling)
 **Source**: "Can we add a rebook feature with maybe 4, 6, 8 week suggested times to skip ahead?"
@@ -40,16 +43,11 @@ Feedback collected from client on May 6, 2025. Items triaged and sorted by prior
 
 ### 📋 Sort Appointments Chronologically
 **Source**: "Also we should sort/order the appointments"
-**Implementation notes**:
-- Ensure all appointment lists (dashboard, calendar day view, appointments page) sort by start time ascending
-- Current `getAppointmentsForDate` already sorts — verify this is applied consistently across all views (appointments page, kiosk, etc.)
+**Status**: ✅ Implemented — time-block view inherently sorts by time position. Month view sorts appointments within each day cell.
 
 ### 📋 Month Navigation Button
 **Source**: "Can we add a month button to skip through quickly? Some book all the way out."
-**Implementation notes**:
-- Add a "Month" view toggle alongside existing Day/Week buttons
-- Or: add forward/back month skip buttons (« ») in addition to the day/week arrows
-- Allows staff to jump ahead quickly when rebooking clients weeks/months out
+**Status**: ✅ Implemented — Month view added as a third view toggle alongside Day/Week. Navigation arrows skip by month in month view.
 
 ---
 
@@ -97,8 +95,6 @@ Feedback collected from client on May 6, 2025. Items triaged and sorted by prior
 
 ---
 
----
-
 ## Completed
 
 ### ✅ Kiosk Tipping
@@ -106,11 +102,18 @@ Feedback collected from client on May 6, 2025. Items triaged and sorted by prior
 **Implementation**: Added tip selection screen (15%, 20%, 25%, custom, no tip) to kiosk checkout flow. Tips sent to Square via `tipMoney` field, tracked independently in Square reporting. Stored on appointment record.
 **Files changed**: `app/kiosk/[appointmentId]/page.jsx`, `app/api/payment/route.js`, `docs/KIOSK_CHECKOUT.md`
 
+### ✅ Time-Block Calendar View
+**Source**: "I find myself switching to Vagaro to book because it puts my schedule in front of me in time blocks"
+**Implementation**: Complete rewrite of dashboard calendar with planner-style time-block layout. Day/week views show 30-min grid with proportional appointment blocks. Month view uses card-list grid. Adjustable hour range (default 6AM–6PM). Date-range filtering added to dashboard API.
+**Files changed**: `app/dashboard/calendar/page.jsx`, `app/utils/calendar.js`, `app/api/dashboard/route.ts`
+
+### ✅ Sort Appointments + Month Navigation
+**Source**: "Sort/order the appointments" + "Can we add a month button to skip through quickly?"
+**Implementation**: Time-block view inherently sorts by time position. Month view added as third toggle. Navigation arrows skip by day/week/month depending on active view.
+
 ---
 
 ## Open Questions
 - [ ] Deposit amount — fixed dollar amount or percentage of service price?
 - [ ] Predefined category list — who defines the initial list? Need the list from client.
-- [ ] Time-block calendar — what are the business hours to display (earliest open to latest close)?
 - [ ] Rebook — should it auto-select the same time of day, or just jump to the date and let staff pick?
-- [ ] Month view — full month grid with appointment counts, or just a quick-jump date picker?

@@ -43,6 +43,7 @@ npm run test:e2e:headed
 | `utils/payment.test.mjs` | 23 | `calculatePaymentSplits` — single/multi vendor, house fees, aggregation, edge cases; `calculateVendorNet` — fee subtraction; `formatPaymentSplits` — display formatting |
 | `utils/availability.test.mjs` | 39 | `getRecurrenceHours` — every-other-week (with/without anchor), 2nd-of-month, standard fallback; `resolveStaffSync` — auto-assign rules, schedule-based resolution, allowedStaff filtering, recurrence in schedules; `getDayHoursSync` — sauna hours, staff schedule priority, vendor fallback; `hasAnySlot` — open/fully-booked detection, staff filtering, window-too-small; `timeOverlaps` — overlap with buffer, adjacent, identical, zero-buffer; `generateTimeSlots` — slot generation, booked exclusion, dateTime formats; `formatTime` — 12-hour display; `DAY_NAMES` constant |
 | `utils/client.test.mjs` | 12 | `normalizePhone` — formatting, +1 prefix, too-short, null/empty; `normalizeEmail` — case/trim, null/empty; `isMatchingClient` — phone match, email match, no match, empty fields, phone priority |
+| `utils/calendar.test.mjs` | 42 | `getWeekStart` — Sunday resolution, immutability; `getWeekDates` — 7 dates, consecutive, month boundary; `getMonthDates` — correct day counts, leap year; `isSameDay` — same/different dates, months, years; `parseAppointmentDate` — valid ISO, null/undefined/empty/invalid; `generateTimeSlots` — slot count, boundaries, edge cases; `getBlockPosition` — top/height calculation, minimum height, half-hour offset, before-start; `getDateRangeForView` — day/week/month ranges |
 
 ### Component Tests (`__tests__/components/`)
 
@@ -57,7 +58,7 @@ npm run test:e2e:headed
 |------|-------|----------------|
 | `smoke.spec.ts` | 6 | Homepage load + title + CTA, booking page loads, vendors page loads, contact page loads, navbar links, footer content |
 
-**Current totals: 174 Jest tests passing, 6 E2E tests ready**
+**Current totals: 216 Jest tests passing, 6 E2E tests ready**
 
 ## Architecture
 
