@@ -20,6 +20,7 @@ import {
   generateTimeSlots,
   formatTime,
   DAY_NAMES,
+  getMultiProviderSlots,
 } from '../../app/utils/availability.js'
 
 // ── getRecurrenceHours ────────────────────────────────────────
@@ -304,5 +305,224 @@ describe('DAY_NAMES', () => {
     expect(DAY_NAMES).toHaveLength(7)
     expect(DAY_NAMES[0]).toBe('sunday')
     expect(DAY_NAMES[6]).toBe('saturday')
+  })
+})
+
+
+// ── getMultiProviderSlots ─────────────────────────────────────
+
+describe('getMultiProviderSlots', () => {
+  const baseService = {
+    duration: 60,
+    providersRequired: 2,
+    allowedStaff: ['staff-1', 'staff-2', 'staff-3'],
+  }
+
+  const makeStaff = (id, vendorId, schedule) => ({
+    visibleId: id,
+    vendorId,
+    isActive: true,
+    name: `Staff ${id}`,
+    schedule: JSON.stringify(schedule),
+    autoAssignRules: null,
+  })
+
+  const mondaySchedule = { monday: { start: '09:00', end: '17:00' } }
+
+  test('returns slots when 2+ staff are simultaneously free', () => {
+    const staffSchedules = [
+      makeStaff('staff-1', 'vendor-a', mondaySchedule),
+      makeStaff('staff-2', 'vendor-b', mondaySchedule),
+    ]
+    const slots = getMultiProviderSlots({
+      service: baseService,
+      staffSchedules,
+      appointments: [],
+      date: '2025-01-06', // Monday
+      bufferMinutes: 15,
+    })
+    expect(slots.length).toBeGreaterThan(0)
+    expect(slots[0]).toHaveProperty('time')
+    expect(slots[0]).toHaveProperty('display')
+  })
+
+  test('returns empty when fewer than providersRequired staff available', () => {
+    const staffSchedules = [
+      makeStaff('staff-1', 'vendor-a', mondaySchedule),
+    ]
+    const slots = getMultiProviderSlots({
+      service: baseService,
+      staffSchedules,
+      appointments: [],
+      date: '2025-01-06',
+      bufferMinutes: 15,
+    })
+    expect(slots).toEqual([])
+  })
+
+  test('cross-vendor staff availability works', () => {
+    const staffSchedules = [
+      makeStaff('staff-1', 'vendor-a', mondaySchedule),
+      makeStaff('staff-2', 'vendor-b', mondaySchedule),
+      makeStaff('staff-3', 'vendor-c', mondaySchedule),
+    ]
+    const slots = getMultiProviderSlots({
+      service: baseService,
+      staffSchedules,
+      appointments: [],
+      date: '2025-01-06',
+      bufferMinutes: 15,
+    })
+    expect(slots.length).toBeGreaterThan(0)
+  })
+
+  test('excludes slots where staff has conflicting appointment', () => {
+    const staffSchedules = [
+      makeStaff('staff-1', 'vendor-a', mondaySchedule),
+      makeStaff('staff-2', 'vendor-b', mondaySchedule),
+    ]
+    // staff-1 busy 09:00-10:00, staff-2 busy 10:00-11:00
+    const appointments = [
+      { dateTime: '2025-01-06T09:00', staffId: 'staff-1', status: 'confirmed', customer: JSON.stringify({ name: 'Test' }) },
+      { dateTime: '2025-01-06T10:00', staffId: 'staff-2', status: 'confirmed', customer: JSON.stringify({ name: 'Test' }) },
+    ]
+    const slots = getMultiProviderSlots({
+      service: baseService,
+      staffSchedules,
+      appointments,
+      date: '2025-01-06',
+      bufferMinutes: 15,
+    })
+    // 09:00 slot: staff-1 busy → only 1 free → excluded
+    // 10:00 slot: staff-2 busy → only 1 free → excluded
+    const nineSlot = slots.find(s => s.time === '09:00')
+    const tenSlot = slots.find(s => s.time === '10:00')
+    expect(nineSlot).toBeUndefined()
+    expect(tenSlot).toBeUndefined()
+  })
+
+  test('boundary: exactly providersRequired staff available returns slots', () => {
+    const staffSchedules = [
+      makeStaff('staff-1', 'vendor-a', mondaySchedule),
+      makeStaff('staff-2', 'vendor-b', mondaySchedule),
+    ]
+    const service = { ...baseService, providersRequired: 2 }
+    const slots = getMultiProviderSlots({
+      service,
+      staffSchedules,
+      appointments: [],
+      date: '2025-01-06',
+      bufferMinutes: 15,
+    })
+    expect(slots.length).toBeGreaterThan(0)
+  })
+
+  test('backward compatibility: providersRequired = 1', () => {
+    const staffSchedules = [
+      makeStaff('staff-1', 'vendor-a', mondaySchedule),
+    ]
+    const service = { ...baseService, providersRequired: 1, allowedStaff: ['staff-1'] }
+    const slots = getMultiProviderSlots({
+      service,
+      staffSchedules,
+      appointments: [],
+      date: '2025-01-06',
+      bufferMinutes: 15,
+    })
+    expect(slots.length).toBeGreaterThan(0)
+  })
+
+  test('filters out inactive staff', () => {
+    const staffSchedules = [
+      makeStaff('staff-1', 'vendor-a', mondaySchedule),
+      { ...makeStaff('staff-2', 'vendor-b', mondaySchedule), isActive: false },
+    ]
+    const slots = getMultiProviderSlots({
+      service: baseService,
+      staffSchedules,
+      appointments: [],
+      date: '2025-01-06',
+      bufferMinutes: 15,
+    })
+    // Only 1 active staff, need 2 → empty
+    expect(slots).toEqual([])
+  })
+
+  test('filters out staff not in allowedStaff', () => {
+    const staffSchedules = [
+      makeStaff('staff-1', 'vendor-a', mondaySchedule),
+      makeStaff('staff-99', 'vendor-b', mondaySchedule), // not in allowedStaff
+    ]
+    const slots = getMultiProviderSlots({
+      service: baseService,
+      staffSchedules,
+      appointments: [],
+      date: '2025-01-06',
+      bufferMinutes: 15,
+    })
+    expect(slots).toEqual([])
+  })
+
+  test('returns empty for day when staff not working', () => {
+    const staffSchedules = [
+      makeStaff('staff-1', 'vendor-a', mondaySchedule),
+      makeStaff('staff-2', 'vendor-b', mondaySchedule),
+    ]
+    const slots = getMultiProviderSlots({
+      service: baseService,
+      staffSchedules,
+      appointments: [],
+      date: '2025-01-07', // Tuesday — no schedule
+      bufferMinutes: 15,
+    })
+    expect(slots).toEqual([])
+  })
+
+  test('cancelled appointments do not block slots', () => {
+    const staffSchedules = [
+      makeStaff('staff-1', 'vendor-a', mondaySchedule),
+      makeStaff('staff-2', 'vendor-b', mondaySchedule),
+    ]
+    const appointments = [
+      { dateTime: '2025-01-06T09:00', staffId: 'staff-1', status: 'cancelled', customer: JSON.stringify({ name: 'Test' }) },
+    ]
+    const slots = getMultiProviderSlots({
+      service: baseService,
+      staffSchedules,
+      appointments,
+      date: '2025-01-06',
+      bufferMinutes: 15,
+    })
+    const nineSlot = slots.find(s => s.time === '09:00')
+    expect(nineSlot).toBeDefined()
+  })
+
+  test('recurrence rule handling for multi-provider', () => {
+    const everyOtherSchedule = {
+      monday: { recurrence: 'every-other', anchorDate: '2025-01-06', start: '09:00', end: '17:00' }
+    }
+    const staffSchedules = [
+      makeStaff('staff-1', 'vendor-a', everyOtherSchedule),
+      makeStaff('staff-2', 'vendor-b', everyOtherSchedule),
+    ]
+    // On-week (anchor date)
+    const slotsOn = getMultiProviderSlots({
+      service: baseService,
+      staffSchedules,
+      appointments: [],
+      date: '2025-01-06',
+      bufferMinutes: 15,
+    })
+    expect(slotsOn.length).toBeGreaterThan(0)
+
+    // Off-week
+    const slotsOff = getMultiProviderSlots({
+      service: baseService,
+      staffSchedules,
+      appointments: [],
+      date: '2025-01-13',
+      bufferMinutes: 15,
+    })
+    expect(slotsOff).toEqual([])
   })
 })

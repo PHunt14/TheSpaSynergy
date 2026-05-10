@@ -2,7 +2,7 @@ import { generateServerClientUsingCookies } from '@aws-amplify/adapter-nextjs/da
 import { cookies } from 'next/headers';
 import type { Schema } from '../../../amplify/data/resource';
 import config from '../../../amplify_outputs.json' with { type: 'json' };
-import { getRecurrenceHours, generateTimeSlots } from '../../utils/availability.js';
+import { getRecurrenceHours, generateTimeSlots, getMultiProviderSlots } from '../../utils/availability.js';
 
 const client = generateServerClientUsingCookies<Schema>({
   config,
@@ -48,6 +48,13 @@ export async function GET(request: Request) {
     if (vendorUntil && new Date(vendorUntil) > new Date()) {
       return Response.json({ availableSlots: [], bookingDisabled: true, disabledUntil: vendorUntil });
     }
+
+    // Multi-provider availability path
+    const multiProvider = searchParams.get('multiProvider');
+    if (multiProvider === 'true') {
+      return await handleMultiProviderAvailability(service, date, vendor);
+    }
+
     const isSauna = (service.resourceType || 'staff') === 'sauna';
 
     const requestedDate = new Date(date + 'T00:00:00');
@@ -159,4 +166,57 @@ async function resolveStaff(vendorId: string, dayOfWeek: string, requestedDate: 
     if (daySchedule.recurrence) return !!getRecurrenceHours(daySchedule, requestedDate)?.start;
     return !!daySchedule.start;
   }) || null;
+}
+
+async function handleMultiProviderAvailability(service: any, date: string, vendor: any) {
+  const allowedStaff = (service.allowedStaff as string[]) || [];
+
+  if (allowedStaff.length === 0) {
+    return Response.json({ availableSlots: [] });
+  }
+
+  // Fetch staff schedules for ALL staff in service.allowedStaff
+  // Staff may span multiple vendors, so fetch each individually
+  const staffSchedulePromises = allowedStaff.map(staffId =>
+    client.models.StaffSchedule.get({ visibleId: staffId } as any)
+  );
+  const staffScheduleResults = await Promise.all(staffSchedulePromises);
+
+  const staffSchedules = staffScheduleResults
+    .filter(result => !result.errors && result.data)
+    .map(result => result.data);
+
+  if (staffSchedules.length === 0) {
+    return Response.json({ availableSlots: [] });
+  }
+
+  // Collect unique vendorIds from the staff schedules to fetch appointments
+  const vendorIds = [...new Set(staffSchedules.map((s: any) => s.vendorId).filter(Boolean))];
+
+  // Fetch appointments for ALL those staff members on the requested date
+  // Query by each vendor's appointments for the date, then filter to relevant staff
+  const appointmentPromises = vendorIds.map(vid =>
+    client.models.Appointment.list({
+      filter: {
+        vendorId: { eq: vid },
+        dateTime: { beginsWith: date }
+      }
+    })
+  );
+  const appointmentResults = await Promise.all(appointmentPromises);
+
+  const allAppointments = appointmentResults
+    .flatMap(result => result.data || [])
+    .filter(apt => apt.status !== 'cancelled' && allowedStaff.includes(apt.staffId));
+
+  // Call getMultiProviderSlots
+  const slots = getMultiProviderSlots({
+    service,
+    staffSchedules,
+    appointments: allAppointments,
+    date,
+    bufferMinutes: vendor.bufferMinutes || 15
+  });
+
+  return Response.json({ availableSlots: slots });
 }

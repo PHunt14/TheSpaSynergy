@@ -52,6 +52,11 @@ const schema = a.schema({
       cardPaymentDisabled: a.boolean().default(false),
       allowedStaff: a.string().array(),
       parentServiceIds: a.string().array(),
+      providersRequired: a.integer().default(1),
+      leadVendorId: a.string(),
+      minPeople: a.integer(),
+      maxPeople: a.integer(),
+      paymentSplitRules: a.json(),
     })
     .identifier(['serviceId'])
     .secondaryIndexes((index) => [index('vendorId')])
@@ -99,6 +104,7 @@ const schema = a.schema({
       serviceId: a.string().required(),
       staffId: a.string(),
       bundleId: a.string(),
+      groupId: a.string(),
       dateTime: a.string().required(),
       customer: a.json().required(),
       status: a.string().default('pending'),
@@ -111,7 +117,8 @@ const schema = a.schema({
     })
     .identifier(['appointmentId'])
     .secondaryIndexes((index) => [
-      index('vendorId').sortKeys(['dateTime'])
+      index('vendorId').sortKeys(['dateTime']),
+      index('groupId')
     ])
     .authorization((allow) => [allow.publicApiKey()]),
 

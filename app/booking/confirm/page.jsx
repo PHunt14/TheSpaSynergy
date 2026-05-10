@@ -54,6 +54,7 @@ function ConfirmPageContent() {
   const staffName = params.get('staffName')
   const peopleParam = params.get('people')
   const people = peopleParam ? parseInt(peopleParam) : null
+  const multiProvider = params.get('multiProvider') === 'true'
   const isBundle = !!servicesParam
   const serviceIds = servicesParam ? servicesParam.split(',') : service ? [service] : []
 
@@ -69,8 +70,13 @@ function ConfirmPageContent() {
 
   // For single service, use the first service detail
   const serviceDetails = allServiceDetails.length === 1 ? allServiceDetails[0] : null
-  const totalPrice = allServiceDetails.reduce((sum, s) => sum + (s?.price || 0), 0) * (people || 1)
+  const totalPrice = multiProvider
+    ? allServiceDetails.reduce((sum, s) => sum + (s?.price || 0), 0)
+    : allServiceDetails.reduce((sum, s) => sum + (s?.price || 0), 0) * (people || 1)
   const totalDuration = allServiceDetails.reduce((sum, s) => sum + (s?.duration || 0), 0)
+  const multiProviderGuests = multiProvider && allServiceDetails.length > 0
+    ? (allServiceDetails[0]?.minPeople || 2)
+    : null
 
   useEffect(() => {
     if (serviceIds.length === 0) return
@@ -218,6 +224,42 @@ function ConfirmPageContent() {
     const isResource = allServiceDetails.every(s => s.resourceType === 'sauna')
     const status = isResource ? 'confirmed' : 'pending-confirmation'
 
+    // Multi-provider booking: single API call creates all appointments
+    if (multiProvider) {
+      const response = await fetch('/api/appointments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vendorId: allServiceDetails[0]?.vendorId || vendor,
+          serviceId: allServiceDetails[0]?.serviceId || service,
+          dateTime: dateTimeISO,
+          customer: formData,
+          status,
+          multiProvider: true,
+          providersRequired: allServiceDetails[0]?.providersRequired || 2,
+          ...(paymentId ? { paymentId, paymentStatus: 'paid', paymentAmount: totalPrice } : {})
+        })
+      })
+      const result = await response.json()
+
+      if (result.success) {
+        const successUrl = new URLSearchParams({
+          id: result.appointmentIds?.[0] || result.groupId,
+          dateTime: dateTimeISO,
+          service: allServiceDetails.map(s => s.name).join(', '),
+          payment: pMethod,
+          total: totalPrice.toFixed(2),
+          multiProvider: 'true',
+          guests: String(multiProviderGuests || 2)
+        })
+        if (requiresConfirmation) successUrl.set('confirmation', 'required')
+        window.location.href = `/booking/success?${successUrl}`
+      } else {
+        alert(result.error || 'Appointment creation failed')
+      }
+      return
+    }
+
     const results = await Promise.all(
       allServiceDetails.map(svc =>
         fetch('/api/appointments', {
@@ -352,9 +394,17 @@ function ConfirmPageContent() {
         totalDuration={totalDuration}
         date={date}
         time={time}
-        staffName={staffName}
-        people={people}
+        staffName={multiProvider ? null : staffName}
+        people={multiProviderGuests || people}
       />
+
+      {multiProvider && (
+        <div style={{ marginTop: '1rem', padding: '1rem', background: '#e8f5e9', borderRadius: '8px', border: '1px solid #a5d6a7' }}>
+          <p style={{ margin: 0, fontSize: '0.9rem' }}>
+            🎉 This is a couples/group service for <strong>{multiProviderGuests || 2} guests</strong>. Staff will be automatically assigned.
+          </p>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} style={{ marginTop: '2rem' }}>
         <div style={{ marginBottom: '1rem' }}>

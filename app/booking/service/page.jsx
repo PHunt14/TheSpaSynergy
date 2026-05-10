@@ -169,18 +169,20 @@ function ServicePageContent() {
       setExpandedService(prev => prev === service.serviceId ? null : service.serviceId)
       return
     }
-    router.push(`/booking/time?vendor=${vendor}&service=${service.serviceId}`)
+    const multiProviderParam = service.providersRequired > 1 ? '&multiProvider=true' : ''
+    router.push(`/booking/time?vendor=${vendor}&service=${service.serviceId}${multiProviderParam}`)
   }
 
   const handleBook = (e, service) => {
     e.stopPropagation()
     if (!isBookingEnabled) { setShowDisabled(true); return }
     const addons = selectedAddons[service.serviceId] || []
+    const multiProviderParam = service.providersRequired > 1 ? '&multiProvider=true' : ''
     if (addons.length > 0) {
       const allIds = [service.serviceId, ...addons].join(',')
-      router.push(`/booking/time?vendor=${vendor}&services=${allIds}`)
+      router.push(`/booking/time?vendor=${vendor}&services=${allIds}${multiProviderParam}`)
     } else {
-      router.push(`/booking/time?vendor=${vendor}&service=${service.serviceId}`)
+      router.push(`/booking/time?vendor=${vendor}&service=${service.serviceId}${multiProviderParam}`)
     }
   }
 

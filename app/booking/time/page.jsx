@@ -11,6 +11,7 @@ function TimePageContent() {
   const params = useSearchParams()
   const service = params.get('service')
   const vendor = params.get('vendor')
+  const multiProvider = params.get('multiProvider') === 'true'
 
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [selectedTime, setSelectedTime] = useState(null)
@@ -79,7 +80,8 @@ function TimePageContent() {
 
     const dateStr = selectedDate.toISOString().split('T')[0] // YYYY-MM-DD
 
-    fetch(`/api/availability?vendorId=${vendor}&serviceId=${service}&date=${dateStr}`)
+    const multiProviderParam = multiProvider ? '&multiProvider=true' : ''
+    fetch(`/api/availability?vendorId=${vendor}&serviceId=${service}&date=${dateStr}${multiProviderParam}`)
       .then(res => res.json())
       .then(data => {
         if (data.bookingDisabled) {
@@ -89,7 +91,7 @@ function TimePageContent() {
         } else {
           setAvailableSlots(data.availableSlots || [])
         }
-        setAssignedStaff(data.assignedStaff || null)
+        setAssignedStaff(multiProvider ? null : (data.assignedStaff || null))
         setLoading(false)
       })
       .catch(err => {
@@ -199,7 +201,7 @@ function TimePageContent() {
 
       {selectedTime && (
         <Link
-          href={`/booking/confirm?vendor=${vendor}&service=${service}&date=${selectedDate.toISOString()}&time=${selectedTime}${assignedStaff ? `&staffId=${assignedStaff.id}&staffName=${encodeURIComponent(assignedStaff.name)}` : ''}`}
+          href={`/booking/confirm?vendor=${vendor}&service=${service}&date=${selectedDate.toISOString()}&time=${selectedTime}${multiProvider ? '&multiProvider=true' : ''}${assignedStaff ? `&staffId=${assignedStaff.id}&staffName=${encodeURIComponent(assignedStaff.name)}` : ''}`}
           className="cta"
         >
           Continue
