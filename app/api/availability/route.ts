@@ -52,7 +52,7 @@ export async function GET(request: Request) {
 
     // Multi-provider availability path
     const multiProvider = searchParams.get('multiProvider');
-    if (multiProvider === 'true') {
+    if (multiProvider === 'true' || (service.providersRequired && service.providersRequired > 1)) {
       return await handleMultiProviderAvailability(service, date, vendor);
     }
 
@@ -184,7 +184,13 @@ async function resolveStaff(vendorId: string, dayOfWeek: string, requestedDate: 
 }
 
 async function handleMultiProviderAvailability(service: any, date: string, vendor: any) {
-  const allowedStaff = (service.allowedStaff as string[]) || [];
+  let allowedStaff = (service.allowedStaff as string[]) || [];
+
+  // If allowedStaff is empty (null = all staff), fetch all active staff across all vendors
+  if (allowedStaff.length === 0) {
+    const { data: allStaff } = await client.models.StaffSchedule.list();
+    allowedStaff = (allStaff || []).filter((s: any) => s.isActive !== false).map((s: any) => s.visibleId);
+  }
 
   if (allowedStaff.length === 0) {
     return Response.json({ availableSlots: [] });

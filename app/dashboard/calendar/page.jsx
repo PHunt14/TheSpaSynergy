@@ -304,6 +304,7 @@ function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onEdit, 
                 color: appointment.paymentStatus === 'paid' ? '#155724' : '#856404',
               }}>{appointment.paymentStatus === 'paid' ? 'Paid' : 'Unpaid'}</span></p>
               {appointment.customer?.phone && <p style={{ margin: 0 }}><strong>Phone:</strong> {appointment.customer.phone}</p>}
+              {appointment.customer?.notes && <p style={{ margin: 0 }}><strong>Notes:</strong> {appointment.customer.notes}</p>}
             </div>
 
             {/* Action buttons */}

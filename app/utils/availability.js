@@ -198,7 +198,7 @@ export function getMultiProviderSlots({ service, staffSchedules, appointments, d
 
   // 1. Filter staff to those in allowedStaff and active
   const eligibleStaff = staffSchedules.filter(staff =>
-    staff.isActive && allowedStaff.includes(staff.visibleId)
+    staff.isActive && (allowedStaff.length === 0 || allowedStaff.includes(staff.visibleId))
   )
 
   if (eligibleStaff.length < providersRequired) {

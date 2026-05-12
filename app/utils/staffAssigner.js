@@ -26,7 +26,7 @@ export function assignStaff({ service, staffSchedules, appointments, date, time,
   // 1. Filter to eligible staff: in allowedStaff, active, and available at the specific time
   const eligible = staffSchedules.filter(staff => {
     if (!staff.isActive) return false
-    if (!allowedStaff.includes(staff.visibleId)) return false
+    if (allowedStaff.length > 0 && !allowedStaff.includes(staff.visibleId)) return false
     if (!isWorkingAtTime(staff, dayOfWeek, requestedDate, time, duration)) return false
     if (hasConflict(staff.visibleId, appointments, time, duration, bufferMinutes)) return false
     return true

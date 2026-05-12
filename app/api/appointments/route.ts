@@ -75,13 +75,34 @@ export async function POST(request: Request) {
       return await handleQuantityBooking(body, client);
     }
 
+    // Check if service requires multiple providers (auto-detect)
+    const { data: serviceCheck } = await client.models.Service.get({ serviceId });
+    if (serviceCheck && (serviceCheck.providersRequired as number) > 1) {
+      return await handleMultiProviderBooking({ ...body, multiProvider: true }, client);
+    }
+
     const appointmentId = randomUUID();
+
+    // Auto-assign staff if none provided
+    let assignedStaffId = staffId;
+    if (!assignedStaffId) {
+      const { data: svcData } = await client.models.Service.get({ serviceId });
+      const allowedStaff = (svcData?.allowedStaff as string[]) || [];
+      if (allowedStaff.length > 0) {
+        assignedStaffId = allowedStaff[0];
+      } else {
+        // allowedStaff is null/empty = all staff for this vendor can do it
+        const { data: vendorStaff } = await client.models.StaffSchedule.listStaffScheduleByVendorId({ vendorId } as any);
+        const activeStaff = (vendorStaff || []).filter((s: any) => s.isActive !== false);
+        if (activeStaff.length > 0) assignedStaffId = activeStaff[0].visibleId;
+      }
+    }
 
     const { data, errors } = await client.models.Appointment.create({
       appointmentId,
       vendorId,
       serviceId,
-      staffId: staffId || undefined,
+      staffId: assignedStaffId || undefined,
       bundleId: bundleId || undefined,
       dateTime,
       customer: JSON.stringify(customer),
@@ -111,7 +132,7 @@ export async function POST(request: Request) {
       }
     } catch (e) { console.error('Client auto-populate failed:', e); }
 
-    await sendBookingNotifications({ appointmentId, vendorId, serviceId, staffId, dateTime, customer });
+    await sendBookingNotifications({ appointmentId, vendorId, serviceId, staffId: assignedStaffId, dateTime, customer });
 
     return Response.json({ success: true, appointmentId });
   } catch (error) {
@@ -129,9 +150,16 @@ async function handleMultiProviderBooking(body: any, amplifyClient: any) {
     return Response.json({ error: 'Service not found' }, { status: 404 });
   }
 
-  const allowedStaff = (service.allowedStaff as string[]) || [];
+  let allowedStaff = (service.allowedStaff as string[]) || [];
+
+  // If allowedStaff is empty (null = all staff), fetch all active staff across all vendors
   if (allowedStaff.length === 0) {
-    return Response.json({ error: 'No allowed staff configured for this service' }, { status: 400 });
+    const { data: allStaff } = await amplifyClient.models.StaffSchedule.list();
+    allowedStaff = (allStaff || []).filter((s: any) => s.isActive !== false).map((s: any) => s.visibleId);
+  }
+
+  if (allowedStaff.length === 0) {
+    return Response.json({ error: 'No staff available for this service' }, { status: 400 });
   }
 
   // Extract date and time from dateTime (e.g., "2024-01-15T09:00")
@@ -359,6 +387,20 @@ async function handleQuantityBooking(body: any, amplifyClient: any) {
     const { data: vendorData } = await amplifyClient.models.Vendor.get({ vendorId });
     const actualBuffer = vendorData?.bufferMinutes || bufferMinutes;
 
+    // Auto-assign staff if none provided
+    let assignedStaffId = staffId;
+    if (!assignedStaffId) {
+      const allowedStaff = (service.allowedStaff as string[]) || [];
+      if (allowedStaff.length > 0) {
+        assignedStaffId = allowedStaff[0];
+      } else {
+        // allowedStaff is null = all staff for this vendor
+        const { data: vendorStaff } = await amplifyClient.models.StaffSchedule.listStaffScheduleByVendorId({ vendorId } as any);
+        const activeStaff = (vendorStaff || []).filter((s: any) => s.isActive !== false);
+        if (activeStaff.length > 0) assignedStaffId = activeStaff[0].visibleId;
+      }
+    }
+
     // Parse the start dateTime
     const [date, timeStr] = dateTime.includes('T')
       ? [dateTime.split('T')[0], dateTime.split('T')[1].substring(0, 5)]
@@ -377,7 +419,7 @@ async function handleQuantityBooking(body: any, amplifyClient: any) {
         appointmentId,
         vendorId,
         serviceId,
-        staffId: staffId || undefined,
+        staffId: assignedStaffId || undefined,
         groupId,
         dateTime: slotDateTime,
         customer: JSON.stringify(customer),
@@ -429,7 +471,7 @@ async function handleQuantityBooking(body: any, amplifyClient: any) {
   } catch (e) { console.error('Client auto-populate failed:', e); }
 
   // Send notifications
-  await sendBookingNotifications({ appointmentId: appointmentIds[0], vendorId, serviceId, staffId, dateTime, customer });
+  await sendBookingNotifications({ appointmentId: appointmentIds[0], vendorId, serviceId, staffId: assignedStaffId, dateTime, customer });
 
   return Response.json({ success: true, appointmentIds, groupId, quantity, mode: quantityMode });
 }

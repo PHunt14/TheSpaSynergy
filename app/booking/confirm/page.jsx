@@ -70,7 +70,7 @@ function ConfirmPageContent() {
   const isBundle = !!servicesParam
   const serviceIds = servicesParam ? servicesParam.split(',') : service ? [service] : []
 
-  const [formData, setFormData] = useState({ name: '', email: '', phone: '', smsOptIn: false })
+  const [formData, setFormData] = useState({ name: '', email: '', phone: '', smsOptIn: false, notes: '' })
   const [loading, setLoading] = useState(false)
   const [card, setCard] = useState(null)
   const [applePay, setApplePay] = useState(null)
@@ -465,6 +465,17 @@ function ConfirmPageContent() {
               I agree to receive automated SMS appointment updates from The Spa Synergy (e.g. confirmations, reminders, cancellations). Msg frequency: ~1–5 msgs per booking. Msg & data rates may apply. Reply STOP to cancel, HELP for help. Consent is not required to book. <a href="/privacy" target="_blank" style={{ color: 'var(--color-primary)' }}>Privacy Policy</a> & <a href="/terms" target="_blank" style={{ color: 'var(--color-primary)' }}>Terms</a>.
             </span>
           </label>
+        </div>
+
+        <div style={{ marginBottom: '1rem' }}>
+          <label style={{ display: 'block', marginBottom: '0.5rem' }}>Notes (optional)</label>
+          <textarea
+            value={formData.notes}
+            onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+            placeholder="Any special requests, preferences, or info for your provider (e.g. 'schedule haircuts simultaneously if possible')"
+            rows="3"
+            style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem', resize: 'vertical' }}
+          />
         </div>
 
         <div style={{ marginTop: '2rem', marginBottom: '1rem' }}>

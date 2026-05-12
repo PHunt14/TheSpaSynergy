@@ -118,7 +118,12 @@ function BundleTimeContent() {
 
     if (!vendorId) return
 
-    fetch(`/api/availability?vendorId=${vendorId}&serviceId=${serviceIds[0]}&date=${dateStr}`)
+    // Use bundle-availability for multi-service, single-service availability otherwise
+    const url = serviceIds.length > 1
+      ? `/api/bundle-availability?serviceIds=${serviceIds.join(',')}&date=${dateStr}`
+      : `/api/availability?vendorId=${vendorId}&serviceId=${serviceIds[0]}&date=${dateStr}`
+
+    fetch(url)
       .then(res => res.json())
       .then(data => {
         setAvailableSlots(data.availableSlots || [])

@@ -207,7 +207,7 @@ function TimePageContent() {
 
         <div style={{
           display: 'grid',
-          gridTemplateColumns: window.innerWidth > 768 ? 'repeat(4, 1fr)' : 'repeat(2, 1fr)',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
           gap: '1rem'
         }}>
           {!loading && availableSlots.map(slot => (
