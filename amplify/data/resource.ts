@@ -53,6 +53,7 @@ const schema = a.schema({
       allowedStaff: a.string().array(),
       parentServiceIds: a.string().array(),
       providersRequired: a.integer().default(1),
+      maxQuantityPerBooking: a.integer().default(1),
       leadVendorId: a.string(),
       minPeople: a.integer(),
       maxPeople: a.integer(),

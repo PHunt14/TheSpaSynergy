@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import BookingDisabled, { isBookingEnabled } from '../../components/BookingDisabled'
 import PropTypes from 'prop-types'
 
-function ServiceCard({ service, isExpanded, selectedAddons, onServiceClick, onToggleAddon, onBook }) {
+function ServiceCard({ service, isExpanded, selectedAddons, onServiceClick, onToggleAddon, onBook, quantity, onQuantityChange }) {
   const addons = service._addons || []
   const selected = selectedAddons[service.serviceId] || []
   const addonTotal = selected.reduce((sum, id) => {
@@ -17,6 +17,8 @@ function ServiceCard({ service, isExpanded, selectedAddons, onServiceClick, onTo
     const addon = addons.find(a => a.serviceId === id)
     return sum + (addon?.duration || 0)
   }, 0)
+  const maxQty = service.maxQuantityPerBooking || 1
+  const currentQty = quantity || 1
 
   return (
     <div>
@@ -50,21 +52,50 @@ function ServiceCard({ service, isExpanded, selectedAddons, onServiceClick, onTo
 
       {isExpanded && (
         <div style={{ background: '#f9f5f0', borderRadius: '0 0 8px 8px', padding: '0.75rem 1rem', borderTop: '1px dashed var(--color-border)' }}>
-          <div style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--color-text-light)' }}>Optional Add-ons:</div>
-          {addons.map(addon => (
-            <label key={addon.serviceId} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', padding: '0.35rem 0', fontSize: '0.9rem' }}>
-              <input type="checkbox" checked={selected.includes(addon.serviceId)} onChange={(e) => onToggleAddon(e, service.serviceId, addon.serviceId)} style={{ width: '16px', height: '16px', cursor: 'pointer' }} />
-              <span>{addon.name}</span>
-              <span style={{ marginLeft: 'auto', color: 'var(--color-text-light)', fontSize: '0.85rem' }}>+${addon.price} ({addon.duration} min)</span>
-            </label>
-          ))}
+          {addons.length > 0 && (
+            <>
+              <div style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--color-text-light)' }}>Optional Add-ons:</div>
+              {addons.map(addon => (
+                <label key={addon.serviceId} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', padding: '0.35rem 0', fontSize: '0.9rem' }}>
+                  <input type="checkbox" checked={selected.includes(addon.serviceId)} onChange={(e) => onToggleAddon(e, service.serviceId, addon.serviceId)} style={{ width: '16px', height: '16px', cursor: 'pointer' }} />
+                  <span>{addon.name}</span>
+                  <span style={{ marginLeft: 'auto', color: 'var(--color-text-light)', fontSize: '0.85rem' }}>+${addon.price} ({addon.duration} min)</span>
+                </label>
+              ))}
+            </>
+          )}
+
+          {maxQty > 1 && (
+            <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: addons.length > 0 ? '1px solid var(--color-border)' : 'none' }}>
+              <div style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--color-text-light)' }}>Quantity:</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onQuantityChange(service.serviceId, Math.max(1, currentQty - 1)) }}
+                  disabled={currentQty <= 1}
+                  aria-label="Decrease quantity"
+                  style={{ width: '32px', height: '32px', borderRadius: '50%', border: '1px solid var(--color-border)', background: 'white', cursor: currentQty <= 1 ? 'not-allowed' : 'pointer', fontSize: '1.1rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                >−</button>
+                <span style={{ fontSize: '1.1rem', fontWeight: 600, minWidth: '24px', textAlign: 'center' }}>{currentQty}</span>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onQuantityChange(service.serviceId, Math.min(maxQty, currentQty + 1)) }}
+                  disabled={currentQty >= maxQty}
+                  aria-label="Increase quantity"
+                  style={{ width: '32px', height: '32px', borderRadius: '50%', border: '1px solid var(--color-border)', background: 'white', cursor: currentQty >= maxQty ? 'not-allowed' : 'pointer', fontSize: '1.1rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                >+</button>
+                <span style={{ fontSize: '0.8rem', color: 'var(--color-text-light)' }}>(max {maxQty})</span>
+              </div>
+            </div>
+          )}
+
           <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ fontSize: '0.9rem', fontWeight: 600 }}>
-              Total: ${service.price + addonTotal}
-              <span style={{ fontWeight: 400, color: 'var(--color-text-light)', marginLeft: '0.5rem' }}>({service.duration + addonDuration} min)</span>
+              Total: ${(service.price + addonTotal) * currentQty}
+              <span style={{ fontWeight: 400, color: 'var(--color-text-light)', marginLeft: '0.5rem' }}>({(service.duration + addonDuration) * currentQty} min{currentQty > 1 ? ' total' : ''})</span>
             </div>
             <button onClick={(e) => onBook(e, service)} className="cta" style={{ margin: 0, padding: '0.5rem 1.25rem', fontSize: '0.9rem' }}>
-              Book{selected.length > 0 ? ` with ${selected.length} add-on${selected.length > 1 ? 's' : ''}` : ''}
+              Book{currentQty > 1 ? ` ${currentQty}×` : ''}{selected.length > 0 ? ` with ${selected.length} add-on${selected.length > 1 ? 's' : ''}` : ''}
             </button>
           </div>
         </div>
@@ -80,6 +111,8 @@ ServiceCard.propTypes = {
   onServiceClick: PropTypes.func.isRequired,
   onToggleAddon: PropTypes.func.isRequired,
   onBook: PropTypes.func.isRequired,
+  quantity: PropTypes.number,
+  onQuantityChange: PropTypes.func.isRequired,
 }
 
 function ServicePageContent() {
@@ -93,6 +126,7 @@ function ServicePageContent() {
   const [loading, setLoading] = useState(true)
   const [expandedService, setExpandedService] = useState(null)
   const [selectedAddons, setSelectedAddons] = useState({})
+  const [quantities, setQuantities] = useState({})
   const categoryRefs = useRef({})
 
   const groupServicesByCategory = (serviceList) => {
@@ -157,6 +191,10 @@ function ServicePageContent() {
     })
   }
 
+  const handleQuantityChange = (serviceId, qty) => {
+    setQuantities(prev => ({ ...prev, [serviceId]: qty }))
+  }
+
   const handleServiceClick = (service) => {
     if (!isBookingEnabled) { setShowDisabled(true); return }
     if (typeof window !== 'undefined' && window.gtag) {
@@ -165,7 +203,7 @@ function ServicePageContent() {
         items: [{ item_id: service.serviceId, item_name: service.name, price: service.price }]
       })
     }
-    if (service._addons?.length > 0) {
+    if (service._addons?.length > 0 || (service.maxQuantityPerBooking || 1) > 1) {
       setExpandedService(prev => prev === service.serviceId ? null : service.serviceId)
       return
     }
@@ -177,12 +215,14 @@ function ServicePageContent() {
     e.stopPropagation()
     if (!isBookingEnabled) { setShowDisabled(true); return }
     const addons = selectedAddons[service.serviceId] || []
+    const qty = quantities[service.serviceId] || 1
     const multiProviderParam = service.providersRequired > 1 ? '&multiProvider=true' : ''
+    const quantityParam = qty > 1 ? `&quantity=${qty}` : ''
     if (addons.length > 0) {
       const allIds = [service.serviceId, ...addons].join(',')
-      router.push(`/booking/time?vendor=${vendor}&services=${allIds}${multiProviderParam}`)
+      router.push(`/booking/time?vendor=${vendor}&services=${allIds}${multiProviderParam}${quantityParam}`)
     } else {
-      router.push(`/booking/time?vendor=${vendor}&service=${service.serviceId}${multiProviderParam}`)
+      router.push(`/booking/time?vendor=${vendor}&service=${service.serviceId}${multiProviderParam}${quantityParam}`)
     }
   }
 
@@ -262,6 +302,8 @@ function ServicePageContent() {
                   onServiceClick={handleServiceClick}
                   onToggleAddon={toggleAddon}
                   onBook={handleBook}
+                  quantity={quantities[service.serviceId] || 1}
+                  onQuantityChange={handleQuantityChange}
                 />
               ))}
             </div>

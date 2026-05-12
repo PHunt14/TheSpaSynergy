@@ -66,6 +66,11 @@ export async function POST(request: Request) {
       return await handleMultiProviderBooking(body, client);
     }
 
+    // Multi-quantity booking path
+    if (body.quantity && body.quantity > 1) {
+      return await handleQuantityBooking(body, client);
+    }
+
     const appointmentId = randomUUID();
 
     const { data, errors } = await client.models.Appointment.create({
@@ -248,4 +253,179 @@ async function handleMultiProviderBooking(body: any, amplifyClient: any) {
   }
 
   return Response.json({ success: true, appointmentIds, groupId });
+}
+
+async function handleQuantityBooking(body: any, amplifyClient: any) {
+  const { vendorId, serviceId, dateTime, customer, status, quantity, quantityMode, staffId, paymentId, paymentStatus, paymentAmount } = body;
+
+  // Fetch the service
+  const { data: service, errors: serviceErrors } = await amplifyClient.models.Service.get({ serviceId });
+  if (serviceErrors || !service) {
+    return Response.json({ error: 'Service not found' }, { status: 404 });
+  }
+
+  // Validate quantity against maxQuantityPerBooking
+  const maxQty = service.maxQuantityPerBooking || 1;
+  if (quantity > maxQty) {
+    return Response.json({ error: `Maximum quantity for this service is ${maxQty}` }, { status: 400 });
+  }
+
+  const duration = service.duration;
+  const mode = quantityMode || 'sequential';
+
+  // Generate a shared groupId for all appointments in this quantity booking
+  const groupId = randomUUID();
+  const appointmentIds: string[] = [];
+  const creationErrors: any[] = [];
+
+  if (mode === 'parallel') {
+    // Parallel: assign different staff to each unit, all at the same dateTime
+    const allowedStaff = (service.allowedStaff as string[]) || [];
+    if (allowedStaff.length < quantity) {
+      return Response.json({ error: 'Not enough staff available for parallel booking' }, { status: 400 });
+    }
+
+    // Fetch staff schedules and existing appointments for assignment
+    const [date, time] = dateTime.includes('T')
+      ? [dateTime.split('T')[0], dateTime.split('T')[1].substring(0, 5)]
+      : [dateTime.split(' ')[0], dateTime.split(' ')[1]];
+
+    const staffSchedulePromises = allowedStaff.map((sid: string) =>
+      amplifyClient.models.StaffSchedule.get({ visibleId: sid })
+    );
+    const staffScheduleResults = await Promise.all(staffSchedulePromises);
+    const staffSchedules = staffScheduleResults
+      .filter((r: any) => !r.errors && r.data)
+      .map((r: any) => r.data);
+
+    const vendorIds = [...new Set(staffSchedules.map((s: any) => s.vendorId).filter(Boolean))] as string[];
+    const appointmentPromises = vendorIds.map((vid: string) =>
+      amplifyClient.models.Appointment.list({ filter: { vendorId: { eq: vid }, dateTime: { beginsWith: date } } })
+    );
+    const appointmentResults = await Promise.all(appointmentPromises);
+    const existingAppointments = appointmentResults
+      .flatMap((r: any) => r.data || [])
+      .filter((apt: any) => apt.status !== 'cancelled');
+
+    const { data: leadVendor } = await amplifyClient.models.Vendor.get({ vendorId });
+    const bufferMinutes = leadVendor?.bufferMinutes || 15;
+
+    // Use assignStaff with providersRequired = quantity
+    let assignedStaffMembers;
+    try {
+      assignedStaffMembers = assignStaff({
+        service: { ...service, providersRequired: quantity },
+        staffSchedules,
+        appointments: existingAppointments,
+        date,
+        time,
+        bufferMinutes
+      });
+    } catch (error: any) {
+      return Response.json({ error: error.message || 'Selected time is no longer available' }, { status: 409 });
+    }
+
+    // Create one appointment per staff member
+    for (const staff of assignedStaffMembers) {
+      const appointmentId = randomUUID();
+      const { errors } = await amplifyClient.models.Appointment.create({
+        appointmentId,
+        vendorId: staff.vendorId,
+        serviceId,
+        staffId: staff.staffId,
+        groupId,
+        dateTime,
+        customer: JSON.stringify(customer),
+        status: status || 'pending-confirmation',
+        paymentId,
+        paymentStatus: paymentStatus || undefined,
+        paymentAmount: paymentAmount || undefined,
+        createdAt: new Date().toISOString(),
+      } as any);
+
+      if (errors) {
+        creationErrors.push({ appointmentId, errors });
+      } else {
+        appointmentIds.push(appointmentId);
+      }
+    }
+  } else {
+    // Sequential: same staff, back-to-back appointments
+    const bufferMinutes = 15;
+    const { data: vendorData } = await amplifyClient.models.Vendor.get({ vendorId });
+    const actualBuffer = vendorData?.bufferMinutes || bufferMinutes;
+
+    // Parse the start dateTime
+    const [date, timeStr] = dateTime.includes('T')
+      ? [dateTime.split('T')[0], dateTime.split('T')[1].substring(0, 5)]
+      : [dateTime.split(' ')[0], dateTime.split(' ')[1]];
+
+    const [startHour, startMin] = timeStr.split(':').map(Number);
+    let currentMinutes = startHour * 60 + startMin;
+
+    for (let i = 0; i < quantity; i++) {
+      const hour = Math.floor(currentMinutes / 60);
+      const min = currentMinutes % 60;
+      const slotDateTime = `${date}T${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}:00`;
+
+      const appointmentId = randomUUID();
+      const { errors } = await amplifyClient.models.Appointment.create({
+        appointmentId,
+        vendorId,
+        serviceId,
+        staffId: staffId || undefined,
+        groupId,
+        dateTime: slotDateTime,
+        customer: JSON.stringify(customer),
+        status: status || 'pending-confirmation',
+        paymentId,
+        paymentStatus: paymentStatus || undefined,
+        paymentAmount: paymentAmount || undefined,
+        createdAt: new Date().toISOString(),
+      } as any);
+
+      if (errors) {
+        creationErrors.push({ appointmentId, errors });
+      } else {
+        appointmentIds.push(appointmentId);
+      }
+
+      // Move to next slot: duration + buffer
+      currentMinutes += duration + actualBuffer;
+    }
+  }
+
+  // Rollback on failure
+  if (creationErrors.length > 0) {
+    for (const id of appointmentIds) {
+      try {
+        await amplifyClient.models.Appointment.update({ appointmentId: id, status: 'cancelled' } as any);
+      } catch (e) {
+        console.error('Rollback failed for appointment:', id, e);
+      }
+    }
+    console.error('Error creating quantity appointments:', creationErrors);
+    return Response.json({ error: 'Failed to create appointments' }, { status: 500 });
+  }
+
+  // Auto-populate client catalog
+  try {
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const clientRes = await fetch(`${appUrl}/api/clients`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: customer.name, phone: customer.phone, email: customer.email })
+    });
+    const clientData = await clientRes.json();
+    if (clientData.client?.clientId) {
+      for (const id of appointmentIds) {
+        await amplifyClient.models.Appointment.update({ appointmentId: id, clientId: clientData.client.clientId } as any);
+      }
+    }
+  } catch (e) { console.error('Client auto-populate failed:', e); }
+
+  // Send notifications
+  await sendBookingNotifications({ appointmentId: appointmentIds[0], vendorId, serviceId, staffId, dateTime, customer });
+
+  return Response.json({ success: true, appointmentIds, groupId, quantity, mode: quantityMode });
 }

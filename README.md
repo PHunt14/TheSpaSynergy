@@ -50,6 +50,10 @@ Deployed via AWS Amplify with automatic CI/CD from Git. See `AMPLIFY_SETUP.md`.
 
 - Customers can browse vendors, view services, and book appointments through a multi-step flow
 - Customers can select multiple services and book them together
+- Customers can book multiple units of the same service (e.g., 3 men's haircuts) with a quantity picker
+  - **Sequential mode**: back-to-back with the same staff member
+  - **Parallel mode**: all at the same time with multiple staff (when enough staff are available)
+  - The system automatically determines which modes are available based on staff configuration
 - When the assigned staff member's Square account is connected, customers can pay online at checkout
 - Customers who don't pay online will pay in-person at the appointment
 - On booking, both the customer and vendor receive:
@@ -98,6 +102,43 @@ Deployed via AWS Amplify with automatic CI/CD from Git. See `AMPLIFY_SETUP.md`.
 |-----|-------------|
 | `AMPLIFY_SETUP.md` | AWS Amplify deployment and environment setup |
 | `SQUARE_SETUP.md` | Square integration quick-start for vendors and admins |
+
+---
+
+## Multi-Quantity Booking
+
+Services can be configured to allow customers to book multiple units at once (e.g., 3 haircuts for a family).
+
+### Configuration
+
+Set `maxQuantityPerBooking` on the Service model (default: 1). When set to a value > 1, the service card shows a quantity picker.
+
+### Scheduling Modes
+
+| Mode | Description | Requirement |
+|------|-------------|-------------|
+| **Sequential** | Back-to-back with same staff | At least 1 staff member with enough consecutive free time |
+| **Parallel** | All at the same time | N staff members available simultaneously (N = quantity) |
+
+The customer chooses their preferred mode on the time selection page. If only one mode is possible (e.g., only 1 staff member exists), the system defaults to sequential without showing the toggle.
+
+### How It Works
+
+1. Service card expands to show quantity picker (when `maxQuantityPerBooking > 1`)
+2. Time page shows mode toggle (sequential vs parallel) when parallel is possible
+3. Availability API calculates slots based on mode and quantity
+4. On booking, N appointments are created with a shared `groupId`
+5. Sequential appointments have staggered `dateTime` values; parallel share the same time
+
+### API Parameters
+
+**GET /api/availability**
+- `quantity` (number) — units to book (default: 1)
+- `mode` ('sequential' | 'parallel') — scheduling mode (default: 'sequential')
+
+**POST /api/appointments**
+- `quantity` (number) — triggers multi-quantity booking path
+- `quantityMode` ('sequential' | 'parallel') — how to schedule the units
 | `docs/SQUARE_MULTI_PARTY_PAYMENTS.md` | Technical details: payment API, multi-vendor splits |
 | `docs/SQUARE_CATALOG_SYNC.md` | Square Catalog sync: service push, order line items, OAuth scopes |
 | `docs/HOUSE_FEE_IMPLEMENTATION.md` | House fee business model, payment flow examples, configuration |

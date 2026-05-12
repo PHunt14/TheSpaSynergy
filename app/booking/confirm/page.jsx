@@ -55,6 +55,9 @@ function ConfirmPageContent() {
   const peopleParam = params.get('people')
   const people = peopleParam ? parseInt(peopleParam) : null
   const multiProvider = params.get('multiProvider') === 'true'
+  const quantityParam = params.get('quantity')
+  const quantity = quantityParam ? parseInt(quantityParam) : 1
+  const quantityMode = params.get('mode') || 'sequential'
   const isBundle = !!servicesParam
   const serviceIds = servicesParam ? servicesParam.split(',') : service ? [service] : []
 
@@ -72,8 +75,8 @@ function ConfirmPageContent() {
   const serviceDetails = allServiceDetails.length === 1 ? allServiceDetails[0] : null
   const totalPrice = multiProvider
     ? allServiceDetails.reduce((sum, s) => sum + (s?.price || 0), 0)
-    : allServiceDetails.reduce((sum, s) => sum + (s?.price || 0), 0) * (people || 1)
-  const totalDuration = allServiceDetails.reduce((sum, s) => sum + (s?.duration || 0), 0)
+    : allServiceDetails.reduce((sum, s) => sum + (s?.price || 0), 0) * (quantity > 1 ? quantity : (people || 1))
+  const totalDuration = allServiceDetails.reduce((sum, s) => sum + (s?.duration || 0), 0) * (quantity > 1 && quantityMode === 'sequential' ? quantity : 1)
   const multiProviderGuests = multiProvider && allServiceDetails.length > 0
     ? (allServiceDetails[0]?.minPeople || 2)
     : null
@@ -275,7 +278,8 @@ function ConfirmPageContent() {
             status,
             paymentId,
             ...(paymentId ? { paymentStatus: 'paid', paymentAmount: totalPrice } : {}),
-            ...(people ? { people } : {})
+            ...(people ? { people } : {}),
+            ...(quantity > 1 ? { quantity, quantityMode } : {})
           })
         }).then(r => r.json())
       )
@@ -313,6 +317,7 @@ function ConfirmPageContent() {
       if (requiresConfirmation) successUrl.set('confirmation', 'required')
       if (staffName) successUrl.set('staffName', staffName)
       if (people) successUrl.set('people', people)
+      if (quantity > 1) successUrl.set('quantity', String(quantity))
       window.location.href = `/booking/success?${successUrl}`
     } else {
       alert('Appointment creation failed')
@@ -397,6 +402,14 @@ function ConfirmPageContent() {
         staffName={multiProvider ? null : staffName}
         people={multiProviderGuests || people}
       />
+
+      {quantity > 1 && (
+        <div style={{ marginTop: '1rem', padding: '1rem', background: '#e3f2fd', borderRadius: '8px', border: '1px solid #90caf9' }}>
+          <p style={{ margin: 0, fontSize: '0.9rem' }}>
+            📋 <strong>{quantity}× {allServiceDetails[0]?.name || 'Service'}</strong> — {quantityMode === 'parallel' ? 'all at the same time (multiple staff)' : 'back-to-back with the same staff'}
+          </p>
+        </div>
+      )}
 
       {multiProvider && (
         <div style={{ marginTop: '1rem', padding: '1rem', background: '#e8f5e9', borderRadius: '8px', border: '1px solid #a5d6a7' }}>
