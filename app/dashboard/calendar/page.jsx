@@ -89,7 +89,7 @@ function AppointmentBlock({ appointment, startHour, onClick, column = 0, totalCo
 
 // ── Appointment Detail Modal ──────────────────────────────────
 
-function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onEdit, vendorId }) {
+function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onEdit, onRebook, vendorId }) {
   const [editing, setEditing] = useState(false)
   const [services, setServices] = useState([])
   const [staffList, setStaffList] = useState([])
@@ -323,6 +323,12 @@ function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onEdit, 
                   style={{ flex: 1, padding: '0.6rem 1rem', borderRadius: '6px', border: 'none', background: '#2196F3', color: 'white', cursor: 'pointer', fontWeight: '500', fontSize: '0.85rem' }}
                 >
                   Edit
+                </button>
+                <button
+                  onClick={() => { onRebook(appointment); onClose() }}
+                  style={{ flex: 1, padding: '0.6rem 1rem', borderRadius: '6px', border: 'none', background: '#9C27B0', color: 'white', cursor: 'pointer', fontWeight: '500', fontSize: '0.85rem' }}
+                >
+                  Rebook
                 </button>
                 <button
                   onClick={() => { onCancel(appointment); onClose() }}
@@ -631,18 +637,18 @@ function MonthView({ currentDate, appointments, onAppointmentClick }) {
 
 // ── New Appointment / Block Time Modal ────────────────────────
 
-function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, onClose, onCreated }) {
+function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServiceId, defaultCustomer, onClose, onCreated }) {
   const [mode, setMode] = useState('appointment') // 'appointment' or 'block'
   const [form, setForm] = useState({
-    customerName: '',
-    customerPhone: '',
-    customerEmail: '',
+    customerName: defaultCustomer?.name || '',
+    customerPhone: defaultCustomer?.phone || '',
+    customerEmail: defaultCustomer?.email || '',
     notes: '',
     dateTime: dateTime ? dateTime.toISOString().slice(0, 16) : '',
   })
   const [services, setServices] = useState([])
   const [staffList, setStaffList] = useState([])
-  const [serviceId, setServiceId] = useState('')
+  const [serviceId, setServiceId] = useState(defaultServiceId || '')
   const [staffId, setStaffId] = useState(defaultStaffId || '')
   const [duration, setDuration] = useState(60)
   const [submitting, setSubmitting] = useState(false)
@@ -840,6 +846,27 @@ export default function Calendar() {
   const handleReschedule = () => {
     // Edit is now handled inline in the modal
     loadAppointments()
+  }
+
+  const [rebookData, setRebookData] = useState(null)
+
+  const handleRebook = (appointment) => {
+    // Set date 6 weeks from now, same time of day
+    const sixWeeksOut = new Date()
+    sixWeeksOut.setDate(sixWeeksOut.getDate() + 42)
+    const aptDate = parseAppointmentDate(appointment.rawDateTime)
+    if (aptDate) {
+      sixWeeksOut.setHours(aptDate.getHours(), aptDate.getMinutes(), 0, 0)
+    }
+    setRebookData({
+      dateTime: sixWeeksOut,
+      customerName: appointment.customer?.name || '',
+      customerPhone: appointment.customer?.phone || '',
+      customerEmail: appointment.customer?.email || '',
+      serviceId: appointment.serviceId || '',
+      staffId: appointment.staffId || '',
+      vendorId: appointment.vendorId || selectedStaffVendorId,
+    })
   }
 
   useEffect(() => {
@@ -1135,17 +1162,20 @@ export default function Calendar() {
           onConfirm={handleConfirm}
           onCancel={handleCancel}
           onEdit={handleReschedule}
+          onRebook={handleRebook}
           vendorId={selectedStaffVendorId}
         />
       )}
 
-      {/* New Appointment / Block Time Modal */}
-      {newAppointmentDateTime && (
+      {/* New Appointment / Block Time / Rebook Modal */}
+      {(newAppointmentDateTime || rebookData) && (
         <NewAppointmentModal
-          dateTime={newAppointmentDateTime}
-          vendorId={selectedStaffVendorId}
-          defaultStaffId={selectedStaffId}
-          onClose={() => setNewAppointmentDateTime(null)}
+          dateTime={rebookData?.dateTime || newAppointmentDateTime}
+          vendorId={rebookData?.vendorId || selectedStaffVendorId}
+          defaultStaffId={rebookData?.staffId || selectedStaffId}
+          defaultServiceId={rebookData?.serviceId || ''}
+          defaultCustomer={rebookData ? { name: rebookData.customerName, phone: rebookData.customerPhone, email: rebookData.customerEmail } : null}
+          onClose={() => { setNewAppointmentDateTime(null); setRebookData(null) }}
           onCreated={loadAppointments}
         />
       )}
