@@ -10,7 +10,7 @@ Amplify.configure(config, { ssr: true });
 
 export async function POST(request) {
   try {
-    const { sourceId, amount, tipAmount, vendorId, staffId, bundlePayments, serviceIds, people, multiProvider, paymentSplit } = await request.json();
+    const { sourceId, amount, tipAmount, vendorId, staffId, bundlePayments, bundleId, serviceIds, people, multiProvider, paymentSplit } = await request.json();
 
     if (!sourceId || !amount) {
       return Response.json({ error: 'Missing payment details' }, { status: 400 });
@@ -29,7 +29,14 @@ export async function POST(request) {
       return await processSinglePayment(sourceId, amount, vendorId, staffId, serviceIds, people, tip);
     }
 
-    // Multi-vendor bundle payment
+    // Multi-vendor bundle payment — when a bundleId is present we link the charge
+    // to all appointments in the bundle after a successful capture
+    if (bundlePayments && bundlePayments.length > 0 && bundleId) {
+      return await processMultiVendorBundlePayment(sourceId, amount, bundlePayments, bundleId, tip);
+    }
+
+    // Legacy bundle payment path (e.g., couples booking flow that pre-builds its own bundlePayments
+    // and links appointments via groupId in processMultiProviderPayment)
     if (bundlePayments && bundlePayments.length > 0) {
       return await processBundlePayment(sourceId, amount, bundlePayments, tip);
     }
@@ -250,6 +257,70 @@ async function processSinglePayment(sourceId, amount, vendorId, staffId, service
   }
 }
 
+async function processMultiVendorBundlePayment(sourceId, totalAmount, bundlePayments, bundleId, tipAmount = 0) {
+  const dataClient = generateClient();
+
+  // Delegate charge + credential validation to the shared bundle payment helper
+  const paymentResult = await processBundlePayment(sourceId, totalAmount, bundlePayments, tipAmount);
+  const paymentResponse = await paymentResult.json();
+
+  // Bubble up errors (e.g., missing Square credentials → 400, Square API failures → 500)
+  if (!paymentResponse.success) {
+    return Response.json(paymentResponse, { status: paymentResult.status || 500 });
+  }
+
+  // Record paymentId + per-appointment paymentAmount on each appointment in the bundle
+  try {
+    const { data: bundleAppointments } = await dataClient.models.Appointment.list({
+      filter: { bundleId: { eq: bundleId } },
+    });
+
+    if (bundleAppointments && bundleAppointments.length > 0) {
+      // Fetch each appointment's service to determine its share of the total
+      const appointmentsWithServices = await Promise.all(
+        bundleAppointments.map(async (appt) => {
+          const { data: svc } = await dataClient.models.Service.get({ serviceId: appt.serviceId });
+          return { appt, servicePrice: svc?.price || 0 };
+        })
+      );
+
+      const subtotal = appointmentsWithServices.reduce((sum, { servicePrice }) => sum + servicePrice, 0);
+
+      await Promise.all(
+        appointmentsWithServices.map(async ({ appt, servicePrice }, idx) => {
+          // Proportional share of the (possibly discounted) total.
+          // Fall back to even split if subtotal is zero (avoids divide-by-zero).
+          let paymentAmount;
+          if (subtotal > 0) {
+            paymentAmount = Math.round((servicePrice / subtotal) * totalAmount * 100) / 100;
+          } else {
+            paymentAmount = Math.round((totalAmount / appointmentsWithServices.length) * 100) / 100;
+          }
+
+          await dataClient.models.Appointment.update({
+            appointmentId: appt.appointmentId,
+            paymentId: paymentResponse.paymentId,
+            paymentStatus: paymentResponse.status,
+            paymentAmount,
+          });
+        })
+      );
+    }
+  } catch (error) {
+    // Log but do not fail the payment response — the charge already succeeded.
+    console.error('Failed to record payment details on bundle appointments:', error);
+  }
+
+  return Response.json({
+    success: true,
+    paymentId: paymentResponse.paymentId,
+    status: paymentResponse.status,
+    splitPayments: paymentResponse.splitPayments,
+    bundleId,
+    tipAmount: tipAmount || 0,
+  });
+}
+
 async function processBundlePayment(sourceId, totalAmount, bundlePayments, tipAmount = 0) {
   const dataClient = generateClient();
   
@@ -277,7 +348,7 @@ async function processBundlePayment(sourceId, totalAmount, bundlePayments, tipAm
     amount
   }));
 
-  // Validate all non-house vendors are connected to Square
+  // Validate all non-house vendors are connected to Square (access token AND location id)
   const vendorChecks = await Promise.all(
     consolidatedPayments
       .filter(p => p.vendorId !== houseVendor.vendorId)
@@ -287,10 +358,13 @@ async function processBundlePayment(sourceId, totalAmount, bundlePayments, tipAm
       })
   );
 
-  const missingVendors = vendorChecks.filter(({ vendor }) => !vendor?.squareAccessToken);
+  const missingVendors = vendorChecks.filter(
+    ({ vendor }) => !vendor?.squareAccessToken || !vendor?.squareLocationId
+  );
   if (missingVendors.length > 0) {
-    return Response.json({ 
-      error: 'Some vendors not connected to Square',
+    return Response.json({
+      error: 'Card payment unavailable',
+      details: 'One or more vendors have not connected Square. Please pay in person.',
       vendors: missingVendors.map(v => v.vendorId)
     }, { status: 400 });
   }

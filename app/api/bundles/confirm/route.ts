@@ -91,8 +91,23 @@ export async function POST(request: Request) {
     const { data: bundle } = await client.models.Bundle.get({ bundleId });
     if (!bundle?.status) return Response.json({ error: 'Bundle booking not found' }, { status: 404 });
 
+    // Reject if bundle is already in a terminal state
+    if (bundle.status === 'confirmed' || bundle.status === 'cancelled') {
+      return Response.json({ error: `Bundle is already ${bundle.status}` }, { status: 400 });
+    }
+
+    // Check vendor membership via vendorConfirmations first, fallback to vendorIds
     const confirmations = parseJsonField(bundle.vendorConfirmations);
-    if (!(vendorId in confirmations)) return Response.json({ error: 'Vendor not part of this bundle' }, { status: 400 });
+    const vendorIds = bundle.vendorIds || [];
+    const isVendorInBundle = (vendorId in confirmations) || vendorIds.includes(vendorId);
+    if (!isVendorInBundle) {
+      return Response.json({ error: 'Vendor not part of this bundle' }, { status: 400 });
+    }
+
+    // If vendor is in vendorIds but not yet in confirmations, initialize their entry
+    if (!(vendorId in confirmations)) {
+      confirmations[vendorId] = 'pending';
+    }
 
     const customer = parseJsonField(bundle.customer);
 

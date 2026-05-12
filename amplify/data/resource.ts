@@ -82,6 +82,10 @@ const schema = a.schema({
       allowedDays: a.string().array(),
       addOns: a.json(),
       contactOnly: a.boolean().default(false),
+      serviceOrder: a.string().array(),
+      schedule: a.json(),
+      multiDay: a.boolean().default(false),
+      refundRecord: a.json(),
     })
     .identifier(['bundleId'])
     .authorization((allow) => [allow.publicApiKey()]),
