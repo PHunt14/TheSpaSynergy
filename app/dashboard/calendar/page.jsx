@@ -89,9 +89,169 @@ function AppointmentBlock({ appointment, startHour, onClick, column = 0, totalCo
 
 // ── Appointment Detail Modal ──────────────────────────────────
 
-function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onReschedule }) {
+function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onEdit, vendorId }) {
+  const [editing, setEditing] = useState(false)
+  const [services, setServices] = useState([])
+  const [staffList, setStaffList] = useState([])
+  const [vendors, setVendors] = useState([])
+  const [saving, setSaving] = useState(false)
+  const [editForm, setEditForm] = useState({
+    dateTime: '',
+    serviceId: '',
+    staffId: '',
+    vendorId: '',
+    status: '',
+    customerName: '',
+    customerPhone: '',
+    customerEmail: '',
+  })
+
   if (!appointment) return null
   const aptDate = parseAppointmentDate(appointment.rawDateTime)
+
+  // Initialize edit form when entering edit mode
+  const startEditing = () => {
+    const dt = appointment.rawDateTime || ''
+    // Convert to datetime-local format
+    let dtLocal = ''
+    if (dt) {
+      const d = new Date(dt)
+      if (!isNaN(d.getTime())) {
+        dtLocal = d.toISOString().slice(0, 16)
+      }
+    }
+    setEditForm({
+      dateTime: dtLocal,
+      serviceId: appointment.serviceId || '',
+      staffId: appointment.staffId || '',
+      vendorId: appointment.vendorId || vendorId || '',
+      status: appointment.status || '',
+      customerName: appointment.customer?.name || '',
+      customerPhone: appointment.customer?.phone || '',
+      customerEmail: appointment.customer?.email || '',
+    })
+    setEditing(true)
+    // Load services and staff
+    loadEditData(appointment.vendorId || vendorId)
+  }
+
+  const loadEditData = (vid) => {
+    if (!vid) return
+    fetch(`/api/services?vendorId=${vid}`).then(r => r.json()).then(d => setServices((d.services || []).filter(s => s.isActive !== false)))
+    fetch(`/api/staff-schedules?vendorId=${vid}`).then(r => r.json()).then(d => setStaffList((d.schedules || []).filter(s => s.isActive !== false)))
+    fetch('/api/vendors').then(r => r.json()).then(d => setVendors(d.vendors || []))
+  }
+
+  const handleVendorChange = (newVendorId) => {
+    setEditForm(prev => ({ ...prev, vendorId: newVendorId, serviceId: '', staffId: '' }))
+    // Reload services and staff for new vendor
+    fetch(`/api/services?vendorId=${newVendorId}`).then(r => r.json()).then(d => setServices((d.services || []).filter(s => s.isActive !== false)))
+    fetch(`/api/staff-schedules?vendorId=${newVendorId}`).then(r => r.json()).then(d => setStaffList((d.schedules || []).filter(s => s.isActive !== false)))
+  }
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      // Build update payload
+      const updates = {}
+      let hasChanges = false
+
+      // Check dateTime change
+      if (editForm.dateTime) {
+        const newDT = new Date(editForm.dateTime).toISOString()
+        if (newDT !== appointment.rawDateTime) {
+          // Use reschedule endpoint for time changes
+          const res = await fetch('/api/appointments/reschedule', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ appointmentId: appointment.appointmentId, newDateTime: newDT })
+          })
+          if (!res.ok) {
+            const data = await res.json()
+            alert('Failed to update time: ' + (data.error || 'Unknown error'))
+            setSaving(false)
+            return
+          }
+          hasChanges = true
+        }
+      }
+
+      // Check staff change
+      if (editForm.staffId !== (appointment.staffId || '')) {
+        if (editForm.staffId) {
+          const res = await fetch('/api/appointments/reassign', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              appointmentId: appointment.appointmentId,
+              newStaffId: editForm.staffId,
+              requestingVendorId: vendorId
+            })
+          })
+          if (!res.ok) {
+            const data = await res.json()
+            alert('Failed to reassign staff: ' + (data.error || 'Unknown error'))
+            setSaving(false)
+            return
+          }
+        } else {
+          // Clear staff assignment via PATCH
+          updates.staffId = null
+        }
+        hasChanges = true
+      }
+
+      // Check status change
+      if (editForm.status !== appointment.status) {
+        updates.status = editForm.status
+        hasChanges = true
+      }
+
+      // Check service change
+      if (editForm.serviceId !== (appointment.serviceId || '')) {
+        updates.serviceId = editForm.serviceId
+        hasChanges = true
+      }
+
+      // Check customer info changes
+      const currentCustomer = appointment.customer || {}
+      if (editForm.customerName !== (currentCustomer.name || '') ||
+          editForm.customerPhone !== (currentCustomer.phone || '') ||
+          editForm.customerEmail !== (currentCustomer.email || '')) {
+        updates.customer = JSON.stringify({
+          ...currentCustomer,
+          name: editForm.customerName,
+          phone: editForm.customerPhone,
+          email: editForm.customerEmail,
+        })
+        hasChanges = true
+      }
+
+      // Apply remaining updates via PATCH
+      if (Object.keys(updates).length > 0) {
+        const res = await fetch('/api/appointments', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ appointmentId: appointment.appointmentId, ...updates })
+        })
+        if (!res.ok) {
+          const data = await res.json()
+          alert('Failed to save changes: ' + (data.error || 'Unknown error'))
+          setSaving(false)
+          return
+        }
+      }
+
+      if (hasChanges) {
+        onEdit()
+      }
+      onClose()
+    } catch (error) {
+      alert('Error saving: ' + (error.message || 'Unknown error'))
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <div
@@ -111,57 +271,193 @@ function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onResche
         role="document"
         style={{
           background: 'white', borderRadius: '12px', padding: '2rem',
-          maxWidth: '400px', width: '90%', boxShadow: '0 8px 32px rgba(0,0,0,0.2)'
+          maxWidth: '440px', width: '90%', maxHeight: '90vh', overflowY: 'auto',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.2)'
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-          <h3 style={{ margin: 0 }}>Appointment Details</h3>
+          <h3 style={{ margin: 0 }}>{editing ? 'Edit Appointment' : 'Appointment Details'}</h3>
           <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: 'var(--color-text-light)' }}>×</button>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          <p style={{ margin: 0 }}><strong>Customer:</strong> {appointment.customer?.name || 'Walk-in'}</p>
-          <p style={{ margin: 0 }}><strong>Service:</strong> {appointment.service?.name} ({appointment.service?.duration} min)</p>
-          <p style={{ margin: 0 }}><strong>Price:</strong> ${appointment.service?.price?.toFixed(2)}</p>
-          {appointment.staffName && <p style={{ margin: 0 }}><strong>With:</strong> {appointment.staffName}</p>}
-          {aptDate && <p style={{ margin: 0 }}><strong>Time:</strong> {formatTime(aptDate)}</p>}
-          {aptDate && <p style={{ margin: 0 }}><strong>Date:</strong> {aptDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>}
-          <p style={{ margin: 0 }}><strong>Status:</strong> <span style={{
-            padding: '0.15rem 0.5rem', borderRadius: '8px', fontSize: '0.85rem',
-            background: appointment.status === 'confirmed' ? '#d4edda' : appointment.status === 'cancelled' ? '#f8d7da' : '#fff3cd',
-            color: appointment.status === 'confirmed' ? '#155724' : appointment.status === 'cancelled' ? '#721c24' : '#856404',
-          }}>{appointment.status}</span></p>
-          <p style={{ margin: 0 }}><strong>Payment:</strong> <span style={{
-            padding: '0.15rem 0.5rem', borderRadius: '8px', fontSize: '0.85rem',
-            background: appointment.paymentStatus === 'paid' ? '#d4edda' : '#fff3cd',
-            color: appointment.paymentStatus === 'paid' ? '#155724' : '#856404',
-          }}>{appointment.paymentStatus === 'paid' ? 'Paid' : 'Unpaid'}</span></p>
-          {appointment.customer?.phone && <p style={{ margin: 0 }}><strong>Phone:</strong> {appointment.customer.phone}</p>}
-        </div>
 
-        {/* Action buttons */}
-        {appointment.status !== 'cancelled' && (
-          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.5rem', flexWrap: 'wrap' }}>
-            {(appointment.status === 'pending' || appointment.status === 'pending-confirmation') && (
-              <button
-                onClick={() => { onConfirm(appointment); onClose() }}
-                style={{ flex: 1, padding: '0.6rem 1rem', borderRadius: '6px', border: 'none', background: '#4CAF50', color: 'white', cursor: 'pointer', fontWeight: '500', fontSize: '0.85rem' }}
-              >
-                Confirm
-              </button>
+        {!editing ? (
+          <>
+            {/* View mode */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <p style={{ margin: 0 }}><strong>Customer:</strong> {appointment.customer?.name || 'Walk-in'}</p>
+              <p style={{ margin: 0 }}><strong>Service:</strong> {appointment.service?.name} ({appointment.service?.duration} min)</p>
+              <p style={{ margin: 0 }}><strong>Price:</strong> ${appointment.service?.price?.toFixed(2)}</p>
+              {appointment.staffName && <p style={{ margin: 0 }}><strong>With:</strong> {appointment.staffName}</p>}
+              {aptDate && <p style={{ margin: 0 }}><strong>Time:</strong> {formatTime(aptDate)}</p>}
+              {aptDate && <p style={{ margin: 0 }}><strong>Date:</strong> {aptDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>}
+              <p style={{ margin: 0 }}><strong>Status:</strong> <span style={{
+                padding: '0.15rem 0.5rem', borderRadius: '8px', fontSize: '0.85rem',
+                background: appointment.status === 'confirmed' ? '#d4edda' : appointment.status === 'cancelled' ? '#f8d7da' : '#fff3cd',
+                color: appointment.status === 'confirmed' ? '#155724' : appointment.status === 'cancelled' ? '#721c24' : '#856404',
+              }}>{appointment.status}</span></p>
+              <p style={{ margin: 0 }}><strong>Payment:</strong> <span style={{
+                padding: '0.15rem 0.5rem', borderRadius: '8px', fontSize: '0.85rem',
+                background: appointment.paymentStatus === 'paid' ? '#d4edda' : '#fff3cd',
+                color: appointment.paymentStatus === 'paid' ? '#155724' : '#856404',
+              }}>{appointment.paymentStatus === 'paid' ? 'Paid' : 'Unpaid'}</span></p>
+              {appointment.customer?.phone && <p style={{ margin: 0 }}><strong>Phone:</strong> {appointment.customer.phone}</p>}
+            </div>
+
+            {/* Action buttons */}
+            {appointment.status !== 'cancelled' && (
+              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.5rem', flexWrap: 'wrap' }}>
+                {(appointment.status === 'pending' || appointment.status === 'pending-confirmation') && (
+                  <button
+                    onClick={() => { onConfirm(appointment); onClose() }}
+                    style={{ flex: 1, padding: '0.6rem 1rem', borderRadius: '6px', border: 'none', background: '#4CAF50', color: 'white', cursor: 'pointer', fontWeight: '500', fontSize: '0.85rem' }}
+                  >
+                    Confirm
+                  </button>
+                )}
+                <button
+                  onClick={startEditing}
+                  style={{ flex: 1, padding: '0.6rem 1rem', borderRadius: '6px', border: 'none', background: '#2196F3', color: 'white', cursor: 'pointer', fontWeight: '500', fontSize: '0.85rem' }}
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={() => { onCancel(appointment); onClose() }}
+                  style={{ flex: 1, padding: '0.6rem 1rem', borderRadius: '6px', border: 'none', background: '#F44336', color: 'white', cursor: 'pointer', fontWeight: '500', fontSize: '0.85rem' }}
+                >
+                  Cancel
+                </button>
+              </div>
             )}
-            <button
-              onClick={() => { onReschedule(appointment); onClose() }}
-              style={{ flex: 1, padding: '0.6rem 1rem', borderRadius: '6px', border: 'none', background: '#2196F3', color: 'white', cursor: 'pointer', fontWeight: '500', fontSize: '0.85rem' }}
-            >
-              Reschedule
-            </button>
-            <button
-              onClick={() => { onCancel(appointment); onClose() }}
-              style={{ flex: 1, padding: '0.6rem 1rem', borderRadius: '6px', border: 'none', background: '#F44336', color: 'white', cursor: 'pointer', fontWeight: '500', fontSize: '0.85rem' }}
-            >
-              Cancel
-            </button>
-          </div>
+          </>
+        ) : (
+          <>
+            {/* Edit mode */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {/* Date & Time */}
+              <div>
+                <label htmlFor="edit-datetime" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Date & Time</label>
+                <input
+                  id="edit-datetime"
+                  type="datetime-local"
+                  value={editForm.dateTime}
+                  onChange={(e) => setEditForm({ ...editForm, dateTime: e.target.value })}
+                  style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              {/* Vendor */}
+              {vendors.length > 1 && (
+                <div>
+                  <label htmlFor="edit-vendor" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Vendor</label>
+                  <select
+                    id="edit-vendor"
+                    value={editForm.vendorId}
+                    onChange={(e) => handleVendorChange(e.target.value)}
+                    style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem' }}
+                  >
+                    {vendors.map(v => <option key={v.vendorId} value={v.vendorId}>{v.name}</option>)}
+                  </select>
+                </div>
+              )}
+
+              {/* Service */}
+              <div>
+                <label htmlFor="edit-service" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Service</label>
+                <select
+                  id="edit-service"
+                  value={editForm.serviceId}
+                  onChange={(e) => setEditForm({ ...editForm, serviceId: e.target.value })}
+                  style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem' }}
+                >
+                  <option value="">Select a service</option>
+                  {services.map(s => <option key={s.serviceId} value={s.serviceId}>{s.name} ({s.duration} min — ${s.price})</option>)}
+                </select>
+              </div>
+
+              {/* Staff */}
+              <div>
+                <label htmlFor="edit-staff" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Staff Member</label>
+                <select
+                  id="edit-staff"
+                  value={editForm.staffId}
+                  onChange={(e) => setEditForm({ ...editForm, staffId: e.target.value })}
+                  style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem' }}
+                >
+                  <option value="">None / Auto-assign</option>
+                  {staffList.map(s => <option key={s.visibleId} value={s.visibleId}>{s.staffName}</option>)}
+                </select>
+              </div>
+
+              {/* Status */}
+              <div>
+                <label htmlFor="edit-status" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Status</label>
+                <select
+                  id="edit-status"
+                  value={editForm.status}
+                  onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
+                  style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem' }}
+                >
+                  <option value="pending-confirmation">Pending Confirmation</option>
+                  <option value="confirmed">Confirmed</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </div>
+
+              {/* Customer Name */}
+              <div>
+                <label htmlFor="edit-customer-name" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Customer Name</label>
+                <input
+                  id="edit-customer-name"
+                  type="text"
+                  value={editForm.customerName}
+                  onChange={(e) => setEditForm({ ...editForm, customerName: e.target.value })}
+                  style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              {/* Customer Phone */}
+              <div>
+                <label htmlFor="edit-customer-phone" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Phone</label>
+                <input
+                  id="edit-customer-phone"
+                  type="tel"
+                  value={editForm.customerPhone}
+                  onChange={(e) => setEditForm({ ...editForm, customerPhone: e.target.value })}
+                  style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              {/* Customer Email */}
+              <div>
+                <label htmlFor="edit-customer-email" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Email</label>
+                <input
+                  id="edit-customer-email"
+                  type="email"
+                  value={editForm.customerEmail}
+                  onChange={(e) => setEditForm({ ...editForm, customerEmail: e.target.value })}
+                  style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                />
+              </div>
+            </div>
+
+            {/* Save / Cancel buttons */}
+            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="cta"
+                style={{ flex: 1, opacity: saving ? 0.6 : 1 }}
+              >
+                {saving ? 'Saving...' : 'Save Changes'}
+              </button>
+              <button
+                onClick={() => setEditing(false)}
+                style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', background: 'white', cursor: 'pointer' }}
+              >
+                Back
+              </button>
+            </div>
+          </>
         )}
       </div>
     </div>
@@ -514,9 +810,9 @@ export default function Calendar() {
     }
   }
 
-  const handleReschedule = (appointment) => {
-    // Navigate to the appointments page with the reschedule modal open
-    window.location.href = `/dashboard/appointments?reschedule=${appointment.appointmentId}`
+  const handleReschedule = () => {
+    // Edit is now handled inline in the modal
+    loadAppointments()
   }
 
   useEffect(() => {
@@ -770,7 +1066,8 @@ export default function Calendar() {
           onClose={() => setSelectedAppointment(null)}
           onConfirm={handleConfirm}
           onCancel={handleCancel}
-          onReschedule={handleReschedule}
+          onEdit={handleReschedule}
+          vendorId={userVendorId}
         />
       )}
 

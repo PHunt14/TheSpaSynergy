@@ -13,7 +13,7 @@ const client = generateServerClientUsingCookies<Schema>({
 
 export async function PATCH(request: Request) {
   try {
-    const { appointmentId, paymentId, paymentStatus, paymentAmount, status } = await request.json();
+    const { appointmentId, paymentId, paymentStatus, paymentAmount, status, serviceId, staffId, vendorId, customer } = await request.json();
 
     if (!appointmentId) {
       return Response.json({ error: 'appointmentId required' }, { status: 400 });
@@ -24,6 +24,10 @@ export async function PATCH(request: Request) {
     if (paymentStatus !== undefined) updateFields.paymentStatus = paymentStatus;
     if (paymentAmount !== undefined) updateFields.paymentAmount = paymentAmount;
     if (status !== undefined) updateFields.status = status;
+    if (serviceId !== undefined) updateFields.serviceId = serviceId;
+    if (staffId !== undefined) updateFields.staffId = staffId;
+    if (vendorId !== undefined) updateFields.vendorId = vendorId;
+    if (customer !== undefined) updateFields.customer = customer;
 
     const { errors } = await client.models.Appointment.update(updateFields);
 

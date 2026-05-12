@@ -76,6 +76,7 @@ Deployed via AWS Amplify with automatic CI/CD from Git. See `AMPLIFY_SETUP.md`.
   - Add, edit, and deactivate services
   - Assign which staff members can perform each service (based on staff logged in for that vendor, excluding admins)
   - Cancel, reschedule, and confirm appointments
+  - Edit appointments inline from the calendar view (change time, staff, service, vendor, status, and customer info without leaving the page)
   - Add and manage staff members
   - Connect their Square account (Settings → My Settings)
   - Add social media links (Settings → Vendor Settings)

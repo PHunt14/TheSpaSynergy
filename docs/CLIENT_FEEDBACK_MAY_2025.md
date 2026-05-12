@@ -107,7 +107,7 @@ Feedback collected from client on May 6, 2025. Items triaged and sorted by prior
 ### ✅ Time-Block Calendar View
 **Source**: "I find myself switching to Vagaro to book because it puts my schedule in front of me in time blocks"
 **Implementation**: Complete rewrite of dashboard calendar with planner-style time-block layout. Day/week views show 30-min grid with proportional appointment blocks. Month view uses card-list grid. Adjustable hour range (default 6AM–6PM). Date-range filtering added to dashboard API.
-- Action buttons (Confirm, Reschedule, Cancel) in appointment detail modal
+- Action buttons (Confirm, Edit, Cancel) in appointment detail modal — Edit opens inline form to change time, staff, service, vendor, status, and customer info without leaving the calendar
 - Click empty time slots to create new appointments or block time directly from the calendar
 - "+ New" button in top bar for quick appointment/block creation
 - Overlapping appointments render side-by-side
