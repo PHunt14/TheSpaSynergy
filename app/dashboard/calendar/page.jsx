@@ -470,7 +470,7 @@ function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onEdit, 
 
 // ── Time Block Day Column ─────────────────────────────────────
 
-function TimeBlockColumn({ date, appointments, startHour, endHour, onAppointmentClick, onSlotClick }) {
+function TimeBlockColumn({ date, appointments, startHour, endHour, onAppointmentClick, onSlotClick, workingStart, workingEnd }) {
   const slots = generateTimeSlots(startHour, endHour)
   const dayAppointments = appointments.filter(apt => {
     const d = parseAppointmentDate(apt.rawDateTime)
@@ -488,8 +488,29 @@ function TimeBlockColumn({ date, appointments, startHour, endHour, onAppointment
     onSlotClick(dateTime)
   }
 
+  const isInWorkingHours = (slot) => {
+    if (workingStart == null || workingEnd == null) return false
+    const slotMin = slot.hour * 60 + slot.minute
+    return slotMin >= workingStart && slotMin < workingEnd
+  }
+
   return (
-    <div style={{ position: 'relative', minHeight: `${slots.length * 40}px` }}>
+    <div style={{ position: 'relative', minHeight: `${slots.length * 40}px`, marginLeft: '1px' }}>
+      {/* Working hours background overlay */}
+      {workingStart != null && workingEnd != null && (
+        <div style={{
+          position: 'absolute',
+          top: `${((workingStart - startHour * 60) / 30) * 40}px`,
+          left: 0,
+          right: 0,
+          height: `${((workingEnd - workingStart) / 30) * 40}px`,
+          background: 'rgba(76, 175, 80, 0.06)',
+          borderTop: '2px solid rgba(76, 175, 80, 0.4)',
+          borderBottom: '2px solid rgba(76, 175, 80, 0.4)',
+          pointerEvents: 'none',
+          zIndex: 1,
+        }} />
+      )}
       {/* Grid lines (clickable) */}
       {slots.map((slot, i) => (
         <div
@@ -505,8 +526,8 @@ function TimeBlockColumn({ date, appointments, startHour, endHour, onAppointment
             left: 0,
             right: 0,
             height: '40px',
-            borderBottom: '1px solid var(--color-border)',
-            background: slot.minute === 0 ? 'transparent' : 'rgba(0,0,0,0.01)',
+            borderBottom: slot.minute === 0 ? '1px solid var(--color-border)' : '1px dashed rgba(0,0,0,0.06)',
+            background: 'transparent',
             cursor: 'cell',
           }}
         />
@@ -926,6 +947,19 @@ export default function Calendar() {
   const selectedStaffRecord = allStaff.find(s => s.visibleId === selectedStaffId)
   const selectedStaffVendorId = selectedStaffRecord?.vendorId || userVendorId || vendors[0]?.vendorId
 
+  // Compute working hours for a given date
+  const DAY_NAMES_MAP = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+  const getWorkingHoursForDate = (date) => {
+    if (!selectedStaffRecord?.schedule) return { start: null, end: null }
+    const schedule = typeof selectedStaffRecord.schedule === 'string' ? JSON.parse(selectedStaffRecord.schedule) : selectedStaffRecord.schedule
+    const dayName = DAY_NAMES_MAP[date.getDay()]
+    const daySchedule = schedule[dayName]
+    if (!daySchedule || !daySchedule.start) return { start: null, end: null }
+    const [sh, sm] = daySchedule.start.split(':').map(Number)
+    const [eh, em] = daySchedule.end.split(':').map(Number)
+    return { start: sh * 60 + sm, end: eh * 60 + em }
+  }
+
   return (
     <div>
       {/* Top bar: title + vendor selector + view toggle */}
@@ -1019,6 +1053,7 @@ export default function Calendar() {
           </div>
           {/* Day column */}
           <div style={{ flex: 1, position: 'relative' }}>
+            {(() => { const wh = getWorkingHoursForDate(currentDate); return (
             <TimeBlockColumn
               date={currentDate}
               appointments={appointments}
@@ -1026,7 +1061,10 @@ export default function Calendar() {
               endHour={endHour}
               onAppointmentClick={setSelectedAppointment}
               onSlotClick={setNewAppointmentDateTime}
+              workingStart={wh.start}
+              workingEnd={wh.end}
             />
+            ) })()}
           </div>
         </div>
       )}
@@ -1045,8 +1083,10 @@ export default function Calendar() {
             ))}
           </div>
           {/* Day columns */}
-          {getWeekDates(currentDate).map((date, idx) => (
-            <div key={idx} style={{ flex: 1, minWidth: '100px', borderLeft: '1px solid var(--color-border)' }}>
+          {getWeekDates(currentDate).map((date, idx) => {
+            const wh = getWorkingHoursForDate(date)
+            return (
+            <div key={idx} style={{ flex: 1, minWidth: '100px', borderLeft: '3px solid #ccc' }}>
               {/* Day header */}
               <div style={{
                 height: '36px',
@@ -1055,7 +1095,7 @@ export default function Calendar() {
                 alignItems: 'center',
                 justifyContent: 'center',
                 borderBottom: '2px solid var(--color-border)',
-                background: isToday(date) ? 'var(--color-primary)' : 'var(--color-accent)',
+                background: isToday(date) ? 'var(--color-primary)' : wh.start != null ? '#f0f9f0' : 'var(--color-accent)',
                 color: isToday(date) ? 'white' : 'var(--color-text)',
               }}>
                 <div style={{ fontSize: '0.7rem', fontWeight: '500' }}>{DAY_LABELS[date.getDay()]}</div>
@@ -1069,9 +1109,12 @@ export default function Calendar() {
                 endHour={endHour}
                 onAppointmentClick={setSelectedAppointment}
                 onSlotClick={setNewAppointmentDateTime}
+                workingStart={wh.start}
+                workingEnd={wh.end}
               />
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
 
