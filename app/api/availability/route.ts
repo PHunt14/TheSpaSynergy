@@ -83,12 +83,17 @@ export async function GET(request: Request) {
     }
 
     // Get existing appointments for conflict checking
-    const { data: allAppointments } = await client.models.Appointment.list({
-      filter: {
-        vendorId: { eq: vendorId },
-        dateTime: { beginsWith: date }
-      }
-    });
+    let allAppointments: any[] = [];
+    let nextToken: string | undefined;
+    do {
+      const result = await client.models.Appointment.listAppointmentByVendorIdAndDateTime({
+        vendorId,
+        dateTime: { beginsWith: date },
+        ...(nextToken ? { nextToken } : {})
+      } as any);
+      allAppointments = allAppointments.concat(result.data || []);
+      nextToken = (result as any).nextToken;
+    } while (nextToken);
 
     // Filter by resource type — sauna appointments don't block staff and vice versa
     const relevantAppointments = await filterRelevantAppointments(allAppointments || [], isSauna, assignedStaff, serviceId, excludeAppointmentId);
@@ -204,19 +209,16 @@ async function handleMultiProviderAvailability(service: any, date: string, vendo
   const vendorIds = [...new Set(staffSchedules.map((s: any) => s.vendorId).filter(Boolean))];
 
   // Fetch appointments for ALL those staff members on the requested date
-  // Query by each vendor's appointments for the date, then filter to relevant staff
   const appointmentPromises = vendorIds.map(vid =>
-    client.models.Appointment.list({
-      filter: {
-        vendorId: { eq: vid },
-        dateTime: { beginsWith: date }
-      }
-    })
+    client.models.Appointment.listAppointmentByVendorIdAndDateTime({
+      vendorId: vid,
+      dateTime: { beginsWith: date }
+    } as any)
   );
   const appointmentResults = await Promise.all(appointmentPromises);
 
   const allAppointments = appointmentResults
-    .flatMap(result => result.data || [])
+    .flatMap(result => (result as any).data || [])
     .filter(apt => apt.status !== 'cancelled' && allowedStaff.includes(apt.staffId));
 
   // Call getMultiProviderSlots
@@ -262,17 +264,15 @@ async function handleQuantityAvailability(service: any, date: string, vendor: an
   const vendorIds = [...new Set(staffSchedules.map((s: any) => s.vendorId).filter(Boolean))];
 
   const appointmentPromises = vendorIds.map(vid =>
-    client.models.Appointment.list({
-      filter: {
-        vendorId: { eq: vid },
-        dateTime: { beginsWith: date }
-      }
-    })
+    client.models.Appointment.listAppointmentByVendorIdAndDateTime({
+      vendorId: vid,
+      dateTime: { beginsWith: date }
+    } as any)
   );
   const appointmentResults = await Promise.all(appointmentPromises);
 
   const allAppointments = appointmentResults
-    .flatMap(result => result.data || [])
+    .flatMap(result => (result as any).data || [])
     .filter(apt => apt.status !== 'cancelled' && allowedStaff.includes(apt.staffId));
 
   const bufferMinutes = vendor.bufferMinutes || 15;

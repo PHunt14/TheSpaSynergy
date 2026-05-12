@@ -15,6 +15,8 @@ export async function GET(request: Request) {
   const serviceId = searchParams.get('serviceId');
   const month = searchParams.get('month'); // 1-12
   const year = searchParams.get('year');
+  const allowedDaysParam = searchParams.get('allowedDays');
+  const allowedDays = allowedDaysParam ? allowedDaysParam.split(',') : null;
 
   if (!vendorId || !serviceId || !month || !year) {
     return Response.json({ error: 'Missing required parameters' }, { status: 400 });
@@ -72,7 +74,7 @@ export async function GET(request: Request) {
 
     const availableDates = buildAvailableDates(
       firstDay, lastDay, minDate, isSauna, vendor, service,
-      { staffList: staffList || [], workingHours, saunaHours, allowedStaffIds, monthAppointments: monthAppointments || [] }
+      { staffList: staffList || [], workingHours, saunaHours, allowedStaffIds, monthAppointments: monthAppointments || [], allowedDays }
     );
 
     return Response.json({ availableDates });
@@ -84,15 +86,18 @@ export async function GET(request: Request) {
 
 function buildAvailableDates(
   firstDay: Date, lastDay: Date, minDate: Date, isSauna: boolean,
-  vendor: any, service: any, ctx: { staffList: any[]; workingHours: any; saunaHours: any; allowedStaffIds: string[] | null; monthAppointments: any[] }
+  vendor: any, service: any, ctx: { staffList: any[]; workingHours: any; saunaHours: any; allowedStaffIds: string[] | null; monthAppointments: any[]; allowedDays: string[] | null }
 ): string[] {
-  const { staffList, workingHours, saunaHours, allowedStaffIds, monthAppointments } = ctx;
+  const { staffList, workingHours, saunaHours, allowedStaffIds, monthAppointments, allowedDays } = ctx;
   const availableDates: string[] = [];
 
   for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
     if (d < minDate) continue;
     const dateStr = d.toISOString().split('T')[0];
     const dayOfWeek = DAY_NAMES[d.getDay()];
+
+    // Skip days not in allowedDays
+    if (allowedDays && !allowedDays.includes(dayOfWeek)) continue;
 
     const dayHours = getDayHoursSync(vendor, service, dayOfWeek, d, { staffList, workingHours, saunaHours, allowedStaffIds });
     if (!dayHours?.start) continue;

@@ -5,17 +5,20 @@ import { useState, useEffect, Suspense } from 'react'
 import BookingDisabled, { isBookingEnabled } from '../../components/BookingDisabled'
 import PropTypes from 'prop-types'
 
-function AppointmentSummary({ allServiceDetails, totalPrice, totalDuration, date, time, staffName, people }) {
+function AppointmentSummary({ allServiceDetails, totalPrice, totalDuration, date, time, staffName, people, getQty }) {
   return (
     <div style={{ marginTop: '1.5rem', padding: '1rem', background: 'var(--color-accent)', borderRadius: '8px' }}>
       <h3>Appointment Summary</h3>
-      {allServiceDetails.map(svc => (
-        <div key={svc.serviceId} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-          <span>{svc.name} ({svc.duration} min)</span>
-          <span>${svc.price}</span>
-        </div>
-      ))}
-      {allServiceDetails.length > 1 && (
+      {allServiceDetails.map(svc => {
+        const qty = getQty ? getQty(svc) : 1
+        return (
+          <div key={svc.serviceId} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+            <span>{qty > 1 ? `${qty}× ` : ''}{svc.name} ({svc.duration} min{qty > 1 ? ' each' : ''})</span>
+            <span>${(svc.price * qty).toFixed(2)}</span>
+          </div>
+        )
+      })}
+      {(allServiceDetails.length > 1 || allServiceDetails.some(s => (getQty ? getQty(s) : 1) > 1)) && (
         <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: '0.5rem', marginTop: '0.5rem', display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
           <span>Total ({totalDuration} min)</span>
           <span>${totalPrice.toFixed(2)}</span>
@@ -37,6 +40,7 @@ AppointmentSummary.propTypes = {
   time: PropTypes.string,
   staffName: PropTypes.string,
   people: PropTypes.number,
+  getQty: PropTypes.func,
 }
 
 function ConfirmPageContent() {
@@ -58,6 +62,11 @@ function ConfirmPageContent() {
   const quantityParam = params.get('quantity')
   const quantity = quantityParam ? parseInt(quantityParam) : 1
   const quantityMode = params.get('mode') || 'sequential'
+  const quantitiesParam = params.get('quantities')
+  // Parse per-service quantities (format: "svc-id:2,svc-id2:3")
+  const perServiceQuantities = quantitiesParam
+    ? Object.fromEntries(quantitiesParam.split(',').map(entry => { const [id, qty] = entry.split(':'); return [id, parseInt(qty)] }))
+    : {}
   const isBundle = !!servicesParam
   const serviceIds = servicesParam ? servicesParam.split(',') : service ? [service] : []
 
@@ -73,10 +82,11 @@ function ConfirmPageContent() {
 
   // For single service, use the first service detail
   const serviceDetails = allServiceDetails.length === 1 ? allServiceDetails[0] : null
+  const getQty = (svc) => perServiceQuantities[svc.serviceId] || quantity || 1
   const totalPrice = multiProvider
     ? allServiceDetails.reduce((sum, s) => sum + (s?.price || 0), 0)
-    : allServiceDetails.reduce((sum, s) => sum + (s?.price || 0), 0) * (quantity > 1 ? quantity : (people || 1))
-  const totalDuration = allServiceDetails.reduce((sum, s) => sum + (s?.duration || 0), 0) * (quantity > 1 && quantityMode === 'sequential' ? quantity : 1)
+    : allServiceDetails.reduce((sum, s) => sum + (s?.price || 0) * getQty(s), 0) * (people || 1)
+  const totalDuration = allServiceDetails.reduce((sum, s) => sum + (s?.duration || 0) * getQty(s), 0)
   const multiProviderGuests = multiProvider && allServiceDetails.length > 0
     ? (allServiceDetails[0]?.minPeople || 2)
     : null
@@ -264,8 +274,9 @@ function ConfirmPageContent() {
     }
 
     const results = await Promise.all(
-      allServiceDetails.map(svc =>
-        fetch('/api/appointments', {
+      allServiceDetails.map(svc => {
+        const svcQty = getQty(svc)
+        return fetch('/api/appointments', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -279,14 +290,14 @@ function ConfirmPageContent() {
             paymentId,
             ...(paymentId ? { paymentStatus: 'paid', paymentAmount: totalPrice } : {}),
             ...(people ? { people } : {}),
-            ...(quantity > 1 ? { quantity, quantityMode } : {})
+            ...(svcQty > 1 ? { quantity: svcQty, quantityMode } : {})
           })
         }).then(r => r.json())
-      )
+      })
     )
 
     if (bundleId) {
-      const appointmentIds = results.filter(r => r.appointmentId).map(r => r.appointmentId)
+      const appointmentIds = results.filter(r => r.appointmentId || r.appointmentIds).flatMap(r => r.appointmentIds || [r.appointmentId])
       const uniqueVendorIds = [...new Set(allServiceDetails.map(s => s.vendorId))]
       const confirmations = {}
       uniqueVendorIds.forEach(v => { confirmations[v] = 'pending' })
@@ -305,10 +316,10 @@ function ConfirmPageContent() {
       })
     }
 
-    const firstSuccess = results.find(r => r.appointmentId)
+    const firstSuccess = results.find(r => r.appointmentId || r.appointmentIds)
     if (firstSuccess) {
       const successUrl = new URLSearchParams({
-        id: firstSuccess.appointmentId,
+        id: firstSuccess.appointmentId || firstSuccess.appointmentIds?.[0] || firstSuccess.groupId,
         dateTime: dateTimeISO,
         service: allServiceDetails.map(s => s.name).join(', '),
         payment: pMethod,
@@ -401,12 +412,16 @@ function ConfirmPageContent() {
         time={time}
         staffName={multiProvider ? null : staffName}
         people={multiProviderGuests || people}
+        getQty={getQty}
       />
 
-      {quantity > 1 && (
+      {(Object.keys(perServiceQuantities).length > 0 || quantity > 1) && (
         <div style={{ marginTop: '1rem', padding: '1rem', background: '#e3f2fd', borderRadius: '8px', border: '1px solid #90caf9' }}>
           <p style={{ margin: 0, fontSize: '0.9rem' }}>
-            📋 <strong>{quantity}× {allServiceDetails[0]?.name || 'Service'}</strong> — {quantityMode === 'parallel' ? 'all at the same time (multiple staff)' : 'back-to-back with the same staff'}
+            📋 {Object.keys(perServiceQuantities).length > 0
+              ? allServiceDetails.filter(s => getQty(s) > 1).map(s => `${getQty(s)}× ${s.name}`).join(', ')
+              : `${quantity}× ${allServiceDetails[0]?.name || 'Service'}`
+            } — {quantityMode === 'parallel' ? 'all at the same time (multiple staff)' : 'back-to-back with the same staff'}
           </p>
         </div>
       )}

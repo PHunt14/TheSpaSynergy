@@ -26,7 +26,9 @@ export default function Services() {
     resourceType: 'staff',
     staffRestriction: 'all',
     allowedStaff: [],
-    parentServiceIds: []
+    parentServiceIds: [],
+    maxQuantityPerBooking: 1,
+    providersRequired: 1
   })
 
   useEffect(() => {
@@ -94,6 +96,8 @@ export default function Services() {
       resourceType: newService.resourceType,
       allowedStaff: newService.staffRestriction === 'all' ? null : newService.allowedStaff,
       parentServiceIds: newService.parentServiceIds.length > 0 ? newService.parentServiceIds : null,
+      maxQuantityPerBooking: newService.maxQuantityPerBooking,
+      providersRequired: newService.providersRequired,
       isActive: editingService ? editingService.isActive : true
     }
     
@@ -108,7 +112,7 @@ export default function Services() {
         alert(editingService ? 'Service updated successfully!' : 'Service added successfully!')
         setShowAddForm(false)
         setEditingService(null)
-        setNewService({ name: '', category: '', description: '', duration: 30, price: 0, requiresConsultation: false, cardPaymentDisabled: false, resourceType: 'staff', staffRestriction: 'all', allowedStaff: [], parentServiceIds: [] })
+        setNewService({ name: '', category: '', description: '', duration: 30, price: 0, requiresConsultation: false, cardPaymentDisabled: false, resourceType: 'staff', staffRestriction: 'all', allowedStaff: [], parentServiceIds: [], maxQuantityPerBooking: 1, providersRequired: 1 })
         const data = await fetch(`/api/services?vendorId=${selectedVendor}&includeInactive=true`).then(r => r.json())
         setServices(data.services || [])
       } else {
@@ -156,16 +160,18 @@ export default function Services() {
       resourceType: service.resourceType || 'staff',
       staffRestriction: (service.allowedStaff && service.allowedStaff.length > 0) ? 'specific' : 'all',
       allowedStaff: service.allowedStaff || [],
-      parentServiceIds: service.parentServiceIds || []
-    })
-    setShowAddForm(true)
-    setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
-  }
+      parentServiceIds: service.parentServiceIds || [],
+      maxQuantityPerBooking: service.maxQuantityPerBooking || 1,
+    providersRequired: service.providersRequired || 1
+  })
+  setShowAddForm(true)
+  setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
+}
 
   const handleCancelEdit = () => {
     setEditingService(null)
     setShowAddForm(false)
-    setNewService({ name: '', category: '', description: '', duration: 30, price: 0, requiresConsultation: false, cardPaymentDisabled: false, resourceType: 'staff', staffRestriction: 'all', allowedStaff: [], parentServiceIds: [] })
+    setNewService({ name: '', category: '', description: '', duration: 30, price: 0, requiresConsultation: false, cardPaymentDisabled: false, resourceType: 'staff', staffRestriction: 'all', allowedStaff: [], parentServiceIds: [], maxQuantityPerBooking: 1, providersRequired: 1 })
   }
 
   const handleDelete = async (service) => {
@@ -363,6 +369,48 @@ export default function Services() {
           </div>
 
           <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Max Quantity Per Booking</label>
+            <input
+              type="number"
+              min="1"
+              max="10"
+              value={newService.maxQuantityPerBooking}
+              onChange={(e) => setNewService({ ...newService, maxQuantityPerBooking: parseInt(e.target.value) || 1 })}
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                borderRadius: '8px',
+                border: '1px solid var(--color-border)',
+                fontSize: '1rem'
+              }}
+            />
+            <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.5rem' }}>
+              Allow customers to book multiple units at once (e.g., 3 haircuts for a family). Set to 1 to disable.
+            </p>
+          </div>
+
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Providers Required</label>
+            <input
+              type="number"
+              min="1"
+              max="10"
+              value={newService.providersRequired}
+              onChange={(e) => setNewService({ ...newService, providersRequired: parseInt(e.target.value) || 1 })}
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                borderRadius: '8px',
+                border: '1px solid var(--color-border)',
+                fontSize: '1rem'
+              }}
+            />
+            <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.5rem' }}>
+              Number of staff needed simultaneously (e.g., 2 for a couples service). Each provider gets their own appointment on their calendar.
+            </p>
+          </div>
+
+          <div style={{ marginBottom: '1rem' }}>
             <label style={{ display: 'block', marginBottom: '0.5rem' }}>Add-on of Service(s)</label>
             <select
               multiple
@@ -468,7 +516,12 @@ export default function Services() {
             </>
           )}
 
-          <button type="submit" className="cta">{editingService ? 'Update Service' : 'Save Service'}</button>
+          <div style={{ display: 'flex', gap: '1rem' }}>
+            <button type="submit" className="cta">{editingService ? 'Update Service' : 'Save Service'}</button>
+            {editingService && (
+              <button type="button" onClick={handleCancelEdit} style={{ padding: '0.75rem 1.5rem', borderRadius: '8px', border: '1px solid var(--color-border)', cursor: 'pointer', background: 'white', fontSize: '1rem' }}>Cancel</button>
+            )}
+          </div>
         </form>
       )}
 
@@ -508,6 +561,8 @@ export default function Services() {
               )}
               <p style={{ color: 'var(--color-text-light)', fontSize: '0.9rem' }}>
                 {service.category && `${service.category} • `}{service.duration} min • ${service.price}
+                {service.maxQuantityPerBooking > 1 && ` • 🔢 Up to ${service.maxQuantityPerBooking}`}
+                {service.providersRequired > 1 && ` • 👥 ${service.providersRequired} providers`}
                 {service.requiresConsultation && ' • ⚠️ Requires Consultation'}
                 {service.cardPaymentDisabled && ' • 💳 Card Payment Disabled'}
               </p>

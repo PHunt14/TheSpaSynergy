@@ -15,6 +15,7 @@ function BundleTimeContent() {
   const bundleId = params.get('bundleId')
   const serviceIds = params.get('services')?.split(',') || []
   const people = params.get('people')
+  const quantitiesParam = params.get('quantities')
 
   const [selectedDate, setSelectedDate] = useState(null)
   const [selectedTime, setSelectedTime] = useState(null)
@@ -24,6 +25,7 @@ function BundleTimeContent() {
   const [vendorInfo, setVendorInfo] = useState(null)
   const [bundle, setBundle] = useState(null)
   const [availableDates, setAvailableDates] = useState(null)
+  const [dataReady, setDataReady] = useState(false)
 
   const allowedDays = bundle?.allowedDays?.length > 0 ? bundle.allowedDays : null
 
@@ -64,6 +66,7 @@ function BundleTimeContent() {
       if (bundleId) {
         setBundle(bundleData.bundles?.find(b => b.bundleId === bundleId))
       }
+      setDataReady(true)
     })
   }, [])
 
@@ -72,15 +75,20 @@ function BundleTimeContent() {
     if (!vendorId || serviceIds.length === 0) return
     const month = date.getMonth() + 1
     const year = date.getFullYear()
-    fetch(`/api/available-dates?vendorId=${vendorId}&serviceId=${serviceIds[0]}&month=${month}&year=${year}`)
+    const daysParam = allowedDays ? `&allowedDays=${allowedDays.join(',')}` : ''
+    fetch(`/api/available-dates?vendorId=${vendorId}&serviceId=${serviceIds[0]}&month=${month}&year=${year}${daysParam}`)
       .then(res => res.json())
       .then(data => setAvailableDates(new Set(data.availableDates || [])))
       .catch(() => {})
   }
 
   useEffect(() => {
-    if (services.length > 0 && isBookingEnabled) fetchAvailableDates(selectedDate || new Date())
-  }, [services])
+    if (services.length > 0 && isBookingEnabled) {
+      // Wait for bundle to load if bundleId is present, so allowedDays can filter
+      if (bundleId && !bundle) return
+      fetchAvailableDates(selectedDate || new Date())
+    }
+  }, [services, bundle])
 
   const isDateAvailable = (date) => {
     if (allowedDays && !isAllowedDay(date)) return false
@@ -89,12 +97,18 @@ function BundleTimeContent() {
   }
 
   const getDayClassName = (date) => {
+    if (allowedDays && !isAllowedDay(date)) return 'unavailable-day'
     if (!availableDates) return ''
     return availableDates.has(date.toISOString().split('T')[0]) ? '' : 'unavailable-day'
   }
 
   useEffect(() => {
     if (!isBookingEnabled || serviceIds.length === 0 || !selectedDate) return
+    // Don't fetch times for disallowed days
+    if (allowedDays && !isAllowedDay(selectedDate)) {
+      setAvailableSlots([])
+      return
+    }
 
     setLoading(true)
     setSelectedTime(null)
@@ -136,17 +150,21 @@ function BundleTimeContent() {
 
       <div style={{ marginTop: '1.5rem' }}>
         <h3>Select Your Date</h3>
-        <div className="spa-datepicker">
-          <DatePicker
-            selected={selectedDate}
-            onChange={setSelectedDate}
-            onMonthChange={fetchAvailableDates}
-            minDate={new Date()}
-            filterDate={isDateAvailable}
-            dayClassName={getDayClassName}
-            inline
-          />
-        </div>
+        {!dataReady ? (
+          <p>Loading calendar...</p>
+        ) : (
+          <div className="spa-datepicker">
+            <DatePicker
+              selected={selectedDate}
+              onChange={setSelectedDate}
+              onMonthChange={fetchAvailableDates}
+              minDate={new Date()}
+              filterDate={isDateAvailable}
+              dayClassName={getDayClassName}
+              inline
+            />
+          </div>
+        )}
       </div>
 
       <div style={{ marginTop: '2rem' }}>
@@ -190,7 +208,7 @@ function BundleTimeContent() {
 
       {selectedTime && (
         <Link
-          href={`/booking/confirm?${bundleId ? `bundleId=${bundleId}&` : ''}services=${serviceIds.join(',')}&date=${selectedDate.toISOString()}&time=${selectedTime}${people ? `&people=${people}` : ''}`}
+          href={`/booking/confirm?${bundleId ? `bundleId=${bundleId}&` : ''}services=${serviceIds.join(',')}&date=${selectedDate.toISOString()}&time=${selectedTime}${people ? `&people=${people}` : ''}${quantitiesParam ? `&quantities=${quantitiesParam}` : ''}`}
           className="cta"
         >
           Continue

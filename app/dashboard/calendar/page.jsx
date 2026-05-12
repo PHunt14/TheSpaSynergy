@@ -290,6 +290,9 @@ function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onEdit, 
               {appointment.staffName && <p style={{ margin: 0 }}><strong>With:</strong> {appointment.staffName}</p>}
               {aptDate && <p style={{ margin: 0 }}><strong>Time:</strong> {formatTime(aptDate)}</p>}
               {aptDate && <p style={{ margin: 0 }}><strong>Date:</strong> {aptDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>}
+              {(appointment.groupId || appointment.bundleId) && (
+                <p style={{ margin: 0 }}><strong>{appointment.bundleId ? '📦 Bundle' : '🔗 Group'}:</strong> This is part of a multi-appointment booking</p>
+              )}
               <p style={{ margin: 0 }}><strong>Status:</strong> <span style={{
                 padding: '0.15rem 0.5rem', borderRadius: '8px', fontSize: '0.85rem',
                 background: appointment.status === 'confirmed' ? '#d4edda' : appointment.status === 'cancelled' ? '#f8d7da' : '#fff3cd',
@@ -606,7 +609,7 @@ function MonthView({ currentDate, appointments, onAppointmentClick }) {
 
 // ── New Appointment / Block Time Modal ────────────────────────
 
-function NewAppointmentModal({ dateTime, vendorId, onClose, onCreated }) {
+function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, onClose, onCreated }) {
   const [mode, setMode] = useState('appointment') // 'appointment' or 'block'
   const [form, setForm] = useState({
     customerName: '',
@@ -618,7 +621,7 @@ function NewAppointmentModal({ dateTime, vendorId, onClose, onCreated }) {
   const [services, setServices] = useState([])
   const [staffList, setStaffList] = useState([])
   const [serviceId, setServiceId] = useState('')
-  const [staffId, setStaffId] = useState('')
+  const [staffId, setStaffId] = useState(defaultStaffId || '')
   const [duration, setDuration] = useState(60)
   const [submitting, setSubmitting] = useState(false)
 
@@ -766,6 +769,8 @@ export default function Calendar() {
   const [userVendorId, setUserVendorId] = useState(null)
   const [userRole, setUserRole] = useState(null)
   const [vendors, setVendors] = useState([])
+  const [allStaff, setAllStaff] = useState([])
+  const [selectedStaffId, setSelectedStaffId] = useState(null)
   const [view, setView] = useState('week')
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedAppointment, setSelectedAppointment] = useState(null)
@@ -832,32 +837,37 @@ export default function Calendar() {
     }
   }
 
+  // Load all staff and vendors for the staff selector
   useEffect(() => {
-    if (userRole === 'admin') {
-      fetch('/api/vendors')
-        .then(res => res.json())
-        .then(data => {
-          setVendors(data.vendors || [])
-          if (!userVendorId && data.vendors?.length > 0) {
-            setUserVendorId(data.vendors[0].vendorId)
-          }
-        })
-    }
+    if (!userRole) return
+    Promise.all([
+      fetch('/api/staff-schedules').then(r => r.json()),
+      fetch('/api/vendors').then(r => r.json())
+    ]).then(([staffData, vendorData]) => {
+      const staff = (staffData.schedules || []).filter(s => s.isActive !== false)
+      setAllStaff(staff)
+      setVendors(vendorData.vendors || [])
+      // Default to the current user's staff record, or first staff member
+      if (!selectedStaffId) {
+        const myStaff = userVendorId ? staff.find(s => s.vendorId === userVendorId) : null
+        setSelectedStaffId(myStaff?.visibleId || staff[0]?.visibleId || null)
+      }
+    })
   }, [userRole])
 
   useEffect(() => {
-    if (userVendorId) {
+    if (selectedStaffId) {
       loadAppointments()
     }
-  }, [userVendorId, currentDate, view])
+  }, [selectedStaffId, currentDate, view])
 
   const loadAppointments = () => {
-    if (!userVendorId) return
+    if (!selectedStaffId) return
     setLoading(true)
 
     const { start, end } = getDateRangeForView(view, currentDate)
     const params = new URLSearchParams({
-      vendorId: userVendorId,
+      staffId: selectedStaffId,
       startDate: start.toISOString(),
       endDate: end.toISOString(),
     })
@@ -905,7 +915,15 @@ export default function Calendar() {
   // Time slots for the grid
   const timeSlots = useMemo(() => generateTimeSlots(startHour, endHour), [startHour, endHour])
 
-  if (!userVendorId) return <div style={{ padding: '2rem' }}>Loading...</div>
+  if (!userRole || allStaff.length === 0) return <div style={{ padding: '2rem' }}>Loading...</div>
+
+  // Group staff by vendor for the selector
+  const staffByVendor = vendors.reduce((acc, v) => {
+    acc[v.vendorId] = allStaff.filter(s => s.vendorId === v.vendorId)
+    return acc
+  }, {})
+  const selectedStaffRecord = allStaff.find(s => s.visibleId === selectedStaffId)
+  const selectedStaffVendorId = selectedStaffRecord?.vendorId || userVendorId || vendors[0]?.vendorId
 
   return (
     <div>
@@ -918,17 +936,23 @@ export default function Calendar() {
           </button>
         </div>
         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
-          {userRole === 'admin' && vendors.length > 0 && (
-            <select
-              value={userVendorId || ''}
-              onChange={(e) => setUserVendorId(e.target.value)}
-              style={{ padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '0.9rem' }}
-            >
-              {vendors.map(vendor => (
-                <option key={vendor.vendorId} value={vendor.vendorId}>{vendor.name}</option>
-              ))}
-            </select>
-          )}
+          <select
+            value={selectedStaffId || ''}
+            onChange={(e) => setSelectedStaffId(e.target.value)}
+            style={{ padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '0.9rem' }}
+          >
+            {vendors.map(vendor => {
+              const vendorStaff = staffByVendor[vendor.vendorId] || []
+              if (vendorStaff.length === 0) return null
+              return (
+                <optgroup key={vendor.vendorId} label={vendor.name}>
+                  {vendorStaff.map(s => (
+                    <option key={s.visibleId} value={s.visibleId}>{s.staffName}</option>
+                  ))}
+                </optgroup>
+              )
+            })}
+          </select>
           <div style={{ display: 'flex', background: 'var(--color-accent)', borderRadius: '8px', padding: '3px' }}>
             {['day', 'week', 'month'].map(v => (
               <button
@@ -1067,7 +1091,7 @@ export default function Calendar() {
           onConfirm={handleConfirm}
           onCancel={handleCancel}
           onEdit={handleReschedule}
-          vendorId={userVendorId}
+          vendorId={selectedStaffVendorId}
         />
       )}
 
@@ -1075,7 +1099,8 @@ export default function Calendar() {
       {newAppointmentDateTime && (
         <NewAppointmentModal
           dateTime={newAppointmentDateTime}
-          vendorId={userVendorId}
+          vendorId={selectedStaffVendorId}
+          defaultStaffId={selectedStaffId}
           onClose={() => setNewAppointmentDateTime(null)}
           onCreated={loadAppointments}
         />

@@ -113,6 +113,7 @@ export default function ServicesPage() {
   const [services, setServices] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedServices, setSelectedServices] = useState([])
+  const [quantities, setQuantities] = useState({})
   const [categoryFilter, setCategoryFilter] = useState('All')
 
   const [allServicesRaw, setAllServicesRaw] = useState([])
@@ -141,15 +142,17 @@ export default function ServicesPage() {
   const MAX_SERVICES = 4
 
   const toggleService = (service) => {
-    setSelectedServices(prev =>
-      prev.find(s => s.serviceId === service.serviceId)
-        ? prev.filter(s => s.serviceId !== service.serviceId)
-        : prev.length >= MAX_SERVICES ? prev : [...prev, service]
-    )
+    setSelectedServices(prev => {
+      if (prev.find(s => s.serviceId === service.serviceId)) {
+        setQuantities(q => { const next = { ...q }; delete next[service.serviceId]; return next })
+        return prev.filter(s => s.serviceId !== service.serviceId)
+      }
+      return prev.length >= MAX_SERVICES ? prev : [...prev, service]
+    })
   }
 
-  const totalPrice = selectedServices.reduce((sum, s) => sum + s.price, 0)
-  const totalDuration = selectedServices.reduce((sum, s) => sum + s.duration, 0)
+  const totalPrice = selectedServices.reduce((sum, s) => sum + s.price * (quantities[s.serviceId] || 1), 0)
+  const totalDuration = selectedServices.reduce((sum, s) => sum + s.duration * (quantities[s.serviceId] || 1), 0)
 
   const [showDisabled, setShowDisabled] = useState(false)
 
@@ -157,9 +160,15 @@ export default function ServicesPage() {
     if (!isBookingEnabled) { setShowDisabled(true); return }
     if (selectedServices.length === 1) {
       const s = selectedServices[0]
-      router.push(`/booking/time?vendor=${s.vendorId}&service=${s.serviceId}`)
+      const qty = quantities[s.serviceId] || 1
+      const quantityParam = qty > 1 ? `&quantity=${qty}` : ''
+      router.push(`/booking/time?vendor=${s.vendorId}&service=${s.serviceId}${quantityParam}`)
     } else {
-      router.push(`/booking/bundle-time?services=${selectedServices.map(s => s.serviceId).join(',')}`)
+      const qtyParams = selectedServices
+        .filter(s => (quantities[s.serviceId] || 1) > 1)
+        .map(s => `${s.serviceId}:${quantities[s.serviceId]}`)
+      const qtyParam = qtyParams.length > 0 ? `&quantities=${qtyParams.join(',')}` : ''
+      router.push(`/booking/bundle-time?services=${selectedServices.map(s => s.serviceId).join(',')}${qtyParam}`)
     }
   }
 
@@ -301,21 +310,47 @@ export default function ServicesPage() {
           background: 'white',
           borderTop: '2px solid var(--color-primary)',
           padding: '1rem 2rem',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
           zIndex: 1000,
           boxShadow: '0 -4px 12px rgba(0,0,0,0.1)',
         }}>
-          <div>
-            <strong>{selectedServices.length} service{selectedServices.length > 1 ? 's' : ''} selected</strong>
-            <span style={{ color: 'var(--color-text-light)', marginLeft: '1rem' }}>
-              {totalDuration} min • ${totalPrice.toFixed(2)}
-            </span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <strong>{selectedServices.length} service{selectedServices.length > 1 ? 's' : ''} selected</strong>
+              <span style={{ color: 'var(--color-text-light)', marginLeft: '1rem' }}>
+                {totalDuration} min • ${totalPrice.toFixed(2)}
+              </span>
+            </div>
+            <button onClick={handleContinue} className="cta" style={{ margin: 0 }}>
+              Continue to Booking →
+            </button>
           </div>
-          <button onClick={handleContinue} className="cta" style={{ margin: 0 }}>
-            Continue to Booking →
-          </button>
+          {selectedServices.some(s => (s.maxQuantityPerBooking || 1) > 1) && (
+            <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid var(--color-border)', display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
+              {selectedServices.filter(s => (s.maxQuantityPerBooking || 1) > 1).map(s => {
+                const qty = quantities[s.serviceId] || 1
+                const maxQty = s.maxQuantityPerBooking
+                return (
+                  <div key={s.serviceId} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem' }}>
+                    <span>{s.name}:</span>
+                    <button
+                      type="button"
+                      onClick={() => setQuantities(prev => ({ ...prev, [s.serviceId]: Math.max(1, qty - 1) }))}
+                      disabled={qty <= 1}
+                      style={{ width: '28px', height: '28px', borderRadius: '50%', border: '1px solid var(--color-border)', background: 'white', cursor: qty <= 1 ? 'not-allowed' : 'pointer', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >−</button>
+                    <span style={{ fontWeight: 600, minWidth: '20px', textAlign: 'center' }}>{qty}</span>
+                    <button
+                      type="button"
+                      onClick={() => setQuantities(prev => ({ ...prev, [s.serviceId]: Math.min(maxQty, qty + 1) }))}
+                      disabled={qty >= maxQty}
+                      style={{ width: '28px', height: '28px', borderRadius: '50%', border: '1px solid var(--color-border)', background: 'white', cursor: qty >= maxQty ? 'not-allowed' : 'pointer', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >+</button>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--color-text-light)' }}>(max {maxQty})</span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       )}
     </div>

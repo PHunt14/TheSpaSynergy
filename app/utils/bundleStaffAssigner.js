@@ -108,41 +108,67 @@ export function assignBundleStaff({
     const service = orderedServices[i]
     const serviceSchedule = schedule[i]
     const eligible = eligibleByService[i]
+    const providersNeeded = service.providersRequired || 1
 
     // Filter out staff that would cause intra-bundle conflicts
     const nonConflicting = eligible.filter(staff =>
       !hasIntraBundleConflict(staff.visibleId, serviceSchedule.startTime, serviceSchedule.endTime, assignedSlots, bufferMinutes)
     )
 
-    if (nonConflicting.length < (service.providersRequired || 1)) {
+    if (nonConflicting.length < providersNeeded) {
       throw new Error(
-        `Cannot assign staff for service ${service.serviceId}: no staff available without intra-bundle conflicts`
+        `Cannot assign staff for service ${service.serviceId}: need ${providersNeeded}, found ${nonConflicting.length} without intra-bundle conflicts`
       )
     }
 
     // Prefer auto-assign staff
     const sorted = sortByAutoAssign(nonConflicting, dayOfWeek)
-    const chosenStaff = sorted[0]
 
-    assignments[i] = {
-      serviceId: service.serviceId,
-      staffId: chosenStaff.visibleId,
-      vendorId: service.vendorId,
-      staffName: chosenStaff.name || '',
-      startTime: serviceSchedule.startTime,
-      endTime: serviceSchedule.endTime
+    if (providersNeeded === 1) {
+      const chosenStaff = sorted[0]
+      assignments[i] = {
+        serviceId: service.serviceId,
+        staffId: chosenStaff.visibleId,
+        vendorId: service.vendorId,
+        staffName: chosenStaff.name || '',
+        startTime: serviceSchedule.startTime,
+        endTime: serviceSchedule.endTime
+      }
+      assignedSlots.push({
+        staffId: chosenStaff.visibleId,
+        startTime: serviceSchedule.startTime,
+        endTime: serviceSchedule.endTime
+      })
+    } else {
+      // Multi-provider: assign multiple staff to the same time slot
+      const multiAssignment = []
+      for (let p = 0; p < providersNeeded; p++) {
+        const chosenStaff = sorted[p]
+        multiAssignment.push({
+          serviceId: service.serviceId,
+          staffId: chosenStaff.visibleId,
+          vendorId: chosenStaff.vendorId || service.vendorId,
+          staffName: chosenStaff.name || '',
+          startTime: serviceSchedule.startTime,
+          endTime: serviceSchedule.endTime
+        })
+        assignedSlots.push({
+          staffId: chosenStaff.visibleId,
+          startTime: serviceSchedule.startTime,
+          endTime: serviceSchedule.endTime
+        })
+      }
+      // Store as array — will be flattened later
+      assignments[i] = multiAssignment
     }
-    assignedSlots.push({
-      staffId: chosenStaff.visibleId,
-      startTime: serviceSchedule.startTime,
-      endTime: serviceSchedule.endTime
-    })
   }
 
-  // 5. Final verification: no intra-bundle staff conflicts
-  verifyNoIntraBundleConflicts(assignments, bufferMinutes)
+  // 5. Flatten multi-provider assignments and verify no intra-bundle conflicts
+  const flatAssignments = assignments.flat()
 
-  return assignments
+  verifyNoIntraBundleConflicts(flatAssignments, bufferMinutes)
+
+  return flatAssignments
 }
 
 // ─── Internal Helpers ────────────────────────────────────────────────────────
