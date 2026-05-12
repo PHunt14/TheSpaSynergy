@@ -578,10 +578,11 @@ describe('assignBundleStaff - multi-provider service', () => {
       bufferMinutes: 15,
     })
 
-    expect(result).toHaveLength(2)
+    expect(result).toHaveLength(3)
     expect(result[0].vendorId).toBe('vendor-a')
-    expect(result[1].vendorId).toBe('vendor-b')
-    expect(result[1].staffId).toBe('staff-4')
+    expect(result[1].vendorId).toBe('vendor-a')
+    expect(result[2].vendorId).toBe('vendor-b')
+    expect(result[2].staffId).toBe('staff-4')
   })
 
   test('throws when fewer staff available than providersRequired', () => {
@@ -642,8 +643,10 @@ describe('assignBundleStaff - multi-provider service', () => {
     })
 
     // Should still succeed since 2 staff (staff-2, staff-3) are available
-    expect(result).toHaveLength(1)
+    expect(result).toHaveLength(2)
     expect(['staff-2', 'staff-3']).toContain(result[0].staffId)
+    expect(['staff-2', 'staff-3']).toContain(result[1].staffId)
+    expect(result[0].staffId).not.toBe(result[1].staffId)
   })
 })
 
