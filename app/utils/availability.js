@@ -176,3 +176,155 @@ export function formatTime(hour, min) {
   else if (hour === 0) displayHour = 12
   return `${displayHour}:${min.toString().padStart(2, '0')} ${period}`
 }
+
+/**
+ * Computes available time slots for a multi-provider service where at least
+ * `providersRequired` staff must be simultaneously free for the full service duration.
+ *
+ * Pure function — no I/O, no side effects.
+ *
+ * @param {Object} params
+ * @param {Object} params.service - Service with duration, providersRequired, allowedStaff
+ * @param {Array} params.staffSchedules - Staff schedule records (visibleId, isActive, schedule, autoAssignRules, vendorId)
+ * @param {Array} params.appointments - Existing appointments for the date (dateTime, staffId, customer, status)
+ * @param {string} params.date - Date string in YYYY-MM-DD format
+ * @param {number} params.bufferMinutes - Buffer minutes between appointments
+ * @returns {Array} Array of available time slot objects { time, display }
+ */
+export function getMultiProviderSlots({ service, staffSchedules, appointments, date, bufferMinutes }) {
+  const providersRequired = service.providersRequired || 1
+  const allowedStaff = service.allowedStaff || []
+  const duration = service.duration
+
+  // 1. Filter staff to those in allowedStaff and active
+  const eligibleStaff = staffSchedules.filter(staff =>
+    staff.isActive && (allowedStaff.length === 0 || allowedStaff.includes(staff.visibleId))
+  )
+
+  if (eligibleStaff.length < providersRequired) {
+    return []
+  }
+
+  const requestedDate = new Date(date + 'T00:00:00')
+  const dayOfWeek = DAY_NAMES[requestedDate.getDay()]
+
+  // 2. Compute per-staff available time ranges
+  const staffAvailability = []
+  for (const staff of eligibleStaff) {
+    const hours = getStaffWorkingHours(staff, dayOfWeek, requestedDate)
+    if (!hours) continue
+
+    const staffAppointments = appointments.filter(apt =>
+      apt.status !== 'cancelled' && apt.staffId === staff.visibleId
+    )
+
+    staffAvailability.push({
+      staffId: staff.visibleId,
+      hours,
+      appointments: staffAppointments
+    })
+  }
+
+  if (staffAvailability.length < providersRequired) {
+    return []
+  }
+
+  // 3. Find 30-minute-aligned slots where at least providersRequired staff are free
+  const slots = []
+  // Determine the overall time range to scan (earliest start to latest end across all staff)
+  let earliestStart = Infinity
+  let latestEnd = 0
+  for (const sa of staffAvailability) {
+    const startMin = timeToMinutes(sa.hours.start)
+    const endMin = timeToMinutes(sa.hours.end)
+    if (startMin < earliestStart) earliestStart = startMin
+    if (endMin > latestEnd) latestEnd = endMin
+  }
+
+  let currentMinutes = earliestStart
+  // Align to 30-minute boundary
+  if (currentMinutes % 30 !== 0) {
+    currentMinutes = Math.ceil(currentMinutes / 30) * 30
+  }
+
+  while (currentMinutes + duration <= latestEnd) {
+    // Count how many staff are free for the full service duration at this slot
+    let freeCount = 0
+    for (const sa of staffAvailability) {
+      const staffStart = timeToMinutes(sa.hours.start)
+      const staffEnd = timeToMinutes(sa.hours.end)
+
+      // Check if slot fits within this staff's working hours
+      if (currentMinutes < staffStart || currentMinutes + duration > staffEnd) {
+        continue
+      }
+
+      // Check if slot conflicts with any of this staff's appointments
+      const hasConflict = sa.appointments.some(apt => {
+        const aptTime = extractTimeFromDateTime(apt.dateTime)
+        const aptStart = timeToMinutes(aptTime)
+        const customer = typeof apt.customer === 'string' ? JSON.parse(apt.customer) : apt.customer
+        const aptDuration = (customer?.isBlockedTime && customer?.duration) ? customer.duration : duration
+        const aptEnd = aptStart + aptDuration + bufferMinutes
+
+        const slotStart = currentMinutes
+        const slotEnd = slotStart + duration + bufferMinutes
+
+        return slotStart < aptEnd && slotEnd > aptStart
+      })
+
+      if (!hasConflict) {
+        freeCount++
+      }
+    }
+
+    if (freeCount >= providersRequired) {
+      const hour = Math.floor(currentMinutes / 60)
+      const min = currentMinutes % 60
+      const timeString = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`
+      slots.push({
+        time: timeString,
+        display: formatTime(hour, min)
+      })
+    }
+
+    currentMinutes += 30
+  }
+
+  return slots
+}
+
+/**
+ * Gets working hours for a staff member on a specific day, handling recurrence rules.
+ */
+function getStaffWorkingHours(staff, dayOfWeek, requestedDate) {
+  if (!staff.schedule) return null
+  const schedule = typeof staff.schedule === 'string' ? JSON.parse(staff.schedule) : staff.schedule
+  const daySchedule = schedule[dayOfWeek]
+  if (!daySchedule) return null
+
+  if (daySchedule.recurrence) {
+    return getRecurrenceHours(daySchedule, requestedDate)
+  }
+
+  return daySchedule.start ? { start: daySchedule.start, end: daySchedule.end } : null
+}
+
+/**
+ * Converts a time string "HH:MM" to minutes since midnight.
+ */
+function timeToMinutes(timeStr) {
+  const [h, m] = timeStr.split(':').map(Number)
+  return h * 60 + m
+}
+
+/**
+ * Extracts the time portion (HH:MM) from a dateTime string.
+ * Handles both "2024-01-15T09:00" and "2024-01-15 09:00" formats.
+ */
+function extractTimeFromDateTime(dateTime) {
+  if (dateTime.includes('T')) {
+    return dateTime.split('T')[1].substring(0, 5)
+  }
+  return dateTime.split(' ')[1]
+}

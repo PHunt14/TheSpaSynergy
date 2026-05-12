@@ -12,6 +12,7 @@ import {
   calculatePaymentSplits,
   calculateVendorNet,
   formatPaymentSplits,
+  calculateMultiProviderSplit,
 } from '../../app/utils/payment.js'
 
 // ── calculatePaymentSplits ────────────────────────────────────
@@ -158,5 +159,118 @@ describe('formatPaymentSplits', () => {
 
   test('handles empty splits', () => {
     expect(formatPaymentSplits([], [])).toBe('')
+  })
+})
+
+
+// ── calculateMultiProviderSplit ───────────────────────────────
+
+describe('calculateMultiProviderSplit', () => {
+  const assignedStaff = [
+    { staffId: 'staff-1', vendorId: 'vendor-a', staffName: 'Alice' },
+    { staffId: 'staff-2', vendorId: 'vendor-b', staffName: 'Bob' },
+  ]
+
+  test('equal split with house fee', () => {
+    const service = {
+      price: 200,
+      providersRequired: 2,
+      paymentSplitRules: { type: 'equal', houseFeeEnabled: true, houseFeeAmount: 40 },
+    }
+    const result = calculateMultiProviderSplit({
+      service,
+      assignedStaff,
+      houseVendorId: 'vendor-house',
+    })
+    expect(result.total).toBe(200)
+    expect(result.houseFee).toBe(40)
+    expect(result.providerShares).toHaveLength(2)
+    expect(result.providerShares[0].amount).toBe(80) // (200-40)/2
+    expect(result.providerShares[1].amount).toBe(80)
+    expect(result.providerShares[0].vendorId).toBe('vendor-a')
+    expect(result.providerShares[1].vendorId).toBe('vendor-b')
+  })
+
+  test('equal split without house fee', () => {
+    const service = {
+      price: 200,
+      providersRequired: 2,
+      paymentSplitRules: { type: 'equal', houseFeeEnabled: false },
+    }
+    const result = calculateMultiProviderSplit({
+      service,
+      assignedStaff,
+      houseVendorId: 'vendor-house',
+    })
+    expect(result.total).toBe(200)
+    expect(result.houseFee).toBe(0)
+    expect(result.providerShares[0].amount).toBe(100)
+    expect(result.providerShares[1].amount).toBe(100)
+  })
+
+  test('custom percentage splits', () => {
+    const service = {
+      price: 300,
+      providersRequired: 2,
+      paymentSplitRules: { type: 'percentage', houseFeeEnabled: true, houseFeeAmount: 60, percentages: [60, 40] },
+    }
+    const result = calculateMultiProviderSplit({
+      service,
+      assignedStaff,
+      houseVendorId: 'vendor-house',
+    })
+    expect(result.total).toBe(300)
+    expect(result.houseFee).toBe(60)
+    // Remainder = 240, 60% = 144, 40% = 96
+    expect(result.providerShares[0].amount).toBe(144)
+    expect(result.providerShares[1].amount).toBe(96)
+  })
+
+  test('sum of all shares equals total minus house fee', () => {
+    const service = {
+      price: 250,
+      providersRequired: 2,
+      paymentSplitRules: { type: 'equal', houseFeeEnabled: true, houseFeeAmount: 50 },
+    }
+    const result = calculateMultiProviderSplit({
+      service,
+      assignedStaff,
+      houseVendorId: 'vendor-house',
+    })
+    const sharesSum = result.providerShares.reduce((sum, s) => sum + s.amount, 0)
+    expect(sharesSum + result.houseFee).toBe(result.total)
+  })
+
+  test('no paymentSplitRules defaults to equal split with no house fee', () => {
+    const service = {
+      price: 200,
+      providersRequired: 2,
+      paymentSplitRules: null,
+    }
+    const result = calculateMultiProviderSplit({
+      service,
+      assignedStaff,
+      houseVendorId: 'vendor-house',
+    })
+    expect(result.houseFee).toBe(0)
+    expect(result.providerShares[0].amount).toBe(100)
+    expect(result.providerShares[1].amount).toBe(100)
+  })
+
+  test('staffId and vendorId are correctly mapped', () => {
+    const service = {
+      price: 100,
+      providersRequired: 2,
+      paymentSplitRules: { type: 'equal' },
+    }
+    const result = calculateMultiProviderSplit({
+      service,
+      assignedStaff,
+      houseVendorId: 'vendor-house',
+    })
+    expect(result.providerShares[0].staffId).toBe('staff-1')
+    expect(result.providerShares[0].vendorId).toBe('vendor-a')
+    expect(result.providerShares[1].staffId).toBe('staff-2')
+    expect(result.providerShares[1].vendorId).toBe('vendor-b')
   })
 })

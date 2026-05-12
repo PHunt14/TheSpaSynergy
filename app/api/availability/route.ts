@@ -2,7 +2,8 @@ import { generateServerClientUsingCookies } from '@aws-amplify/adapter-nextjs/da
 import { cookies } from 'next/headers';
 import type { Schema } from '../../../amplify/data/resource';
 import config from '../../../amplify_outputs.json' with { type: 'json' };
-import { getRecurrenceHours, generateTimeSlots } from '../../utils/availability.js';
+import { getRecurrenceHours, generateTimeSlots, getMultiProviderSlots } from '../../utils/availability.js';
+import { getParallelQuantitySlots, getSequentialQuantitySlots } from '../../utils/quantityAvailability.js';
 
 const client = generateServerClientUsingCookies<Schema>({
   config,
@@ -48,6 +49,22 @@ export async function GET(request: Request) {
     if (vendorUntil && new Date(vendorUntil) > new Date()) {
       return Response.json({ availableSlots: [], bookingDisabled: true, disabledUntil: vendorUntil });
     }
+
+    // Multi-provider availability path
+    const multiProvider = searchParams.get('multiProvider');
+    if (multiProvider === 'true' || (service.providersRequired && service.providersRequired > 1)) {
+      return await handleMultiProviderAvailability(service, date, vendor);
+    }
+
+    // Multi-quantity availability path
+    const quantityParam = searchParams.get('quantity');
+    const quantity = quantityParam ? parseInt(quantityParam) : 1;
+    const mode = searchParams.get('mode') || 'sequential'; // 'parallel' or 'sequential'
+
+    if (quantity > 1) {
+      return await handleQuantityAvailability(service, date, vendor, quantity, mode);
+    }
+
     const isSauna = (service.resourceType || 'staff') === 'sauna';
 
     const requestedDate = new Date(date + 'T00:00:00');
@@ -66,12 +83,17 @@ export async function GET(request: Request) {
     }
 
     // Get existing appointments for conflict checking
-    const { data: allAppointments } = await client.models.Appointment.list({
-      filter: {
-        vendorId: { eq: vendorId },
-        dateTime: { beginsWith: date }
-      }
-    });
+    let allAppointments: any[] = [];
+    let nextToken: string | undefined;
+    do {
+      const result = await client.models.Appointment.listAppointmentByVendorIdAndDateTime({
+        vendorId,
+        dateTime: { beginsWith: date },
+        ...(nextToken ? { nextToken } : {})
+      } as any);
+      allAppointments = allAppointments.concat(result.data || []);
+      nextToken = (result as any).nextToken;
+    } while (nextToken);
 
     // Filter by resource type — sauna appointments don't block staff and vice versa
     const relevantAppointments = await filterRelevantAppointments(allAppointments || [], isSauna, assignedStaff, serviceId, excludeAppointmentId);
@@ -159,4 +181,135 @@ async function resolveStaff(vendorId: string, dayOfWeek: string, requestedDate: 
     if (daySchedule.recurrence) return !!getRecurrenceHours(daySchedule, requestedDate)?.start;
     return !!daySchedule.start;
   }) || null;
+}
+
+async function handleMultiProviderAvailability(service: any, date: string, vendor: any) {
+  let allowedStaff = (service.allowedStaff as string[]) || [];
+
+  // If allowedStaff is empty (null = all staff), fetch all active staff across all vendors
+  if (allowedStaff.length === 0) {
+    const { data: allStaff } = await client.models.StaffSchedule.list();
+    allowedStaff = (allStaff || []).filter((s: any) => s.isActive !== false).map((s: any) => s.visibleId);
+  }
+
+  if (allowedStaff.length === 0) {
+    return Response.json({ availableSlots: [] });
+  }
+
+  // Fetch staff schedules for ALL staff in service.allowedStaff
+  // Staff may span multiple vendors, so fetch each individually
+  const staffSchedulePromises = allowedStaff.map(staffId =>
+    client.models.StaffSchedule.get({ visibleId: staffId } as any)
+  );
+  const staffScheduleResults = await Promise.all(staffSchedulePromises);
+
+  const staffSchedules = staffScheduleResults
+    .filter(result => !result.errors && result.data)
+    .map(result => result.data);
+
+  if (staffSchedules.length === 0) {
+    return Response.json({ availableSlots: [] });
+  }
+
+  // Collect unique vendorIds from the staff schedules to fetch appointments
+  const vendorIds = [...new Set(staffSchedules.map((s: any) => s.vendorId).filter(Boolean))];
+
+  // Fetch appointments for ALL those staff members on the requested date
+  const appointmentPromises = vendorIds.map(vid =>
+    client.models.Appointment.listAppointmentByVendorIdAndDateTime({
+      vendorId: vid,
+      dateTime: { beginsWith: date }
+    } as any)
+  );
+  const appointmentResults = await Promise.all(appointmentPromises);
+
+  const allAppointments = appointmentResults
+    .flatMap(result => (result as any).data || [])
+    .filter(apt => apt.status !== 'cancelled' && allowedStaff.includes(apt.staffId));
+
+  // Call getMultiProviderSlots
+  const slots = getMultiProviderSlots({
+    service,
+    staffSchedules,
+    appointments: allAppointments,
+    date,
+    bufferMinutes: vendor.bufferMinutes || 15
+  });
+
+  return Response.json({ availableSlots: slots });
+}
+
+async function handleQuantityAvailability(service: any, date: string, vendor: any, quantity: number, mode: string) {
+  const allowedStaff = (service.allowedStaff as string[]) || [];
+
+  if (allowedStaff.length === 0) {
+    return Response.json({ availableSlots: [] });
+  }
+
+  // Enforce maxQuantityPerBooking
+  const maxQuantity = service.maxQuantityPerBooking || 1;
+  if (quantity > maxQuantity) {
+    return Response.json({ error: `Maximum quantity for this service is ${maxQuantity}` }, { status: 400 });
+  }
+
+  // Fetch staff schedules
+  const staffSchedulePromises = allowedStaff.map(staffId =>
+    client.models.StaffSchedule.get({ visibleId: staffId } as any)
+  );
+  const staffScheduleResults = await Promise.all(staffSchedulePromises);
+
+  const staffSchedules = staffScheduleResults
+    .filter(result => !result.errors && result.data)
+    .map(result => result.data);
+
+  if (staffSchedules.length === 0) {
+    return Response.json({ availableSlots: [] });
+  }
+
+  // Collect unique vendorIds to fetch appointments
+  const vendorIds = [...new Set(staffSchedules.map((s: any) => s.vendorId).filter(Boolean))];
+
+  const appointmentPromises = vendorIds.map(vid =>
+    client.models.Appointment.listAppointmentByVendorIdAndDateTime({
+      vendorId: vid,
+      dateTime: { beginsWith: date }
+    } as any)
+  );
+  const appointmentResults = await Promise.all(appointmentPromises);
+
+  const allAppointments = appointmentResults
+    .flatMap(result => (result as any).data || [])
+    .filter(apt => apt.status !== 'cancelled' && allowedStaff.includes(apt.staffId));
+
+  const bufferMinutes = vendor.bufferMinutes || 15;
+
+  let slots;
+  if (mode === 'parallel') {
+    slots = getParallelQuantitySlots({
+      service,
+      quantity,
+      staffSchedules,
+      appointments: allAppointments,
+      date,
+      bufferMinutes
+    });
+  } else {
+    slots = getSequentialQuantitySlots({
+      service,
+      quantity,
+      staffSchedules,
+      appointments: allAppointments,
+      date,
+      bufferMinutes
+    });
+  }
+
+  return Response.json({
+    availableSlots: slots,
+    quantity,
+    mode,
+    totalDuration: mode === 'parallel'
+      ? service.duration
+      : (quantity * service.duration) + ((quantity - 1) * bufferMinutes)
+  });
 }

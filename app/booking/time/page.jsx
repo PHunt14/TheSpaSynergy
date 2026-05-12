@@ -11,6 +11,9 @@ function TimePageContent() {
   const params = useSearchParams()
   const service = params.get('service')
   const vendor = params.get('vendor')
+  const multiProvider = params.get('multiProvider') === 'true'
+  const quantityParam = params.get('quantity')
+  const quantity = quantityParam ? parseInt(quantityParam) : 1
 
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [selectedTime, setSelectedTime] = useState(null)
@@ -22,6 +25,7 @@ function TimePageContent() {
   const [bookingBlocked, setBookingBlocked] = useState(false)
   const [disabledUntil, setDisabledUntil] = useState(null)
   const [availableDates, setAvailableDates] = useState(null)
+  const [quantityMode, setQuantityMode] = useState('sequential')
 
   useEffect(() => {
     if (!service || !vendor) return
@@ -79,7 +83,9 @@ function TimePageContent() {
 
     const dateStr = selectedDate.toISOString().split('T')[0] // YYYY-MM-DD
 
-    fetch(`/api/availability?vendorId=${vendor}&serviceId=${service}&date=${dateStr}`)
+    const multiProviderParam = multiProvider ? '&multiProvider=true' : ''
+    const quantityParams = quantity > 1 ? `&quantity=${quantity}&mode=${quantityMode}` : ''
+    fetch(`/api/availability?vendorId=${vendor}&serviceId=${service}&date=${dateStr}${multiProviderParam}${quantityParams}`)
       .then(res => res.json())
       .then(data => {
         if (data.bookingDisabled) {
@@ -89,14 +95,14 @@ function TimePageContent() {
         } else {
           setAvailableSlots(data.availableSlots || [])
         }
-        setAssignedStaff(data.assignedStaff || null)
+        setAssignedStaff(multiProvider ? null : (data.assignedStaff || null))
         setLoading(false)
       })
       .catch(err => {
         console.error('Error loading availability:', err)
         setLoading(false)
       })
-  }, [vendor, service, selectedDate])
+  }, [vendor, service, selectedDate, quantityMode])
 
   if (!isBookingEnabled || bookingBlocked) return <BookingDisabled phone={vendorInfo?.phone} vendorName={vendorInfo?.name} disabledUntil={disabledUntil} />
 
@@ -106,7 +112,7 @@ function TimePageContent() {
       {serviceInfo && (
         <>
           <p style={{ color: 'var(--color-text-light)', marginBottom: '0.5rem' }}>
-            {serviceInfo.name} • {serviceInfo.duration} min • ${serviceInfo.price}
+            {serviceInfo.name} • {quantity > 1 ? `${quantity}× ` : ''}{serviceInfo.duration} min • ${serviceInfo.price}{quantity > 1 ? ` each` : ''}
           </p>
           {serviceInfo.requiresConsultation && (
             <div style={{
@@ -123,6 +129,40 @@ function TimePageContent() {
             </div>
           )}
         </>
+      )}
+
+      {quantity > 1 && serviceInfo && (serviceInfo.allowedStaff?.length || 0) >= quantity && (
+        <div style={{ marginTop: '1rem', marginBottom: '1rem' }}>
+          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, fontSize: '0.9rem' }}>Scheduling Preference:</label>
+          <div style={{ display: 'flex', gap: '0.75rem' }}>
+            <button
+              type="button"
+              onClick={() => setQuantityMode('sequential')}
+              style={{
+                flex: 1, padding: '0.75rem', borderRadius: '8px', border: '2px solid',
+                borderColor: quantityMode === 'sequential' ? 'var(--color-primary)' : 'var(--color-border)',
+                background: quantityMode === 'sequential' ? 'var(--color-accent)' : 'white',
+                cursor: 'pointer', fontSize: '0.85rem', textAlign: 'center'
+              }}
+            >
+              <strong>Back-to-back</strong><br />
+              <span style={{ color: 'var(--color-text-light)' }}>Same stylist, one after another</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setQuantityMode('parallel')}
+              style={{
+                flex: 1, padding: '0.75rem', borderRadius: '8px', border: '2px solid',
+                borderColor: quantityMode === 'parallel' ? 'var(--color-primary)' : 'var(--color-border)',
+                background: quantityMode === 'parallel' ? 'var(--color-accent)' : 'white',
+                cursor: 'pointer', fontSize: '0.85rem', textAlign: 'center'
+              }}
+            >
+              <strong>Same time</strong><br />
+              <span style={{ color: 'var(--color-text-light)' }}>Multiple stylists at once</span>
+            </button>
+          </div>
+        </div>
       )}
       <p style={{ color: 'var(--color-text-light)' }}>
         {serviceInfo?.requiresConsultation ? 'Choose your preferred date and time.' : 'Choose a date and time that works for you.'}
@@ -167,7 +207,7 @@ function TimePageContent() {
 
         <div style={{
           display: 'grid',
-          gridTemplateColumns: window.innerWidth > 768 ? 'repeat(4, 1fr)' : 'repeat(2, 1fr)',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
           gap: '1rem'
         }}>
           {!loading && availableSlots.map(slot => (
@@ -199,7 +239,7 @@ function TimePageContent() {
 
       {selectedTime && (
         <Link
-          href={`/booking/confirm?vendor=${vendor}&service=${service}&date=${selectedDate.toISOString()}&time=${selectedTime}${assignedStaff ? `&staffId=${assignedStaff.id}&staffName=${encodeURIComponent(assignedStaff.name)}` : ''}`}
+          href={`/booking/confirm?vendor=${vendor}&service=${service}&date=${selectedDate.toISOString()}&time=${selectedTime}${multiProvider ? '&multiProvider=true' : ''}${quantity > 1 ? `&quantity=${quantity}&mode=${quantityMode}` : ''}${assignedStaff ? `&staffId=${assignedStaff.id}&staffName=${encodeURIComponent(assignedStaff.name)}` : ''}`}
           className="cta"
         >
           Continue

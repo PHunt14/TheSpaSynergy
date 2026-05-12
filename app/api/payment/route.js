@@ -4,12 +4,13 @@ import { generateClient } from 'aws-amplify/data';
 import config from '../../../amplify_outputs.json';
 import { Amplify } from 'aws-amplify';
 import { buildOrderLineItems } from '../../../lib/square/catalog.js';
+import { calculateMultiProviderSplit } from '../../utils/payment.js';
 
 Amplify.configure(config, { ssr: true });
 
 export async function POST(request) {
   try {
-    const { sourceId, amount, tipAmount, vendorId, staffId, bundlePayments, serviceIds, people } = await request.json();
+    const { sourceId, amount, tipAmount, vendorId, staffId, bundlePayments, bundleId, serviceIds, people, multiProvider, paymentSplit } = await request.json();
 
     if (!sourceId || !amount) {
       return Response.json({ error: 'Missing payment details' }, { status: 400 });
@@ -18,12 +19,24 @@ export async function POST(request) {
     // Validate tipAmount if provided
     const tip = typeof tipAmount === 'number' && tipAmount > 0 ? tipAmount : 0;
 
+    // Multi-provider payment (e.g., couples booking)
+    if (multiProvider && paymentSplit) {
+      return await processMultiProviderPayment(sourceId, amount, paymentSplit, tip);
+    }
+
     // Single vendor payment
     if (vendorId && !bundlePayments) {
       return await processSinglePayment(sourceId, amount, vendorId, staffId, serviceIds, people, tip);
     }
 
-    // Multi-vendor bundle payment
+    // Multi-vendor bundle payment — when a bundleId is present we link the charge
+    // to all appointments in the bundle after a successful capture
+    if (bundlePayments && bundlePayments.length > 0 && bundleId) {
+      return await processMultiVendorBundlePayment(sourceId, amount, bundlePayments, bundleId, tip);
+    }
+
+    // Legacy bundle payment path (e.g., couples booking flow that pre-builds its own bundlePayments
+    // and links appointments via groupId in processMultiProviderPayment)
     if (bundlePayments && bundlePayments.length > 0) {
       return await processBundlePayment(sourceId, amount, bundlePayments, tip);
     }
@@ -51,6 +64,121 @@ async function resolveSquareCredentials(dataClient, vendorId, staffId) {
     return { error: 'Payment configuration error', details: 'Staff member has not connected Square', status: 400 };
   }
   return { accessToken: staff.squareAccessToken, locationId: staff.squareLocationId };
+}
+
+async function processMultiProviderPayment(sourceId, totalAmount, paymentSplit, tipAmount = 0) {
+  const dataClient = generateClient();
+
+  // paymentSplit contains: { serviceId, assignedStaff, groupId }
+  const { serviceId, assignedStaff, groupId } = paymentSplit;
+
+  if (!serviceId || !assignedStaff || !groupId) {
+    return Response.json({ error: 'Missing multi-provider payment details' }, { status: 400 });
+  }
+
+  // Fetch the service to get price and paymentSplitRules
+  const { data: service } = await dataClient.models.Service.get({ serviceId });
+  if (!service) {
+    return Response.json({ error: 'Service not found' }, { status: 404 });
+  }
+
+  // Get house vendor
+  const { data: vendors } = await dataClient.models.Vendor.list();
+  const houseVendor = vendors.find(v => v.isHouse);
+
+  if (!houseVendor) {
+    return Response.json({ error: 'House vendor not configured' }, { status: 500 });
+  }
+
+  // Calculate the payment split using the utility function
+  const split = calculateMultiProviderSplit({
+    service,
+    assignedStaff,
+    houseVendorId: houseVendor.vendorId,
+  });
+
+  // Check that all vendors in the split have Square credentials
+  const vendorIds = [...new Set(split.providerShares.map(s => s.vendorId))];
+  const vendorChecks = await Promise.all(
+    vendorIds.map(async (vid) => {
+      const { data: vendor } = await dataClient.models.Vendor.get({ vendorId: vid });
+      return { vendorId: vid, vendor };
+    })
+  );
+
+  const missingCredentials = vendorChecks.filter(
+    ({ vendor }) => !vendor?.squareAccessToken || !vendor?.squareLocationId
+  );
+
+  if (missingCredentials.length > 0) {
+    return Response.json({
+      error: 'Card payment unavailable',
+      details: 'One or more providers have not connected Square. Please pay in person.',
+      vendors: missingCredentials.map(v => v.vendorId),
+    }, { status: 400 });
+  }
+
+  // Build bundlePayments array from provider shares for processBundlePayment
+  const bundlePayments = [];
+
+  // Add house fee as a payment to the house vendor
+  if (split.houseFee > 0) {
+    bundlePayments.push({
+      vendorId: houseVendor.vendorId,
+      amount: split.houseFee,
+      isHouseFee: true,
+    });
+  }
+
+  // Add each provider's share
+  split.providerShares.forEach(({ vendorId, amount }) => {
+    bundlePayments.push({
+      vendorId,
+      amount,
+      isHouseFee: false,
+    });
+  });
+
+  // Process via existing bundle payment infrastructure
+  const paymentResult = await processBundlePayment(sourceId, totalAmount, bundlePayments, tipAmount);
+  const paymentResponse = await paymentResult.json();
+
+  if (!paymentResponse.success) {
+    return Response.json(paymentResponse, { status: 500 });
+  }
+
+  // Record payment split details on each appointment in the group
+  const { data: groupAppointments } = await dataClient.models.Appointment.list({
+    filter: { groupId: { eq: groupId } },
+  });
+
+  if (groupAppointments && groupAppointments.length > 0) {
+    await Promise.all(
+      groupAppointments.map(async (appointment) => {
+        // Find this appointment's share from the split
+        const share = split.providerShares.find(
+          s => s.staffId === appointment.staffId
+        );
+        const paymentAmount = share ? share.amount : 0;
+
+        await dataClient.models.Appointment.update({
+          appointmentId: appointment.appointmentId,
+          paymentId: paymentResponse.paymentId,
+          paymentStatus: paymentResponse.status,
+          paymentAmount,
+        });
+      })
+    );
+  }
+
+  return Response.json({
+    success: true,
+    paymentId: paymentResponse.paymentId,
+    status: paymentResponse.status,
+    splitDetails: split,
+    groupId,
+    tipAmount: tipAmount || 0,
+  });
 }
 
 async function processSinglePayment(sourceId, amount, vendorId, staffId, serviceIds, people, tipAmount = 0) {
@@ -129,6 +257,70 @@ async function processSinglePayment(sourceId, amount, vendorId, staffId, service
   }
 }
 
+async function processMultiVendorBundlePayment(sourceId, totalAmount, bundlePayments, bundleId, tipAmount = 0) {
+  const dataClient = generateClient();
+
+  // Delegate charge + credential validation to the shared bundle payment helper
+  const paymentResult = await processBundlePayment(sourceId, totalAmount, bundlePayments, tipAmount);
+  const paymentResponse = await paymentResult.json();
+
+  // Bubble up errors (e.g., missing Square credentials → 400, Square API failures → 500)
+  if (!paymentResponse.success) {
+    return Response.json(paymentResponse, { status: paymentResult.status || 500 });
+  }
+
+  // Record paymentId + per-appointment paymentAmount on each appointment in the bundle
+  try {
+    const { data: bundleAppointments } = await dataClient.models.Appointment.list({
+      filter: { bundleId: { eq: bundleId } },
+    });
+
+    if (bundleAppointments && bundleAppointments.length > 0) {
+      // Fetch each appointment's service to determine its share of the total
+      const appointmentsWithServices = await Promise.all(
+        bundleAppointments.map(async (appt) => {
+          const { data: svc } = await dataClient.models.Service.get({ serviceId: appt.serviceId });
+          return { appt, servicePrice: svc?.price || 0 };
+        })
+      );
+
+      const subtotal = appointmentsWithServices.reduce((sum, { servicePrice }) => sum + servicePrice, 0);
+
+      await Promise.all(
+        appointmentsWithServices.map(async ({ appt, servicePrice }, idx) => {
+          // Proportional share of the (possibly discounted) total.
+          // Fall back to even split if subtotal is zero (avoids divide-by-zero).
+          let paymentAmount;
+          if (subtotal > 0) {
+            paymentAmount = Math.round((servicePrice / subtotal) * totalAmount * 100) / 100;
+          } else {
+            paymentAmount = Math.round((totalAmount / appointmentsWithServices.length) * 100) / 100;
+          }
+
+          await dataClient.models.Appointment.update({
+            appointmentId: appt.appointmentId,
+            paymentId: paymentResponse.paymentId,
+            paymentStatus: paymentResponse.status,
+            paymentAmount,
+          });
+        })
+      );
+    }
+  } catch (error) {
+    // Log but do not fail the payment response — the charge already succeeded.
+    console.error('Failed to record payment details on bundle appointments:', error);
+  }
+
+  return Response.json({
+    success: true,
+    paymentId: paymentResponse.paymentId,
+    status: paymentResponse.status,
+    splitPayments: paymentResponse.splitPayments,
+    bundleId,
+    tipAmount: tipAmount || 0,
+  });
+}
+
 async function processBundlePayment(sourceId, totalAmount, bundlePayments, tipAmount = 0) {
   const dataClient = generateClient();
   
@@ -156,7 +348,7 @@ async function processBundlePayment(sourceId, totalAmount, bundlePayments, tipAm
     amount
   }));
 
-  // Validate all non-house vendors are connected to Square
+  // Validate all non-house vendors are connected to Square (access token AND location id)
   const vendorChecks = await Promise.all(
     consolidatedPayments
       .filter(p => p.vendorId !== houseVendor.vendorId)
@@ -166,10 +358,13 @@ async function processBundlePayment(sourceId, totalAmount, bundlePayments, tipAm
       })
   );
 
-  const missingVendors = vendorChecks.filter(({ vendor }) => !vendor?.squareAccessToken);
+  const missingVendors = vendorChecks.filter(
+    ({ vendor }) => !vendor?.squareAccessToken || !vendor?.squareLocationId
+  );
   if (missingVendors.length > 0) {
-    return Response.json({ 
-      error: 'Some vendors not connected to Square',
+    return Response.json({
+      error: 'Card payment unavailable',
+      details: 'One or more vendors have not connected Square. Please pay in person.',
       vendors: missingVendors.map(v => v.vendorId)
     }, { status: 400 });
   }

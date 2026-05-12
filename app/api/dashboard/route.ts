@@ -38,9 +38,10 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const vendorId = searchParams.get('vendorId');
   const clientId = searchParams.get('clientId');
+  const staffId = searchParams.get('staffId');
 
-  if (!vendorId && !clientId) {
-    return Response.json({ error: 'vendorId or clientId required' }, { status: 400 });
+  if (!vendorId && !clientId && !staffId) {
+    return Response.json({ error: 'vendorId, staffId, or clientId required' }, { status: 400 });
   }
 
   const currentUser = await getCurrentUser();
@@ -69,6 +70,58 @@ export async function GET(request: Request) {
     }
   }
 
+  // Staff-based calendar lookup — any authenticated user can view any staff calendar
+  if (staffId) {
+    try {
+      // Find the staff member's vendor
+      const { data: staffRecord } = await client.models.StaffSchedule.get({ visibleId: staffId } as any);
+      if (!staffRecord) {
+        return Response.json({ error: 'Staff not found' }, { status: 404 });
+      }
+      const staffVendorId = staffRecord.vendorId;
+      const startDate = searchParams.get('startDate');
+      const endDate = searchParams.get('endDate');
+
+      let appointments: any[] = [];
+      if (startDate && endDate) {
+        let nextToken: string | undefined;
+        do {
+          const { data, nextToken: token } = await client.models.Appointment.listAppointmentByVendorIdAndDateTime({
+            vendorId: staffVendorId,
+            dateTime: { between: [startDate, endDate] },
+            ...(nextToken ? { nextToken } : {})
+          } as any);
+          appointments = appointments.concat(data || []);
+          nextToken = token as string | undefined;
+        } while (nextToken);
+      } else {
+        const { data } = await client.models.Appointment.list({
+          filter: { vendorId: { eq: staffVendorId } }
+        });
+        appointments = data || [];
+      }
+
+      // Filter to only this staff member's appointments
+      appointments = appointments.filter(apt => apt.staffId === staffId);
+
+      // Enrich
+      const enrichedAppointments = await Promise.all(
+        appointments.map(async (appointment) => {
+          const { data: service } = await client.models.Service.get({ serviceId: appointment.serviceId });
+          let customer = appointment.customer;
+          if (typeof customer === 'string') { try { customer = JSON.parse(customer); } catch {} }
+          let staffName = staffRecord.staffName || null;
+          return { ...appointment, rawDateTime: appointment.dateTime, customer, service, staffName };
+        })
+      );
+
+      return Response.json({ appointments: enrichedAppointments });
+    } catch (error) {
+      console.error('Error fetching staff appointments:', error);
+      return Response.json({ error: 'Failed to fetch staff appointments' }, { status: 500 });
+    }
+  }
+
   // Vendor/owner can only access their own vendor's appointments
   if ((currentUser.role === 'vendor' || currentUser.role === 'owner') && vendorId !== currentUser.vendorId) {
     return Response.json({ error: 'Unauthorized: Cannot access other vendor appointments' }, { status: 403 });
@@ -82,15 +135,22 @@ export async function GET(request: Request) {
     let appointments;
     if (startDate && endDate) {
       // Use the vendorId + dateTime index for efficient range queries
-      const { data, errors: listErrors } = await client.models.Appointment.listAppointmentByVendorIdAndDateTime({
-        vendorId,
-        dateTime: { between: [startDate, endDate] }
-      });
-      if (listErrors) {
-        console.error('Error fetching appointments:', listErrors);
-        return Response.json({ error: 'Failed to fetch appointments' }, { status: 500 });
-      }
-      appointments = data || [];
+      let allData: any[] = [];
+      let nextToken: string | undefined;
+      do {
+        const { data, errors: listErrors, nextToken: token } = await client.models.Appointment.listAppointmentByVendorIdAndDateTime({
+          vendorId,
+          dateTime: { between: [startDate, endDate] },
+          ...(nextToken ? { nextToken } : {})
+        } as any);
+        if (listErrors) {
+          console.error('Error fetching appointments:', listErrors);
+          return Response.json({ error: 'Failed to fetch appointments' }, { status: 500 });
+        }
+        allData = allData.concat(data || []);
+        nextToken = token as string | undefined;
+      } while (nextToken);
+      appointments = allData;
     } else {
       const { data, errors: listErrors } = await client.models.Appointment.list({
         filter: { vendorId: { eq: vendorId } }

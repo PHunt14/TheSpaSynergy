@@ -41,7 +41,8 @@ npm run test:e2e:headed
 | `square/catalog.test.mjs` | 28 | `buildCategoryObject` — temp ID generation, multi-word names; `buildItemObject` — price/duration BigInt conversion, categories, descriptions, zero/fractional prices; `getStaffServices` — allowedStaff filtering, inactive exclusion, empty arrays; `groupByCategory` — grouping, null category fallback; `buildUpsertBatches` — full batch construction, existing category/item reuse, idempotency keys; `parseSyncResponse` — item/category counting, null handling; `buildOrderLineItems` — named line item construction, group quantity |
 | `square/oauth-payment.test.mjs` | 43 | OAuth URL generation, state encoding/decoding, webhook signature verification, webhook event processing + idempotency, vendor token builders (legacy), staff token builders, disconnect builders, payment validation (staff-level only), token expiry detection, payment route integration (POST /api/payment with staff-level Square auth, tipping support) |
 | `utils/payment.test.mjs` | 23 | `calculatePaymentSplits` — single/multi vendor, house fees, aggregation, edge cases; `calculateVendorNet` — fee subtraction; `formatPaymentSplits` — display formatting |
-| `utils/availability.test.mjs` | 39 | `getRecurrenceHours` — every-other-week (with/without anchor), 2nd-of-month, standard fallback; `resolveStaffSync` — auto-assign rules, schedule-based resolution, allowedStaff filtering, recurrence in schedules; `getDayHoursSync` — sauna hours, staff schedule priority, vendor fallback; `hasAnySlot` — open/fully-booked detection, staff filtering, window-too-small; `timeOverlaps` — overlap with buffer, adjacent, identical, zero-buffer; `generateTimeSlots` — slot generation, booked exclusion, dateTime formats; `formatTime` — 12-hour display; `DAY_NAMES` constant |
+| `utils/availability.test.mjs` | 50 | `getRecurrenceHours` — every-other-week (with/without anchor), 2nd-of-month, standard fallback; `resolveStaffSync` — auto-assign rules, schedule-based resolution, allowedStaff filtering, recurrence in schedules; `getDayHoursSync` — sauna hours, staff schedule priority, vendor fallback; `hasAnySlot` — open/fully-booked detection, staff filtering, window-too-small; `timeOverlaps` — overlap with buffer, adjacent, identical, zero-buffer; `generateTimeSlots` — slot generation, booked exclusion, dateTime formats; `formatTime` — 12-hour display; `DAY_NAMES` constant; `getMultiProviderSlots` — simultaneous staff availability, conflict exclusion, recurrence handling |
+| `utils/quantityAvailability.test.mjs` | 25 | `getParallelQuantitySlots` — multi-staff simultaneous availability for quantity bookings, conflict handling, inactive/ineligible staff filtering; `getSequentialQuantitySlots` — back-to-back slot finding, total block calculation, mid-block conflict detection, blocked time handling; `calculateQuantityDuration` — parallel vs sequential duration math; `canBookParallel` — staff count eligibility check |
 | `utils/client.test.mjs` | 12 | `normalizePhone` — formatting, +1 prefix, too-short, null/empty; `normalizeEmail` — case/trim, null/empty; `isMatchingClient` — phone match, email match, no match, empty fields, phone priority |
 | `utils/calendar.test.mjs` | 50 | `getWeekStart` — Sunday resolution, immutability; `getWeekDates` — 7 dates, consecutive, month boundary; `getMonthDates` — correct day counts, leap year; `isSameDay` — same/different dates, months, years; `parseAppointmentDate` — valid ISO, null/undefined/empty/invalid; `generateTimeSlots` — slot count, boundaries, edge cases; `getBlockPosition` — top/height calculation, minimum height, half-hour offset, before-start; `getDateRangeForView` — day/week/month ranges; `computeOverlapLayout` — empty input, single/non-overlapping/overlapping appointments, column assignment, adjacent slots, partial overlap, null handling |
 
@@ -58,7 +59,7 @@ npm run test:e2e:headed
 |------|-------|----------------|
 | `smoke.spec.ts` | 6 | Homepage load + title + CTA, booking page loads, vendors page loads, contact page loads, navbar links, footer content |
 
-**Current totals: 224 Jest tests passing, 6 E2E tests ready**
+**Current totals: 298 Jest tests passing, 6 E2E tests ready**
 
 ## Architecture
 
@@ -126,7 +127,7 @@ Test `app/api/appointments/route.ts` POST and PATCH handlers using the same mock
 
 **PATCH /api/appointments:**
 - Missing appointmentId → 400
-- Successful update with partial fields
+- Successful update with partial fields (status, payment, service, staff, vendor, customer)
 - DynamoDB error handling → 500
 
 ### 3. SMS / Email Unit Tests (MEDIUM VALUE)
@@ -158,9 +159,10 @@ Test `app/api/appointments/route.ts` POST and PATCH handlers using the same mock
 | Page | What to Test |
 |------|-------------|
 | `booking/page.jsx` | Vendor cards render after fetch, click navigates to service page |
-| `booking/service/page.jsx` | Services load for selected vendor, multi-select works |
-| `booking/time/page.jsx` | Time slots render, selection works |
-| `booking/confirm/page.jsx` | Summary displays correctly, form validation |
+| `booking/service/page.jsx` | Services load for selected vendor, multi-select works, quantity picker appears for eligible services |
+| `booking/time/page.jsx` | Time slots render, selection works, quantity mode toggle shows when parallel is possible |
+| `booking/confirm/page.jsx` | Summary displays correctly, form validation, quantity info shown |
+| `dashboard/calendar/page.jsx` | Appointment detail modal renders, Edit button opens inline form, save calls correct APIs (reschedule, reassign, PATCH) |
 
 These require mocking `next/navigation` (useRouter, useSearchParams) and fetch calls.
 

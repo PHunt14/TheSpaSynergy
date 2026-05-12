@@ -72,6 +72,57 @@ export function calculateVendorNet(price, houseFeeEnabled, houseFeeAmount) {
 }
 
 /**
+ * Calculate payment split for a multi-provider service (e.g., couples booking).
+ *
+ * Supports two split types defined in `service.paymentSplitRules`:
+ *   - "equal" (default): remainder after house fee is split equally among providers.
+ *   - "percentage": remainder is split according to the percentages array.
+ *
+ * @param {Object} params
+ * @param {Object} params.service - Service object with price, paymentSplitRules, providersRequired
+ * @param {Array}  params.assignedStaff - Array of { staffId, vendorId, staffName }
+ * @param {string} params.houseVendorId - The vendor ID of the house
+ * @returns {{ total: number, houseFee: number, providerShares: Array<{ vendorId: string, staffId: string, amount: number }> }}
+ */
+export function calculateMultiProviderSplit({ service, assignedStaff, houseVendorId }) {
+  const { price, paymentSplitRules } = service;
+  const rules = paymentSplitRules || {};
+
+  const houseFeeEnabled = rules.houseFeeEnabled === true;
+  const houseFeeAmount = houseFeeEnabled ? (rules.houseFeeAmount || 0) : 0;
+  const remainder = price - houseFeeAmount;
+
+  const splitType = rules.type || 'equal';
+  let providerShares;
+
+  if (splitType === 'percentage' && Array.isArray(rules.percentages)) {
+    // Custom percentage split
+    providerShares = assignedStaff.map((staff, index) => {
+      const pct = rules.percentages[index] || 0;
+      return {
+        vendorId: staff.vendorId,
+        staffId: staff.staffId,
+        amount: (remainder * pct) / 100,
+      };
+    });
+  } else {
+    // Equal split among all providers
+    const perProvider = remainder / assignedStaff.length;
+    providerShares = assignedStaff.map((staff) => ({
+      vendorId: staff.vendorId,
+      staffId: staff.staffId,
+      amount: perProvider,
+    }));
+  }
+
+  return {
+    total: price,
+    houseFee: houseFeeAmount,
+    providerShares,
+  };
+}
+
+/**
  * Format payment split for display
  * @param {Array} splits - Array of split objects
  * @param {Array} vendors - Array of vendor objects

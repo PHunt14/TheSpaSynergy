@@ -5,17 +5,20 @@ import { useState, useEffect, Suspense } from 'react'
 import BookingDisabled, { isBookingEnabled } from '../../components/BookingDisabled'
 import PropTypes from 'prop-types'
 
-function AppointmentSummary({ allServiceDetails, totalPrice, totalDuration, date, time, staffName, people }) {
+function AppointmentSummary({ allServiceDetails, totalPrice, totalDuration, date, time, staffName, people, getQty }) {
   return (
     <div style={{ marginTop: '1.5rem', padding: '1rem', background: 'var(--color-accent)', borderRadius: '8px' }}>
       <h3>Appointment Summary</h3>
-      {allServiceDetails.map(svc => (
-        <div key={svc.serviceId} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-          <span>{svc.name} ({svc.duration} min)</span>
-          <span>${svc.price}</span>
-        </div>
-      ))}
-      {allServiceDetails.length > 1 && (
+      {allServiceDetails.map(svc => {
+        const qty = getQty ? getQty(svc) : 1
+        return (
+          <div key={svc.serviceId} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+            <span>{qty > 1 ? `${qty}× ` : ''}{svc.name} ({svc.duration} min{qty > 1 ? ' each' : ''})</span>
+            <span>${(svc.price * qty).toFixed(2)}</span>
+          </div>
+        )
+      })}
+      {(allServiceDetails.length > 1 || allServiceDetails.some(s => (getQty ? getQty(s) : 1) > 1)) && (
         <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: '0.5rem', marginTop: '0.5rem', display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
           <span>Total ({totalDuration} min)</span>
           <span>${totalPrice.toFixed(2)}</span>
@@ -37,6 +40,7 @@ AppointmentSummary.propTypes = {
   time: PropTypes.string,
   staffName: PropTypes.string,
   people: PropTypes.number,
+  getQty: PropTypes.func,
 }
 
 function ConfirmPageContent() {
@@ -54,10 +58,19 @@ function ConfirmPageContent() {
   const staffName = params.get('staffName')
   const peopleParam = params.get('people')
   const people = peopleParam ? parseInt(peopleParam) : null
+  const multiProvider = params.get('multiProvider') === 'true'
+  const quantityParam = params.get('quantity')
+  const quantity = quantityParam ? parseInt(quantityParam) : 1
+  const quantityMode = params.get('mode') || 'sequential'
+  const quantitiesParam = params.get('quantities')
+  // Parse per-service quantities (format: "svc-id:2,svc-id2:3")
+  const perServiceQuantities = quantitiesParam
+    ? Object.fromEntries(quantitiesParam.split(',').map(entry => { const [id, qty] = entry.split(':'); return [id, parseInt(qty)] }))
+    : {}
   const isBundle = !!servicesParam
   const serviceIds = servicesParam ? servicesParam.split(',') : service ? [service] : []
 
-  const [formData, setFormData] = useState({ name: '', email: '', phone: '', smsOptIn: false })
+  const [formData, setFormData] = useState({ name: '', email: '', phone: '', smsOptIn: false, notes: '' })
   const [loading, setLoading] = useState(false)
   const [card, setCard] = useState(null)
   const [applePay, setApplePay] = useState(null)
@@ -69,8 +82,14 @@ function ConfirmPageContent() {
 
   // For single service, use the first service detail
   const serviceDetails = allServiceDetails.length === 1 ? allServiceDetails[0] : null
-  const totalPrice = allServiceDetails.reduce((sum, s) => sum + (s?.price || 0), 0) * (people || 1)
-  const totalDuration = allServiceDetails.reduce((sum, s) => sum + (s?.duration || 0), 0)
+  const getQty = (svc) => perServiceQuantities[svc.serviceId] || quantity || 1
+  const totalPrice = multiProvider
+    ? allServiceDetails.reduce((sum, s) => sum + (s?.price || 0), 0)
+    : allServiceDetails.reduce((sum, s) => sum + (s?.price || 0) * getQty(s), 0) * (people || 1)
+  const totalDuration = allServiceDetails.reduce((sum, s) => sum + (s?.duration || 0) * getQty(s), 0)
+  const multiProviderGuests = multiProvider && allServiceDetails.length > 0
+    ? (allServiceDetails[0]?.minPeople || 2)
+    : null
 
   useEffect(() => {
     if (serviceIds.length === 0) return
@@ -218,9 +237,46 @@ function ConfirmPageContent() {
     const isResource = allServiceDetails.every(s => s.resourceType === 'sauna')
     const status = isResource ? 'confirmed' : 'pending-confirmation'
 
+    // Multi-provider booking: single API call creates all appointments
+    if (multiProvider) {
+      const response = await fetch('/api/appointments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vendorId: allServiceDetails[0]?.vendorId || vendor,
+          serviceId: allServiceDetails[0]?.serviceId || service,
+          dateTime: dateTimeISO,
+          customer: formData,
+          status,
+          multiProvider: true,
+          providersRequired: allServiceDetails[0]?.providersRequired || 2,
+          ...(paymentId ? { paymentId, paymentStatus: 'paid', paymentAmount: totalPrice } : {})
+        })
+      })
+      const result = await response.json()
+
+      if (result.success) {
+        const successUrl = new URLSearchParams({
+          id: result.appointmentIds?.[0] || result.groupId,
+          dateTime: dateTimeISO,
+          service: allServiceDetails.map(s => s.name).join(', '),
+          payment: pMethod,
+          total: totalPrice.toFixed(2),
+          multiProvider: 'true',
+          guests: String(multiProviderGuests || 2)
+        })
+        if (requiresConfirmation) successUrl.set('confirmation', 'required')
+        window.location.href = `/booking/success?${successUrl}`
+      } else {
+        alert(result.error || 'Appointment creation failed')
+      }
+      return
+    }
+
     const results = await Promise.all(
-      allServiceDetails.map(svc =>
-        fetch('/api/appointments', {
+      allServiceDetails.map(svc => {
+        const svcQty = getQty(svc)
+        return fetch('/api/appointments', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -233,14 +289,15 @@ function ConfirmPageContent() {
             status,
             paymentId,
             ...(paymentId ? { paymentStatus: 'paid', paymentAmount: totalPrice } : {}),
-            ...(people ? { people } : {})
+            ...(people ? { people } : {}),
+            ...(svcQty > 1 ? { quantity: svcQty, quantityMode } : {})
           })
         }).then(r => r.json())
-      )
+      })
     )
 
     if (bundleId) {
-      const appointmentIds = results.filter(r => r.appointmentId).map(r => r.appointmentId)
+      const appointmentIds = results.filter(r => r.appointmentId || r.appointmentIds).flatMap(r => r.appointmentIds || [r.appointmentId])
       const uniqueVendorIds = [...new Set(allServiceDetails.map(s => s.vendorId))]
       const confirmations = {}
       uniqueVendorIds.forEach(v => { confirmations[v] = 'pending' })
@@ -259,10 +316,10 @@ function ConfirmPageContent() {
       })
     }
 
-    const firstSuccess = results.find(r => r.appointmentId)
+    const firstSuccess = results.find(r => r.appointmentId || r.appointmentIds)
     if (firstSuccess) {
       const successUrl = new URLSearchParams({
-        id: firstSuccess.appointmentId,
+        id: firstSuccess.appointmentId || firstSuccess.appointmentIds?.[0] || firstSuccess.groupId,
         dateTime: dateTimeISO,
         service: allServiceDetails.map(s => s.name).join(', '),
         payment: pMethod,
@@ -271,6 +328,7 @@ function ConfirmPageContent() {
       if (requiresConfirmation) successUrl.set('confirmation', 'required')
       if (staffName) successUrl.set('staffName', staffName)
       if (people) successUrl.set('people', people)
+      if (quantity > 1) successUrl.set('quantity', String(quantity))
       window.location.href = `/booking/success?${successUrl}`
     } else {
       alert('Appointment creation failed')
@@ -352,9 +410,29 @@ function ConfirmPageContent() {
         totalDuration={totalDuration}
         date={date}
         time={time}
-        staffName={staffName}
-        people={people}
+        staffName={multiProvider ? null : staffName}
+        people={multiProviderGuests || people}
+        getQty={getQty}
       />
+
+      {(Object.keys(perServiceQuantities).length > 0 || quantity > 1) && (
+        <div style={{ marginTop: '1rem', padding: '1rem', background: '#e3f2fd', borderRadius: '8px', border: '1px solid #90caf9' }}>
+          <p style={{ margin: 0, fontSize: '0.9rem' }}>
+            📋 {Object.keys(perServiceQuantities).length > 0
+              ? allServiceDetails.filter(s => getQty(s) > 1).map(s => `${getQty(s)}× ${s.name}`).join(', ')
+              : `${quantity}× ${allServiceDetails[0]?.name || 'Service'}`
+            } — {quantityMode === 'parallel' ? 'all at the same time (multiple staff)' : 'back-to-back with the same staff'}
+          </p>
+        </div>
+      )}
+
+      {multiProvider && (
+        <div style={{ marginTop: '1rem', padding: '1rem', background: '#e8f5e9', borderRadius: '8px', border: '1px solid #a5d6a7' }}>
+          <p style={{ margin: 0, fontSize: '0.9rem' }}>
+            🎉 This is a couples/group service for <strong>{multiProviderGuests || 2} guests</strong>. Staff will be automatically assigned.
+          </p>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} style={{ marginTop: '2rem' }}>
         <div style={{ marginBottom: '1rem' }}>
@@ -387,6 +465,17 @@ function ConfirmPageContent() {
               I agree to receive automated SMS appointment updates from The Spa Synergy (e.g. confirmations, reminders, cancellations). Msg frequency: ~1–5 msgs per booking. Msg & data rates may apply. Reply STOP to cancel, HELP for help. Consent is not required to book. <a href="/privacy" target="_blank" style={{ color: 'var(--color-primary)' }}>Privacy Policy</a> & <a href="/terms" target="_blank" style={{ color: 'var(--color-primary)' }}>Terms</a>.
             </span>
           </label>
+        </div>
+
+        <div style={{ marginBottom: '1rem' }}>
+          <label style={{ display: 'block', marginBottom: '0.5rem' }}>Notes (optional)</label>
+          <textarea
+            value={formData.notes}
+            onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+            placeholder="Any special requests, preferences, or info for your provider (e.g. 'schedule haircuts simultaneously if possible')"
+            rows="3"
+            style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem', resize: 'vertical' }}
+          />
         </div>
 
         <div style={{ marginTop: '2rem', marginBottom: '1rem' }}>

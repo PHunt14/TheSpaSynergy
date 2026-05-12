@@ -77,7 +77,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { serviceId, vendorId, name, duration, price, isActive, category, resourceType, houseFeeEnabled, houseFeeAmount, houseFeePercent, cardPaymentDisabled, parentServiceIds } = body;
+    const { serviceId, vendorId, name, duration, price, isActive, category, resourceType, houseFeeEnabled, houseFeeAmount, houseFeePercent, cardPaymentDisabled, parentServiceIds, maxQuantityPerBooking, providersRequired } = body;
 
     if (!serviceId || !vendorId || !name || !duration || price === undefined) {
       return Response.json({ error: 'Missing required fields' }, { status: 400 });
@@ -102,6 +102,8 @@ export async function POST(request: Request) {
       houseFeePercent: houseFeePercent || 0,
       cardPaymentDisabled: cardPaymentDisabled || false,
       parentServiceIds: parentServiceIds?.length ? parentServiceIds : null,
+      maxQuantityPerBooking: maxQuantityPerBooking || 1,
+      providersRequired: providersRequired || 1,
       isActive: isActive !== undefined ? isActive : true,
     });
 

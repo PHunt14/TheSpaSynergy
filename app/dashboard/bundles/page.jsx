@@ -49,7 +49,10 @@ export default function BundlesManagement() {
     description: '',
     selectedServices: [],
     discountPercent: 0,
-    allowedDays: []
+    allowedDays: [],
+    contactOnly: false,
+    minPeople: '',
+    maxPeople: ''
   })
 
   useEffect(() => {
@@ -115,15 +118,26 @@ export default function BundlesManagement() {
     
     const discountedPrice = totalPrice * (1 - newBundle.discountPercent / 100)
     
+    // Derive vendorIds from selected services
+    const vendorIds = [...new Set(
+      newBundle.selectedServices
+        .map(svcId => services.find(s => s.serviceId === svcId)?.vendorId)
+        .filter(Boolean)
+    )]
+
     const bundleData = {
       bundleId,
       name: newBundle.name,
       description: newBundle.description,
       serviceIds: newBundle.selectedServices,
+      vendorIds,
       price: discountedPrice,
       discountPercent: newBundle.discountPercent,
       isActive: editingBundle ? editingBundle.isActive : true,
-      allowedDays: newBundle.allowedDays.length > 0 ? newBundle.allowedDays : undefined
+      allowedDays: newBundle.allowedDays.length > 0 ? newBundle.allowedDays : undefined,
+      contactOnly: newBundle.contactOnly || undefined,
+      ...(newBundle.minPeople && { minPeople: parseInt(newBundle.minPeople) }),
+      ...(newBundle.maxPeople && { maxPeople: parseInt(newBundle.maxPeople) })
     }
     
     console.log('Saving bundle:', bundleData)
@@ -142,7 +156,7 @@ export default function BundlesManagement() {
         alert(editingBundle ? 'Bundle updated!' : 'Bundle created!')
         setShowAddForm(false)
         setEditingBundle(null)
-        setNewBundle({ name: '', description: '', selectedServices: [], discountPercent: 0, allowedDays: [] })
+        setNewBundle({ name: '', description: '', selectedServices: [], discountPercent: 0, allowedDays: [], contactOnly: false, minPeople: '', maxPeople: '' })
         await loadData()
       } else {
         console.error('Save failed:', result)
@@ -180,7 +194,10 @@ export default function BundlesManagement() {
       description: bundle.description || '',
       selectedServices: bundle.serviceIds || [],
       discountPercent: bundle.discountPercent || 0,
-      allowedDays: bundle.allowedDays || []
+      allowedDays: bundle.allowedDays || [],
+      contactOnly: bundle.contactOnly || false,
+      minPeople: bundle.minPeople || '',
+      maxPeople: bundle.maxPeople || ''
     })
     setShowAddForm(true)
   }
@@ -314,7 +331,7 @@ export default function BundlesManagement() {
           setShowAddForm(!showAddForm)
           if (showAddForm) {
             setEditingBundle(null)
-            setNewBundle({ name: '', description: '', selectedServices: [], discountPercent: 0, allowedDays: [] })
+            setNewBundle({ name: '', description: '', selectedServices: [], discountPercent: 0, allowedDays: [], contactOnly: false, minPeople: '', maxPeople: '' })
           }
         }}
         className="cta"
@@ -390,6 +407,43 @@ export default function BundlesManagement() {
           </div>
 
           <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={newBundle.contactOnly}
+                onChange={(e) => setNewBundle({ ...newBundle, contactOnly: e.target.checked })}
+                style={{ width: '18px', height: '18px' }}
+              />
+              <span>Contact Only (customer must call/email to book this bundle)</span>
+            </label>
+          </div>
+
+          <div style={{ marginBottom: '1rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <div>
+              <label style={{ display: 'block', marginBottom: '0.5rem' }}>Min People</label>
+              <input
+                type="number"
+                min="1"
+                value={newBundle.minPeople}
+                onChange={(e) => setNewBundle({ ...newBundle, minPeople: e.target.value })}
+                placeholder="No minimum"
+                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)' }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', marginBottom: '0.5rem' }}>Max People</label>
+              <input
+                type="number"
+                min="1"
+                value={newBundle.maxPeople}
+                onChange={(e) => setNewBundle({ ...newBundle, maxPeople: e.target.value })}
+                placeholder="No maximum"
+                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)' }}
+              />
+            </div>
+          </div>
+
+          <div style={{ marginBottom: '1rem' }}>
             <label style={{ display: 'block', marginBottom: '0.5rem' }}>Select Services *</label>
             <div style={{ maxHeight: '300px', overflowY: 'auto', border: '1px solid var(--color-border)', borderRadius: '8px', padding: '1rem' }}>
               {vendors.map(vendor => (
@@ -409,13 +463,25 @@ export default function BundlesManagement() {
             </div>
           </div>
 
-          {newBundle.selectedServices.length > 0 && (
-            <div style={{ background: 'white', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
-              <p><strong>Total Price:</strong> ${calculateTotal().toFixed(2)}</p>
-              <p><strong>Discount:</strong> {newBundle.discountPercent}%</p>
-              <p><strong>Final Price:</strong> ${(calculateTotal() * (1 - newBundle.discountPercent / 100)).toFixed(2)}</p>
-            </div>
-          )}
+          {newBundle.selectedServices.length > 0 && (() => {
+            const involvedVendors = [...new Set(
+              newBundle.selectedServices
+                .map(svcId => services.find(s => s.serviceId === svcId)?.vendorId)
+                .filter(Boolean)
+            )]
+            return (
+              <div style={{ background: 'white', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
+                <p><strong>Total Price:</strong> ${calculateTotal().toFixed(2)}</p>
+                <p><strong>Discount:</strong> {newBundle.discountPercent}%</p>
+                <p><strong>Final Price:</strong> ${(calculateTotal() * (1 - newBundle.discountPercent / 100)).toFixed(2)}</p>
+                {involvedVendors.length > 1 && (
+                  <p style={{ marginTop: '0.5rem', color: 'var(--color-primary)', fontWeight: 'bold' }}>
+                    🔗 Multi-vendor bundle ({involvedVendors.length} vendors) — each vendor must confirm bookings
+                  </p>
+                )}
+              </div>
+            )
+          })()}
 
           <button type="submit" className="cta">{editingBundle ? 'Update Bundle' : 'Create Bundle'}</button>
         </form>
@@ -443,6 +509,9 @@ export default function BundlesManagement() {
               )}
               <p style={{ color: 'var(--color-text-light)', fontSize: '0.9rem', marginBottom: '0.5rem' }}>
                 {bundle.discountPercent}% discount • ${bundle.price?.toFixed(2)}
+                {bundle.vendorIds?.length > 1 && ` • 🔗 ${bundle.vendorIds.length} vendors`}
+                {bundle.contactOnly && ' • 📞 Contact only'}
+                {(bundle.minPeople || bundle.maxPeople) && ` • 👥 ${bundle.minPeople || 1}–${bundle.maxPeople || '∞'} people`}
                 {bundle.allowedDays?.length > 0 && (
                   <> • {bundle.allowedDays.map(d => d.charAt(0).toUpperCase() + d.slice(0, 3)).join(', ')}</>
                 )}

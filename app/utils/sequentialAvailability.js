@@ -1,0 +1,548 @@
+import { DAY_NAMES, getRecurrenceHours } from './availability.js'
+
+/**
+ * Calculates the total duration of a sequential bundle including buffers.
+ *
+ * @param {Array} services - Array of service objects with duration
+ * @param {number} bufferMinutes - Buffer between services
+ * @returns {number} Total minutes
+ */
+export function calculateTotalBundleDuration(services, bufferMinutes) {
+  if (!services || services.length === 0) return 0
+  return services.reduce((sum, s) => sum + s.duration, 0) + bufferMinutes * (services.length - 1)
+}
+
+/**
+ * Calculates start/end times for each service in a sequence given a start time.
+ *
+ * @param {Array} orderedServices - Services in sequence order
+ * @param {string} startTime - HH:MM start of first service
+ * @param {number} bufferMinutes - Buffer between services
+ * @returns {Array<{ serviceId, startTime: string, endTime: string }>}
+ */
+export function calculateServiceSchedule(orderedServices, startTime, bufferMinutes) {
+  const schedule = []
+  let currentMinutes = timeToMinutes(startTime)
+
+  for (let i = 0; i < orderedServices.length; i++) {
+    const service = orderedServices[i]
+    const serviceStart = currentMinutes
+    const serviceEnd = serviceStart + service.duration
+
+    schedule.push({
+      serviceId: service.serviceId,
+      startTime: minutesToTime(serviceStart),
+      endTime: minutesToTime(serviceEnd)
+    })
+
+    // Add buffer after this service (but not after the last one)
+    if (i < orderedServices.length - 1) {
+      currentMinutes = serviceEnd + bufferMinutes
+    }
+  }
+
+  return schedule
+}
+
+/**
+ * For a given service order, finds all valid start times on a single day.
+ *
+ * @param {Object} params
+ * @param {Array} params.orderedServices - Services in the desired sequence
+ * @param {Object} params.staffSchedulesByService - Map of serviceId → eligible StaffSchedule[]
+ * @param {Array} params.appointments - Existing appointments
+ * @param {string} params.date - YYYY-MM-DD
+ * @param {number} params.bufferMinutes - Buffer between services
+ * @returns {Array<{ startTime: string, schedule: Array<{ serviceId, startTime, endTime, staffId }> }>}
+ */
+export function findSlotsForOrder({ orderedServices, staffSchedulesByService, appointments, date, bufferMinutes }) {
+  if (!orderedServices || orderedServices.length === 0) return []
+
+  const requestedDate = new Date(date + 'T00:00:00')
+  const dayOfWeek = DAY_NAMES[requestedDate.getDay()]
+
+  // Determine the scanning range: earliest possible start to latest possible end
+  // based on all staff working hours across all services
+  const { earliestStart, latestEnd } = getScanRange(orderedServices, staffSchedulesByService, dayOfWeek, requestedDate)
+  if (earliestStart === null || latestEnd === null) return []
+
+  const totalDuration = calculateTotalBundleDuration(orderedServices, bufferMinutes)
+  if (earliestStart + totalDuration > latestEnd) return []
+
+  const validSlots = []
+
+  // Scan in 30-minute increments
+  let currentMinutes = earliestStart
+  // Align to 30-minute boundary
+  if (currentMinutes % 30 !== 0) {
+    currentMinutes = Math.ceil(currentMinutes / 30) * 30
+  }
+
+  while (currentMinutes + totalDuration <= latestEnd) {
+    const schedule = calculateServiceSchedule(orderedServices, minutesToTime(currentMinutes), bufferMinutes)
+
+    // Check if every service in the schedule has at least providersRequired staff available
+    const isValid = validateScheduleSlot(schedule, orderedServices, staffSchedulesByService, appointments, dayOfWeek, requestedDate, bufferMinutes)
+
+    if (isValid) {
+      validSlots.push({
+        startTime: minutesToTime(currentMinutes),
+        schedule: schedule.map((entry, idx) => ({
+          ...entry,
+          staffId: null // Staff assignment happens at booking time, not availability check
+        }))
+      })
+    }
+
+    currentMinutes += 30
+  }
+
+  return validSlots
+}
+
+/**
+ * Computes available start times for a sequential bundle of services.
+ * Tries all permutations of service ordering (up to 10 services) and returns
+ * the union of valid start times with the suggested optimal order.
+ *
+ * Pure function — no I/O, no side effects.
+ *
+ * @param {Object} params
+ * @param {Array} params.services - Array of service objects with serviceId, duration, allowedStaff, providersRequired, vendorId
+ * @param {Object} params.staffSchedulesByService - Map of serviceId → eligible StaffSchedule[]
+ * @param {Array} params.appointments - All existing appointments for the date(s) across relevant staff
+ * @param {string} params.startDate - Date string YYYY-MM-DD for the first day
+ * @param {number} params.bufferMinutes - Buffer between sequential services
+ * @param {Array} params.serviceOrder - Optional customer-specified order (array of serviceIds). If null, system finds optimal.
+ * @param {boolean} params.multiDay - Whether to consider multi-day scheduling
+ * @param {number} params.maxDays - Maximum consecutive days to span (default 1)
+ * @returns {{ slots: Array<{ startTime: string, schedule: Array<{ serviceId, startTime, endTime, day }> }>, suggestedOrder: string[] }}
+ */
+export function getSequentialBundleSlots({
+  services,
+  staffSchedulesByService,
+  appointments,
+  startDate,
+  bufferMinutes,
+  serviceOrder,
+  multiDay,
+  maxDays
+}) {
+  const effectiveMaxDays = maxDays || 1
+
+  // If customer specified an order, use only that order
+  if (serviceOrder && serviceOrder.length > 0) {
+    const orderedServices = serviceOrder.map(id => services.find(s => s.serviceId === id)).filter(Boolean)
+
+    if (multiDay && effectiveMaxDays > 1) {
+      const slots = findMultiDaySlots(orderedServices, staffSchedulesByService, appointments, startDate, bufferMinutes, effectiveMaxDays)
+      return { slots, suggestedOrder: serviceOrder }
+    }
+
+    const slots = findSlotsForOrder({
+      orderedServices,
+      staffSchedulesByService,
+      appointments,
+      date: startDate,
+      bufferMinutes
+    })
+
+    return { slots, suggestedOrder: serviceOrder }
+  }
+
+  // Try permutations to find the best ordering
+  const permutations = getPermutations(services)
+  let allSlots = []
+  let bestOrder = services.map(s => s.serviceId)
+  let bestSlotCount = 0
+
+  for (const perm of permutations) {
+    let slots
+
+    if (multiDay && effectiveMaxDays > 1) {
+      slots = findMultiDaySlots(perm, staffSchedulesByService, appointments, startDate, bufferMinutes, effectiveMaxDays)
+    } else {
+      slots = findSlotsForOrder({
+        orderedServices: perm,
+        staffSchedulesByService,
+        appointments,
+        date: startDate,
+        bufferMinutes
+      })
+    }
+
+    if (slots.length > bestSlotCount) {
+      bestSlotCount = slots.length
+      bestOrder = perm.map(s => s.serviceId)
+    }
+
+    // Merge slots (union by startTime)
+    for (const slot of slots) {
+      if (!allSlots.some(s => s.startTime === slot.startTime)) {
+        allSlots.push(slot)
+      }
+    }
+  }
+
+  // Sort slots by startTime
+  allSlots.sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
+
+  return { slots: allSlots, suggestedOrder: bestOrder }
+}
+
+// ─── Internal Helpers ────────────────────────────────────────────────────────
+
+/**
+ * Finds multi-day slots by distributing services across consecutive days.
+ */
+function findMultiDaySlots(orderedServices, staffSchedulesByService, appointments, startDate, bufferMinutes, maxDays) {
+  const slots = []
+
+  // Try distributing services across days: 1 service per day up to maxDays
+  const distributions = getMultiDayDistributions(orderedServices, maxDays)
+
+  for (const distribution of distributions) {
+    const daySlots = []
+    let allDaysValid = true
+
+    for (let dayOffset = 0; dayOffset < distribution.length; dayOffset++) {
+      const dayServices = distribution[dayOffset]
+      if (dayServices.length === 0) continue
+
+      const dayDate = addDays(startDate, dayOffset)
+      const slotsForDay = findSlotsForOrder({
+        orderedServices: dayServices,
+        staffSchedulesByService,
+        appointments,
+        date: dayDate,
+        bufferMinutes
+      })
+
+      if (slotsForDay.length === 0) {
+        allDaysValid = false
+        break
+      }
+
+      daySlots.push({ dayOffset, date: dayDate, slots: slotsForDay })
+    }
+
+    if (allDaysValid && daySlots.length > 0) {
+      // Use the first available slot from each day to build a multi-day schedule
+      const firstSlotPerDay = daySlots.map(ds => ds.slots[0])
+      const combinedSchedule = []
+
+      for (let i = 0; i < daySlots.length; i++) {
+        const daySchedule = firstSlotPerDay[i].schedule
+        for (const entry of daySchedule) {
+          combinedSchedule.push({
+            ...entry,
+            day: daySlots[i].dayOffset
+          })
+        }
+      }
+
+      slots.push({
+        startTime: firstSlotPerDay[0].startTime,
+        schedule: combinedSchedule
+      })
+    }
+  }
+
+  return slots
+}
+
+/**
+ * Generates distributions of services across days.
+ * For simplicity, tries: all on day 1, split evenly, one per day.
+ */
+function getMultiDayDistributions(services, maxDays) {
+  const distributions = []
+  const numServices = services.length
+  const daysToUse = Math.min(maxDays, numServices)
+
+  // Distribution 1: all services on day 1
+  const allOnOne = [services]
+  for (let i = 1; i < daysToUse; i++) allOnOne.push([])
+  distributions.push(allOnOne)
+
+  // Distribution 2: split evenly across days
+  if (daysToUse > 1) {
+    const perDay = Math.ceil(numServices / daysToUse)
+    const evenSplit = []
+    for (let d = 0; d < daysToUse; d++) {
+      evenSplit.push(services.slice(d * perDay, (d + 1) * perDay))
+    }
+    distributions.push(evenSplit)
+  }
+
+  // Distribution 3: one service per day (if enough days)
+  if (daysToUse >= numServices) {
+    const onePerDay = services.map(s => [s])
+    distributions.push(onePerDay)
+  }
+
+  return distributions
+}
+
+/**
+ * Validates that a proposed schedule slot is feasible:
+ * each service has enough eligible staff available at its scheduled time.
+ */
+function validateScheduleSlot(schedule, orderedServices, staffSchedulesByService, appointments, dayOfWeek, requestedDate, bufferMinutes) {
+  for (let i = 0; i < schedule.length; i++) {
+    const entry = schedule[i]
+    const service = orderedServices[i]
+    const providersRequired = service.providersRequired || 1
+    const staffSchedules = staffSchedulesByService[service.serviceId] || []
+
+    const availableCount = countAvailableStaff(
+      staffSchedules,
+      dayOfWeek,
+      requestedDate,
+      entry.startTime,
+      service.duration,
+      appointments,
+      bufferMinutes
+    )
+
+    if (availableCount < providersRequired) {
+      return false
+    }
+  }
+  return true
+}
+
+/**
+ * Counts how many staff members are available for a service at a given time.
+ */
+function countAvailableStaff(staffSchedules, dayOfWeek, requestedDate, time, duration, appointments, bufferMinutes) {
+  let count = 0
+
+  for (const staff of staffSchedules) {
+    if (!staff.isActive) continue
+    if (!isWorkingAtTime(staff, dayOfWeek, requestedDate, time, duration)) continue
+    if (hasConflict(staff.visibleId, appointments, time, duration, bufferMinutes)) continue
+    count++
+  }
+
+  return count
+}
+
+/**
+ * Checks if a staff member is working at the given time on the given day.
+ */
+function isWorkingAtTime(staff, dayOfWeek, requestedDate, time, duration) {
+  if (!staff.schedule) return false
+  const schedule = typeof staff.schedule === 'string' ? JSON.parse(staff.schedule) : staff.schedule
+  const daySchedule = schedule[dayOfWeek]
+  if (!daySchedule) return false
+
+  let hours = null
+  if (daySchedule.recurrence) {
+    hours = getRecurrenceHours(daySchedule, requestedDate)
+  } else if (daySchedule.start) {
+    hours = { start: daySchedule.start, end: daySchedule.end }
+  }
+
+  if (!hours) return false
+
+  const slotStart = timeToMinutes(time)
+  const slotEnd = slotStart + duration
+  const workStart = timeToMinutes(hours.start)
+  const workEnd = timeToMinutes(hours.end)
+
+  return slotStart >= workStart && slotEnd <= workEnd
+}
+
+/**
+ * Checks if a staff member has a conflicting appointment at the given time.
+ */
+function hasConflict(staffId, appointments, time, duration, bufferMinutes) {
+  const slotStart = timeToMinutes(time)
+  const slotEnd = slotStart + duration + bufferMinutes
+
+  return appointments.some(apt => {
+    if (apt.status === 'cancelled') return false
+    if (apt.staffId !== staffId) return false
+
+    const aptTime = extractTimeFromDateTime(apt.dateTime)
+    const aptStart = timeToMinutes(aptTime)
+    const customer = typeof apt.customer === 'string' ? JSON.parse(apt.customer) : apt.customer
+    const aptDuration = (customer?.isBlockedTime && customer?.duration) ? customer.duration : duration
+    const aptEnd = aptStart + aptDuration + bufferMinutes
+
+    return slotStart < aptEnd && slotEnd > aptStart
+  })
+}
+
+/**
+ * Determines the scan range (earliest start, latest end) across all staff for all services.
+ */
+function getScanRange(orderedServices, staffSchedulesByService, dayOfWeek, requestedDate) {
+  let earliestStart = Infinity
+  let latestEnd = 0
+  let hasAnyHours = false
+
+  for (const service of orderedServices) {
+    const staffSchedules = staffSchedulesByService[service.serviceId] || []
+
+    for (const staff of staffSchedules) {
+      if (!staff.isActive) continue
+      const hours = getStaffHours(staff, dayOfWeek, requestedDate)
+      if (!hours) continue
+
+      hasAnyHours = true
+      const startMin = timeToMinutes(hours.start)
+      const endMin = timeToMinutes(hours.end)
+      if (startMin < earliestStart) earliestStart = startMin
+      if (endMin > latestEnd) latestEnd = endMin
+    }
+  }
+
+  if (!hasAnyHours) return { earliestStart: null, latestEnd: null }
+  return { earliestStart, latestEnd }
+}
+
+/**
+ * Gets working hours for a staff member on a specific day.
+ */
+function getStaffHours(staff, dayOfWeek, requestedDate) {
+  if (!staff.schedule) return null
+  const schedule = typeof staff.schedule === 'string' ? JSON.parse(staff.schedule) : staff.schedule
+  const daySchedule = schedule[dayOfWeek]
+  if (!daySchedule) return null
+
+  if (daySchedule.recurrence) {
+    return getRecurrenceHours(daySchedule, requestedDate)
+  }
+
+  return daySchedule.start ? { start: daySchedule.start, end: daySchedule.end } : null
+}
+
+/**
+ * Generates all permutations of an array.
+ * For arrays longer than 5 elements, limits to a subset of permutations
+ * to avoid combinatorial explosion (5! = 120, 10! = 3.6M).
+ */
+function getPermutations(arr) {
+  if (arr.length <= 1) return [arr]
+
+  // For larger arrays, use heuristic orderings instead of full permutation
+  if (arr.length > 5) {
+    return getHeuristicOrderings(arr)
+  }
+
+  const result = []
+  function permute(current, remaining) {
+    if (remaining.length === 0) {
+      result.push(current)
+      return
+    }
+    for (let i = 0; i < remaining.length; i++) {
+      permute(
+        [...current, remaining[i]],
+        [...remaining.slice(0, i), ...remaining.slice(i + 1)]
+      )
+    }
+  }
+  permute([], arr)
+  return result
+}
+
+/**
+ * For larger service sets, generates a limited set of heuristic orderings:
+ * - Original order
+ * - Reversed
+ * - Sorted by duration (shortest first)
+ * - Sorted by duration (longest first)
+ * - Random shuffles
+ */
+function getHeuristicOrderings(arr) {
+  const orderings = []
+
+  // Original order
+  orderings.push([...arr])
+
+  // Reversed
+  orderings.push([...arr].reverse())
+
+  // Shortest duration first
+  orderings.push([...arr].sort((a, b) => a.duration - b.duration))
+
+  // Longest duration first
+  orderings.push([...arr].sort((a, b) => b.duration - a.duration))
+
+  // Group by vendor (same vendor services together)
+  const byVendor = [...arr].sort((a, b) => (a.vendorId || '').localeCompare(b.vendorId || ''))
+  orderings.push(byVendor)
+
+  // Interleave vendors (alternate between vendors)
+  const interleaved = interleaveByVendor(arr)
+  if (interleaved) orderings.push(interleaved)
+
+  return orderings
+}
+
+/**
+ * Interleaves services by vendor to spread them out.
+ */
+function interleaveByVendor(services) {
+  const vendorGroups = {}
+  for (const service of services) {
+    const vid = service.vendorId || 'unknown'
+    if (!vendorGroups[vid]) vendorGroups[vid] = []
+    vendorGroups[vid].push(service)
+  }
+
+  const groups = Object.values(vendorGroups)
+  if (groups.length < 2) return null
+
+  const result = []
+  let maxLen = Math.max(...groups.map(g => g.length))
+  for (let i = 0; i < maxLen; i++) {
+    for (const group of groups) {
+      if (i < group.length) {
+        result.push(group[i])
+      }
+    }
+  }
+
+  return result
+}
+
+/**
+ * Adds days to a date string and returns a new date string.
+ */
+function addDays(dateStr, days) {
+  const date = new Date(dateStr + 'T00:00:00')
+  date.setDate(date.getDate() + days)
+  return date.toISOString().split('T')[0]
+}
+
+/**
+ * Converts a time string "HH:MM" to minutes since midnight.
+ */
+function timeToMinutes(timeStr) {
+  const [h, m] = timeStr.split(':').map(Number)
+  return h * 60 + m
+}
+
+/**
+ * Converts minutes since midnight to "HH:MM" format.
+ */
+function minutesToTime(minutes) {
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`
+}
+
+/**
+ * Extracts the time portion (HH:MM) from a dateTime string.
+ * Handles both "2024-01-15T09:00" and "2024-01-15 09:00" formats.
+ */
+function extractTimeFromDateTime(dateTime) {
+  if (dateTime.includes('T')) {
+    return dateTime.split('T')[1].substring(0, 5)
+  }
+  return dateTime.split(' ')[1]
+}
