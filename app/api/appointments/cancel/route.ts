@@ -229,7 +229,7 @@ async function handleFullBundleCancellation(appointment: any, bundle: any, detai
   // Cancel all appointments in the bundle
   const cancelResults = await Promise.all(
     appointmentIds.map((id: string) =>
-      client.models.Appointment.update({ appointmentId: id, status: 'cancelled' as any })
+      client.models.Appointment.update({ appointmentId: id, status: 'cancelled' } as any)
     )
   );
 

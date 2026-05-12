@@ -471,7 +471,10 @@ async function handleQuantityBooking(body: any, amplifyClient: any) {
   } catch (e) { console.error('Client auto-populate failed:', e); }
 
   // Send notifications
-  await sendBookingNotifications({ appointmentId: appointmentIds[0], vendorId, serviceId, staffId: assignedStaffId, dateTime, customer });
+  const notifyStaffId = mode === 'parallel'
+    ? (appointmentIds.length > 0 ? staffId : undefined)
+    : staffId;
+  await sendBookingNotifications({ appointmentId: appointmentIds[0], vendorId, serviceId, staffId: notifyStaffId, dateTime, customer });
 
   return Response.json({ success: true, appointmentIds, groupId, quantity, mode: quantityMode });
 }
