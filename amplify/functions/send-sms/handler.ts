@@ -21,6 +21,14 @@ export const handler = async (event: any) => {
     const command = new PublishCommand({
       PhoneNumber: formattedPhone,
       Message: message,
+      ...(process.env.SNS_ORIGINATION_NUMBER && {
+        MessageAttributes: {
+          'AWS.MM.SMS.OriginationNumber': {
+            DataType: 'String',
+            StringValue: process.env.SNS_ORIGINATION_NUMBER,
+          },
+        },
+      }),
     });
 
     await snsClient.send(command);

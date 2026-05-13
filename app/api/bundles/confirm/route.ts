@@ -11,6 +11,23 @@ function formatPhone(phone: string): string {
   return phone.startsWith('+') ? phone : `+1${phone.replace(/\D/g, '')}`;
 }
 
+function buildSnsParams(phoneNumber: string, message: string) {
+  const params: any = {
+    PhoneNumber: formatPhone(phoneNumber),
+    Message: message,
+  };
+  const originationNumber = process.env.SNS_ORIGINATION_NUMBER;
+  if (originationNumber) {
+    params.MessageAttributes = {
+      'AWS.MM.SMS.OriginationNumber': {
+        DataType: 'String',
+        StringValue: originationNumber,
+      },
+    };
+  }
+  return params;
+}
+
 function parseJsonField(value: any): any {
   return typeof value === 'string' ? JSON.parse(value) : value || {};
 }
@@ -35,10 +52,10 @@ async function cancelBundle(bundleId: string, vendorId: string, bundle: any, con
   });
 
   if (customer?.phone && customer?.smsOptIn) {
-    snsClient.send(new PublishCommand({
-      PhoneNumber: formatPhone(customer.phone),
-      Message: `Bundle Cancelled\n\nYour ${bundle.name} booking has been cancelled by a vendor.\n\nThe Spa Synergy\nReply STOP to opt out`,
-    })).catch(err => console.error('SMS failed:', err));
+    snsClient.send(new PublishCommand(buildSnsParams(
+      customer.phone,
+      `Bundle Cancelled\n\nYour ${bundle.name} booking has been cancelled by a vendor.\n\nThe Spa Synergy\nReply STOP to opt out`
+    ))).catch(err => console.error('SMS failed:', err));
   }
 }
 
@@ -72,10 +89,10 @@ async function confirmVendorPortion(bundleId: string, vendorId: string, bundle: 
           return new Date(dt).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/New_York' })
         })()
       : '';
-    snsClient.send(new PublishCommand({
-      PhoneNumber: formatPhone(customer.phone),
-      Message: `Bundle Confirmed!\n\n${bundle.name}\nDate/Time: ${formattedDateTime}\n\nAll vendors have confirmed your appointment.\n\nThe Spa Synergy\nReply STOP to opt out`,
-    })).catch(err => console.error('SMS failed:', err));
+    snsClient.send(new PublishCommand(buildSnsParams(
+      customer.phone,
+      `Bundle Confirmed!\n\n${bundle.name}\nDate/Time: ${formattedDateTime}\n\nAll vendors have confirmed your appointment.\n\nThe Spa Synergy\nReply STOP to opt out`
+    ))).catch(err => console.error('SMS failed:', err));
   }
 
   return newStatus;

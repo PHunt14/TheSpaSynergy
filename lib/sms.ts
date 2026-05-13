@@ -7,10 +7,24 @@ function formatPhone(phone: string): string {
 async function sendViaSns(phoneNumber: string, message: string) {
   const { SNSClient, PublishCommand } = await import('@aws-sdk/client-sns')
   const client = new SNSClient({ region: process.env.AWS_REGION || 'us-east-1' })
-  await client.send(new PublishCommand({
+
+  const params: any = {
     PhoneNumber: formatPhone(phoneNumber),
     Message: message,
-  }))
+  }
+
+  // Use registered origination number (10DLC/toll-free) if configured
+  const originationNumber = process.env.SNS_ORIGINATION_NUMBER
+  if (originationNumber) {
+    params.MessageAttributes = {
+      'AWS.MM.SMS.OriginationNumber': {
+        DataType: 'String',
+        StringValue: originationNumber,
+      },
+    }
+  }
+
+  await client.send(new PublishCommand(params))
 }
 
 async function sendViaTwilio(phoneNumber: string, message: string) {
