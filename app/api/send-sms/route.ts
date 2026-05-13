@@ -38,13 +38,17 @@ export async function POST(request: Request) {
       : appointment.customer
 
     const dateTime = appointment.dateTime
-    const formattedDateTime = dateTime ? new Date(dateTime).toLocaleString('en-US', {
+    const dtWithOffset = dateTime && !(dateTime.includes('Z') || dateTime.includes('+') || dateTime.includes('-', 10))
+      ? dateTime + '-04:00'
+      : dateTime
+    const formattedDateTime = dtWithOffset ? new Date(dtWithOffset).toLocaleString('en-US', {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
       hour: 'numeric',
       minute: '2-digit',
-      hour12: true
+      hour12: true,
+      timeZone: 'America/New_York'
     }) : 'Not specified'
 
     const message = `New Booking Alert!\n\nService: ${service?.name || 'N/A'}\nCustomer: ${customer.name}\nPhone: ${customer.phone}\nDate/Time: ${formattedDateTime}\n\nThe Spa Synergy\nReply STOP to opt out`
