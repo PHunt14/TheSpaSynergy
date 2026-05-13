@@ -63,10 +63,14 @@ export async function GET(request: Request) {
   const currentUser = await getCurrentUser();
   if (!currentUser) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-  // Vendor/owner can only see their own vendor's schedules
-  const effectiveVendorId = (currentUser.role === 'vendor' || currentUser.role === 'owner')
-    ? currentUser.vendorId
-    : vendorId;
+  const allParam = searchParams.get('all');
+
+  // Vendor/owner can only see their own vendor's schedules (unless all=true for multi-provider booking)
+  const effectiveVendorId = allParam === 'true'
+    ? null
+    : (currentUser.role === 'vendor' || currentUser.role === 'owner')
+      ? currentUser.vendorId
+      : vendorId;
 
   try {
     if (effectiveVendorId) {

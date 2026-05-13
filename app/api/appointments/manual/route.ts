@@ -113,7 +113,7 @@ export async function POST(request: Request) {
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await request.json();
-    const { vendorId, serviceId, staffId, dateTime, customerName, customerPhone, customerEmail, notes, isBlockedTime, duration } = body;
+    const { vendorId, serviceId, staffId, staffIds, dateTime, customerName, customerPhone, customerEmail, notes, isBlockedTime, duration } = body;
 
     if (!vendorId || !dateTime) return Response.json({ error: 'vendorId and dateTime are required' }, { status: 400 });
     if (user.role === 'vendor' && vendorId !== user.vendorId) {
@@ -135,6 +135,47 @@ export async function POST(request: Request) {
       }
 
       return Response.json({ success: true, appointmentId });
+    }
+
+    // Multi-provider booking (e.g., couples head bath)
+    if (staffIds && staffIds.length > 1) {
+      const groupId = randomUUID();
+      const appointmentIds: string[] = [];
+
+      // Look up each staff member to get their vendorId
+      for (const sid of staffIds) {
+        const { data: staffRecord } = await client.models.StaffSchedule.get({ visibleId: sid });
+        const staffVendorId = staffRecord?.vendorId || vendorId;
+        const aptId = randomUUID();
+
+        const { errors: createErrors } = await client.models.Appointment.create({
+          appointmentId: aptId, vendorId: staffVendorId, serviceId: serviceId || 'manual', staffId: sid, groupId, dateTime,
+          customer: JSON.stringify({ name: customerName || 'Manual Entry', phone: customerPhone || '', email: customerEmail || '', notes: notes || '', isManual: true }),
+          status: 'confirmed', createdAt: new Date().toISOString(),
+        } as any);
+
+        if (createErrors) {
+          console.error('Error creating multi-provider appointment:', createErrors);
+          // Roll back any already created
+          for (const id of appointmentIds) {
+            await client.models.Appointment.update({ appointmentId: id, status: 'cancelled' } as any).catch(() => {});
+          }
+          return Response.json({ error: 'Failed to create appointments' }, { status: 500 });
+        }
+        appointmentIds.push(aptId);
+      }
+
+      // Send notifications for each appointment
+      try {
+        for (let i = 0; i < staffIds.length; i++) {
+          const { data: staffRecord } = await client.models.StaffSchedule.get({ visibleId: staffIds[i] });
+          const staffVendorId = staffRecord?.vendorId || vendorId;
+          const ctx = await resolveManualApptContext(staffVendorId, serviceId, staffIds[i]);
+          await Promise.all(sendManualApptNotifications({ ...ctx, dateTime, customerName, customerPhone, customerEmail } as ManualApptContext));
+        }
+      } catch (e) { console.error('Multi-provider notification error:', e); }
+
+      return Response.json({ success: true, appointmentIds, groupId });
     }
 
     const { errors } = await client.models.Appointment.create({

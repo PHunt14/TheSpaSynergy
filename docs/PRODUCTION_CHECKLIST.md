@@ -86,6 +86,11 @@ After the `main` branch deploys and the prod backend is created:
   - SNS Console → Text messaging → Edit account settings
   - Use case: "Appointment booking confirmations for spa customers"
   - Approval takes ~24 hours
+- [ ] **Create and attach SSR Compute Role** (required for Next.js server to call SNS)
+  - IAM Console → Create role with trust policy for `amplify.amazonaws.com`
+  - Attach policy granting `sns:Publish` on `*`
+  - Amplify Console → App settings → IAM roles → Compute role → attach the role
+  - No redeploy needed — takes effect immediately
 - [ ] Set `SNS_ORIGINATION_NUMBER` in Amplify env vars to the registered number
 - [ ] Redeploy after updating the env var
 - [ ] Test with a real booking

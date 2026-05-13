@@ -648,10 +648,15 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
   })
   const [services, setServices] = useState([])
   const [staffList, setStaffList] = useState([])
+  const [allStaff, setAllStaff] = useState([])
   const [serviceId, setServiceId] = useState(defaultServiceId || '')
   const [staffId, setStaffId] = useState(defaultStaffId || '')
+  const [staffId2, setStaffId2] = useState('')
   const [duration, setDuration] = useState(60)
   const [submitting, setSubmitting] = useState(false)
+
+  const selectedService = services.find(s => s.serviceId === serviceId)
+  const isMultiProvider = selectedService?.providersRequired > 1
 
   useEffect(() => {
     if (!vendorId) return
@@ -659,13 +664,21 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
     fetch(`/api/staff-schedules?vendorId=${vendorId}`).then(r => r.json()).then(d => setStaffList((d.schedules || []).filter(s => s.isActive !== false)))
   }, [vendorId])
 
+  // Fetch all staff across vendors when a multi-provider service is selected
+  useEffect(() => {
+    if (!isMultiProvider) { setAllStaff([]); return }
+    fetch('/api/staff-schedules?all=true').then(r => r.json()).then(d => setAllStaff((d.schedules || []).filter(s => s.isActive !== false)))
+  }, [isMultiProvider])
+
   const handleSubmit = async () => {
     if (!form.dateTime) { alert('Please select a date and time'); return }
+    if (isMultiProvider && (!staffId || !staffId2)) { alert('Please select both staff members for this service'); return }
+    if (isMultiProvider && staffId === staffId2) { alert('Please select two different staff members'); return }
     setSubmitting(true)
     try {
       const body = mode === 'block'
         ? { vendorId, staffId: staffId || undefined, dateTime: form.dateTime, customerName: 'Blocked Time', notes: form.notes, isBlockedTime: true, duration }
-        : { vendorId, serviceId: serviceId || undefined, staffId: staffId || undefined, dateTime: form.dateTime, customerName: form.customerName, customerPhone: form.customerPhone, customerEmail: form.customerEmail, notes: form.notes }
+        : { vendorId, serviceId: serviceId || undefined, staffId: staffId || undefined, staffIds: isMultiProvider ? [staffId, staffId2] : undefined, dateTime: form.dateTime, customerName: form.customerName, customerPhone: form.customerPhone, customerEmail: form.customerEmail, notes: form.notes }
 
       const res = await fetch('/api/appointments/manual', {
         method: 'POST',
@@ -723,13 +736,25 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
 
         {/* Staff */}
         <div style={{ marginBottom: '1rem' }}>
-          <label htmlFor="new-apt-staff" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Staff Member</label>
+          <label htmlFor="new-apt-staff" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>{isMultiProvider ? 'Staff Member 1' : 'Staff Member'}</label>
           <select id="new-apt-staff" value={staffId} onChange={(e) => setStaffId(e.target.value)}
             style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem' }}>
             <option value="">None</option>
-            {staffList.map(s => <option key={s.visibleId} value={s.visibleId}>{s.staffName}</option>)}
+            {(isMultiProvider ? allStaff : staffList).map(s => <option key={s.visibleId} value={s.visibleId}>{s.staffName}{s.vendorId !== vendorId ? ` (${s.vendorId.replace('vendor-', '')})` : ''}</option>)}
           </select>
         </div>
+
+        {/* Staff 2 (multi-provider) */}
+        {isMultiProvider && (
+          <div style={{ marginBottom: '1rem' }}>
+            <label htmlFor="new-apt-staff2" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Staff Member 2</label>
+            <select id="new-apt-staff2" value={staffId2} onChange={(e) => setStaffId2(e.target.value)}
+              style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem' }}>
+              <option value="">Select second staff</option>
+              {(allStaff.length > 0 ? allStaff : staffList).filter(s => s.visibleId !== staffId).map(s => <option key={s.visibleId} value={s.visibleId}>{s.staffName}{s.vendorId !== vendorId ? ` (${s.vendorId.replace('vendor-', '')})` : ''}</option>)}
+            </select>
+          </div>
+        )}
 
         {mode === 'appointment' ? (
           <>
@@ -890,7 +915,7 @@ export default function Calendar() {
   useEffect(() => {
     if (!userRole) return
     Promise.all([
-      fetch('/api/staff-schedules').then(r => r.json()),
+      fetch('/api/staff-schedules?all=true').then(r => r.json()),
       fetch('/api/vendors').then(r => r.json())
     ]).then(([staffData, vendorData]) => {
       const staff = (staffData.schedules || []).filter(s => s.isActive !== false)
