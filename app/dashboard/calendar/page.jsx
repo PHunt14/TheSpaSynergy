@@ -915,7 +915,7 @@ export default function Calendar() {
   useEffect(() => {
     if (!userRole) return
     Promise.all([
-      fetch('/api/staff-schedules').then(r => r.json()),
+      fetch('/api/staff-schedules?all=true').then(r => r.json()),
       fetch('/api/vendors').then(r => r.json())
     ]).then(([staffData, vendorData]) => {
       const staff = (staffData.schedules || []).filter(s => s.isActive !== false)
