@@ -223,6 +223,21 @@ Body:
 }
 ```
 
+**Multi-provider appointment (e.g., Couples Head Bath):**
+```json
+{
+  "vendorId": "vendor-kera-studio",
+  "serviceId": "svc-kera-couple-head-bath",
+  "staffIds": ["staff-kera-stacey", "staff-selene-glow"],
+  "dateTime": "2025-07-15T14:00:00",
+  "customerName": "Jane & John",
+  "customerPhone": "2401234567",
+  "customerEmail": "client@example.com"
+}
+```
+
+When `staffIds` is provided with 2+ entries, the API creates one appointment per staff member linked by a shared `groupId`. Each appointment's `vendorId` is resolved from the staff member's record (so providers from different vendors each get their own appointment on their calendar).
+
 **Blocked time:**
 ```json
 {
@@ -268,6 +283,9 @@ Required: `vendorId`, `dateTime`. For blocked time, also send `isBlockedTime: tr
 - [ ] Vendor role can only add to their own vendor
 - [ ] Admin can add to any vendor
 - [ ] Unauthenticated request → 401
+- [ ] Multi-provider service (e.g., Couples Head Bath) → shows two staff pickers in modal
+- [ ] Multi-provider booking creates 2 appointments with shared groupId
+- [ ] Multi-provider appointments have correct vendorId per staff member's vendor
 
 **Blocked Time**
 - [ ] Block time with staff member → appears with gray styling and "🚫 Blocked Time" label

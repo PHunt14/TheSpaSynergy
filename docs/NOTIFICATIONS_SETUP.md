@@ -194,6 +194,8 @@ Emails will include a banner showing the original recipient.
 - [ ] SES domain verified and production access approved
 - [ ] Remove `SMS_TEST_PHONE` and `EMAIL_TEST_ADDRESS` from `.env.local`
 - [ ] Set `SMS_PROVIDER=sns` and `EMAIL_PROVIDER=ses`
+- [ ] **Amplify SSR Compute Role** attached with `sns:Publish` permission (App settings → IAM roles → Compute role)
+- [ ] `SNS_ORIGINATION_NUMBER` set in Amplify environment variables
 - [ ] Test with a real booking
 
 ---
