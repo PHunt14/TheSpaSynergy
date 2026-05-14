@@ -91,6 +91,8 @@ export default function Services() {
       description: newService.description,
       duration: newService.duration,
       price: newService.price,
+      houseFeeEnabled: newService.houseFeeEnabled,
+      houseFeeAmount: newService.houseFeeEnabled ? newService.houseFeeAmount : 0,
       requiresConsultation: newService.requiresConsultation,
       cardPaymentDisabled: newService.cardPaymentDisabled,
       resourceType: newService.resourceType,
@@ -112,7 +114,7 @@ export default function Services() {
         alert(editingService ? 'Service updated successfully!' : 'Service added successfully!')
         setShowAddForm(false)
         setEditingService(null)
-        setNewService({ name: '', category: '', description: '', duration: 30, price: 0, requiresConsultation: false, cardPaymentDisabled: false, resourceType: 'staff', staffRestriction: 'all', allowedStaff: [], parentServiceIds: [], maxQuantityPerBooking: 1, providersRequired: 1 })
+        setNewService({ name: '', category: '', description: '', duration: 30, price: 0, requiresConsultation: false, cardPaymentDisabled: false, resourceType: 'staff', staffRestriction: 'all', allowedStaff: [], parentServiceIds: [], maxQuantityPerBooking: 1, providersRequired: 1, houseFeeEnabled: false, houseFeeAmount: 0 })
         const data = await fetch(`/api/services?vendorId=${selectedVendor}&includeInactive=true`).then(r => r.json())
         setServices(data.services || [])
       } else {
@@ -155,6 +157,8 @@ export default function Services() {
       description: service.description || '',
       duration: service.duration,
       price: service.price,
+      houseFeeEnabled: service.houseFeeEnabled || false,
+      houseFeeAmount: service.houseFeeAmount || 0,
       requiresConsultation: service.requiresConsultation || false,
       cardPaymentDisabled: service.cardPaymentDisabled || false,
       resourceType: service.resourceType || 'staff',
@@ -171,7 +175,7 @@ export default function Services() {
   const handleCancelEdit = () => {
     setEditingService(null)
     setShowAddForm(false)
-    setNewService({ name: '', category: '', description: '', duration: 30, price: 0, requiresConsultation: false, cardPaymentDisabled: false, resourceType: 'staff', staffRestriction: 'all', allowedStaff: [], parentServiceIds: [], maxQuantityPerBooking: 1, providersRequired: 1 })
+    setNewService({ name: '', category: '', description: '', duration: 30, price: 0, requiresConsultation: false, cardPaymentDisabled: false, resourceType: 'staff', staffRestriction: 'all', allowedStaff: [], parentServiceIds: [], maxQuantityPerBooking: 1, providersRequired: 1, houseFeeEnabled: false, houseFeeAmount: 0 })
   }
 
   const handleDelete = async (service) => {
@@ -343,6 +347,44 @@ export default function Services() {
               }}
             />
           </div>
+
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={newService.houseFeeEnabled}
+                onChange={(e) => setNewService({ ...newService, houseFeeEnabled: e.target.checked })}
+                style={{ width: '20px', height: '20px', cursor: 'pointer' }}
+              />
+              <span>House Fee Enabled</span>
+            </label>
+            <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.5rem', marginLeft: '1.75rem' }}>
+              A portion of this service&apos;s price goes to the house (facility fee).
+            </p>
+          </div>
+
+          {newService.houseFeeEnabled && (
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem' }}>House Fee Amount ($)</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={newService.houseFeeAmount}
+                onChange={(e) => setNewService({ ...newService, houseFeeAmount: parseFloat(e.target.value) || 0 })}
+                style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  borderRadius: '8px',
+                  border: '1px solid var(--color-border)',
+                  fontSize: '1rem'
+                }}
+              />
+              <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.5rem' }}>
+                Fixed dollar amount deducted from the service price and paid to the house. Vendor receives ${(newService.price - (newService.houseFeeAmount || 0)).toFixed(2)}.
+              </p>
+            </div>
+          )}
 
           <div style={{ marginBottom: '1rem' }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
