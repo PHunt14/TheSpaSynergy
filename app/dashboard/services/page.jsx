@@ -168,8 +168,7 @@ export default function Services() {
       maxQuantityPerBooking: service.maxQuantityPerBooking || 1,
     providersRequired: service.providersRequired || 1
   })
-  setShowAddForm(true)
-  setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
+  setShowAddForm(false)
 }
 
   const handleCancelEdit = () => {
@@ -238,11 +237,11 @@ export default function Services() {
 
       <button
         onClick={() => {
-          if (showAddForm && editingService) {
+          if (showAddForm) {
             handleCancelEdit()
           } else {
-            setShowAddForm(!showAddForm)
-            if (showAddForm) setEditingService(null)
+            setEditingService(null)
+            setShowAddForm(true)
           }
         }}
         className="cta"
@@ -251,14 +250,14 @@ export default function Services() {
         {showAddForm ? 'Cancel' : '+ Add New Service'}
       </button>
 
-      {showAddForm && (
+      {showAddForm && !editingService && (
         <form ref={formRef} onSubmit={handleAddService} style={{
           background: 'var(--color-accent)',
           padding: '1.5rem',
           borderRadius: '8px',
           marginBottom: '2rem'
         }}>
-          <h3>{editingService ? 'Edit Service' : 'Add New Service'}</h3>
+          <h3>Add New Service</h3>
           
           <div style={{ marginBottom: '1rem' }}>
             <label style={{ display: 'block', marginBottom: '0.5rem' }}>Service Name *</label>
@@ -559,10 +558,7 @@ export default function Services() {
           )}
 
           <div style={{ display: 'flex', gap: '1rem' }}>
-            <button type="submit" className="cta">{editingService ? 'Update Service' : 'Save Service'}</button>
-            {editingService && (
-              <button type="button" onClick={handleCancelEdit} style={{ padding: '0.75rem 1.5rem', borderRadius: '8px', border: '1px solid var(--color-border)', cursor: 'pointer', background: 'white', fontSize: '1rem' }}>Cancel</button>
-            )}
+            <button type="submit" className="cta">Save Service</button>
           </div>
         </form>
       )}
@@ -577,45 +573,223 @@ export default function Services() {
         const parentServices = services.filter(s => !(s.parentServiceIds?.length > 0))
         const getAddons = (parentId) => services.filter(s => s.parentServiceIds?.includes(parentId))
 
-        const ServiceRow = ({ service, isAddon }) => (
-          <div
-            key={service.serviceId}
-            style={{
-              background: isAddon ? '#f9f5f0' : 'var(--color-accent)',
-              padding: isAddon ? '1rem 1.5rem 1rem 2.5rem' : '1.5rem',
-              borderRadius: isAddon ? '0' : '8px',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              ...(isAddon ? { borderTop: '1px dashed var(--color-border)' } : {})
-            }}
-          >
-            <div>
-              <h3 style={{ marginBottom: '0.5rem', fontSize: isAddon ? '1rem' : undefined }}>
-                {isAddon && <span style={{ color: 'var(--color-text-light)', marginRight: '0.5rem' }}>↳</span>}
-                {service.name}
-                {isAddon && <span style={{ fontSize: '0.8rem', color: 'var(--color-primary)', marginLeft: '0.5rem', fontWeight: 'normal' }}>Add-on</span>}
-              </h3>
-              {service.description && (
-                <p style={{ color: 'var(--color-text)', fontSize: '0.9rem', marginBottom: '0.5rem' }}>
-                  {service.description}
-                </p>
-              )}
-              <p style={{ color: 'var(--color-text-light)', fontSize: '0.9rem' }}>
-                {service.category && `${service.category} • `}{service.duration} min • ${service.price}
-                {service.maxQuantityPerBooking > 1 && ` • 🔢 Up to ${service.maxQuantityPerBooking}`}
-                {service.providersRequired > 1 && ` • 👥 ${service.providersRequired} providers`}
-                {service.requiresConsultation && ' • ⚠️ Requires Consultation'}
-                {service.cardPaymentDisabled && ' • 💳 Card Payment Disabled'}
+        const EditForm = () => (
+          <form ref={formRef} onSubmit={handleAddService} style={{
+            background: '#fff8f0',
+            padding: '1.5rem',
+            borderRadius: '8px',
+            border: '2px solid var(--color-primary)',
+          }}>
+            <h3>{editingService ? `Editing: ${editingService.name}` : 'Add New Service'}</h3>
+            
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem' }}>Service Name *</label>
+              <input type="text" required value={newService.name} onChange={(e) => setNewService({ ...newService, name: e.target.value })}
+                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem' }}>Category</label>
+              <input type="text" value={newService.category} onChange={(e) => setNewService({ ...newService, category: e.target.value })}
+                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem' }}>Description</label>
+              <textarea value={newService.description} onChange={(e) => setNewService({ ...newService, description: e.target.value })} rows="3"
+                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem', resize: 'vertical' }} />
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem' }}>Duration (minutes) *</label>
+              <input type="number" required min="5" step="5" value={newService.duration} onChange={(e) => setNewService({ ...newService, duration: parseInt(e.target.value) })}
+                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem' }}>Price ($) *</label>
+              <input type="number" required min="0" step="0.01" value={newService.price} onChange={(e) => setNewService({ ...newService, price: parseFloat(e.target.value) })}
+                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                <input type="checkbox" checked={newService.houseFeeEnabled} onChange={(e) => setNewService({ ...newService, houseFeeEnabled: e.target.checked })}
+                  style={{ width: '20px', height: '20px', cursor: 'pointer' }} />
+                <span>House Fee Enabled</span>
+              </label>
+              <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.5rem', marginLeft: '1.75rem' }}>
+                A portion of this service&apos;s price goes to the house (facility fee).
               </p>
             </div>
-            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexShrink: 0 }}>
-              <button onClick={() => handleEdit(service)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: 'var(--color-primary)', color: 'white' }}>Edit</button>
-              <button onClick={() => handleToggleActive(service)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: service.isActive ? '#4CAF50' : '#999', color: 'white' }}>{service.isActive ? 'Active' : 'Inactive'}</button>
-              <button onClick={() => handleDelete(service)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: '#f44336', color: 'white' }}>Delete</button>
+
+            {newService.houseFeeEnabled && (
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.5rem' }}>House Fee Amount ($)</label>
+                <input type="number" min="0" step="0.01" value={newService.houseFeeAmount} onChange={(e) => setNewService({ ...newService, houseFeeAmount: parseFloat(e.target.value) || 0 })}
+                  style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />
+                <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.5rem' }}>
+                  Fixed dollar amount deducted from the service price and paid to the house. Vendor receives ${(newService.price - (newService.houseFeeAmount || 0)).toFixed(2)}.
+                </p>
+              </div>
+            )}
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                <input type="checkbox" checked={newService.requiresConsultation} onChange={(e) => setNewService({ ...newService, requiresConsultation: e.target.checked })}
+                  style={{ width: '20px', height: '20px', cursor: 'pointer' }} />
+                <span>Requires Consultation (customer must call to schedule)</span>
+              </label>
             </div>
-          </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                <input type="checkbox" checked={newService.cardPaymentDisabled} onChange={(e) => setNewService({ ...newService, cardPaymentDisabled: e.target.checked })}
+                  style={{ width: '20px', height: '20px', cursor: 'pointer' }} />
+                <span>Disable Card Payment (customers must pay in-person)</span>
+              </label>
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem' }}>Max Quantity Per Booking</label>
+              <input type="number" min="1" max="10" value={newService.maxQuantityPerBooking} onChange={(e) => setNewService({ ...newService, maxQuantityPerBooking: parseInt(e.target.value) || 1 })}
+                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />
+              <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.5rem' }}>
+                Allow customers to book multiple units at once (e.g., 3 haircuts for a family). Set to 1 to disable.
+              </p>
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem' }}>Providers Required</label>
+              <input type="number" min="1" max="10" value={newService.providersRequired} onChange={(e) => setNewService({ ...newService, providersRequired: parseInt(e.target.value) || 1 })}
+                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />
+              <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.5rem' }}>
+                Number of staff needed simultaneously (e.g., 2 for a couples service). Each provider gets their own appointment on their calendar.
+              </p>
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem' }}>Add-on of Service(s)</label>
+              <select multiple value={newService.parentServiceIds}
+                onChange={(e) => { setNewService({ ...newService, parentServiceIds: Array.from(e.target.selectedOptions, option => option.value) }) }}
+                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem', minHeight: '100px' }}>
+                {services.filter(s => !(s.parentServiceIds?.length > 0) && s.serviceId !== editingService?.serviceId).map(s => (
+                  <option key={s.serviceId} value={s.serviceId}>{s.name}</option>
+                ))}
+              </select>
+              <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.5rem' }}>
+                Hold Ctrl (Cmd on Mac) to select multiple parent services. Leave empty for a standalone service.
+              </p>
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem' }}>Resource Type</label>
+              <select value={newService.resourceType} onChange={(e) => setNewService({ ...newService, resourceType: e.target.value })}
+                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }}>
+                <option value="staff">Staff</option>
+                <option value="sauna">Sauna</option>
+              </select>
+            </div>
+
+            {newService.resourceType === 'staff' && (
+              <>
+                <div style={{ marginBottom: '1rem' }}>
+                  <label style={{ display: 'block', marginBottom: '0.5rem' }}>Staff Assignment</label>
+                  <select value={newService.staffRestriction}
+                    onChange={(e) => { setNewService({ ...newService, staffRestriction: e.target.value, allowedStaff: e.target.value === 'all' ? [] : newService.allowedStaff }) }}
+                    style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }}>
+                    <option value="all">All Staff Members</option>
+                    <option value="specific">Specific Staff Members</option>
+                  </select>
+                </div>
+
+                {newService.staffRestriction === 'specific' && (
+                  <div style={{ marginBottom: '1rem' }}>
+                    <label style={{ display: 'block', marginBottom: '0.5rem' }}>Select Staff Members</label>
+                    <div style={{ border: '1px solid var(--color-border)', borderRadius: '8px', padding: '0.75rem', maxHeight: '200px', overflowY: 'auto' }}>
+                      {staffSchedules.filter(s => s.vendorId === selectedVendor && s.isActive !== false).map(s => (
+                        <label key={s.visibleId} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', padding: '0.35rem 0' }}>
+                          <input type="checkbox" checked={newService.allowedStaff.includes(s.visibleId)}
+                            onChange={(e) => { setNewService({ ...newService, allowedStaff: e.target.checked ? [...newService.allowedStaff, s.visibleId] : newService.allowedStaff.filter(id => id !== s.visibleId) }) }}
+                            style={{ width: '18px', height: '18px', cursor: 'pointer' }} />
+                          <span>{s.staffName}</span>
+                        </label>
+                      ))}
+                      {staffSchedules.filter(s => s.vendorId === selectedVendor && s.isActive !== false).length === 0 && (
+                        <p style={{ color: 'var(--color-text-light)', fontSize: '0.9rem', margin: 0 }}>No staff schedules found for this vendor.</p>
+                      )}
+                    </div>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.5rem' }}>
+                      Only selected staff members will be available for this service.
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+
+            <div style={{ display: 'flex', gap: '1rem' }}>
+              <button type="submit" className="cta">{editingService ? 'Update Service' : 'Save Service'}</button>
+              <button type="button" onClick={handleCancelEdit} style={{ padding: '0.75rem 1.5rem', borderRadius: '8px', border: '1px solid var(--color-border)', cursor: 'pointer', background: 'white', fontSize: '1rem' }}>Cancel</button>
+            </div>
+          </form>
         )
+
+        const ServiceRow = ({ service, isAddon }) => {
+          const staffNames = service.allowedStaff && service.allowedStaff.length > 0
+            ? service.allowedStaff.map(id => {
+                const staff = staffSchedules.find(s => s.visibleId === id)
+                return staff?.staffName?.split(' ')[0] || id.replace('staff-', '')
+              })
+            : null
+
+          return (
+          <div key={service.serviceId}>
+            <div
+              style={{
+                background: isAddon ? '#f9f5f0' : 'var(--color-accent)',
+                padding: isAddon ? '1rem 1.5rem 1rem 2.5rem' : '1.5rem',
+                borderRadius: isAddon ? '0' : '8px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                ...(isAddon ? { borderTop: '1px dashed var(--color-border)' } : {})
+              }}
+            >
+              <div>
+                <h3 style={{ marginBottom: '0.5rem', fontSize: isAddon ? '1rem' : undefined }}>
+                  {isAddon && <span style={{ color: 'var(--color-text-light)', marginRight: '0.5rem' }}>↳</span>}
+                  {service.name}
+                  {isAddon && <span style={{ fontSize: '0.8rem', color: 'var(--color-primary)', marginLeft: '0.5rem', fontWeight: 'normal' }}>Add-on</span>}
+                </h3>
+                {service.description && (
+                  <p style={{ color: 'var(--color-text)', fontSize: '0.9rem', marginBottom: '0.5rem' }}>
+                    {service.description}
+                  </p>
+                )}
+                <p style={{ color: 'var(--color-text-light)', fontSize: '0.9rem' }}>
+                  {service.category && `${service.category} • `}{service.duration} min • ${service.price}
+                  {service.houseFeeEnabled && ` • 🏠 $${service.houseFeeAmount} → You keep $${(service.price - (service.houseFeeAmount || 0)).toFixed(0)}`}
+                  {service.maxQuantityPerBooking > 1 && ` • 🔢 Up to ${service.maxQuantityPerBooking}`}
+                  {service.providersRequired > 1 && ` • 👥 ${service.providersRequired} providers`}
+                  {staffNames && ` • 👤 ${staffNames.join(', ')}`}
+                  {service.requiresConsultation && ' • ⚠️ Requires Consultation'}
+                  {service.cardPaymentDisabled && ' • 💳 Card Payment Disabled'}
+                </p>
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexShrink: 0 }}>
+                <button onClick={() => handleEdit(service)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: 'var(--color-primary)', color: 'white' }}>Edit</button>
+                <button onClick={() => handleToggleActive(service)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: service.isActive ? '#4CAF50' : '#999', color: 'white' }}>{service.isActive ? 'Active' : 'Inactive'}</button>
+                <button onClick={() => handleDelete(service)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: '#f44336', color: 'white' }}>Delete</button>
+              </div>
+            </div>
+            {editingService?.serviceId === service.serviceId && (
+              <div style={{ marginTop: '0.5rem' }}>
+                <EditForm />
+              </div>
+            )}
+          </div>
+          )
+        }
 
         return (
           <div style={{ display: 'grid', gap: '1rem' }}>
