@@ -83,18 +83,45 @@ export async function POST(request: Request) {
 
     const appointmentId = randomUUID();
 
-    // Auto-assign staff if none provided
+    // Auto-assign staff if none provided — respects schedule
     let assignedStaffId = staffId;
     if (!assignedStaffId) {
       const { data: svcData } = await client.models.Service.get({ serviceId });
       const allowedStaff = (svcData?.allowedStaff as string[]) || [];
+
+      // Helper: check if a staff member is working at the requested dateTime
+      const isWorkingAt = (staff: any) => {
+        if (!staff.schedule) return false;
+        const schedule = typeof staff.schedule === 'string' ? JSON.parse(staff.schedule) : staff.schedule;
+        const requestedDate = new Date(dateTime.split('T')[0] + 'T00:00:00');
+        const dayNames = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+        const dayOfWeek = dayNames[requestedDate.getDay()];
+        const daySchedule = schedule[dayOfWeek];
+        if (!daySchedule || !daySchedule.start) return false;
+        // Check time falls within working hours
+        const time = dateTime.includes('T') ? dateTime.split('T')[1].substring(0, 5) : '00:00';
+        const duration = svcData?.duration || 30;
+        const [h, m] = time.split(':').map(Number);
+        const slotStart = h * 60 + m;
+        const slotEnd = slotStart + duration;
+        const [sh, sm] = daySchedule.start.split(':').map(Number);
+        const [eh, em] = daySchedule.end.split(':').map(Number);
+        return slotStart >= (sh * 60 + sm) && slotEnd <= (eh * 60 + em);
+      };
+
       if (allowedStaff.length > 0) {
-        assignedStaffId = allowedStaff[0];
+        // Fetch schedules for allowed staff and pick one that's working
+        const staffPromises = allowedStaff.map((sid: string) => client.models.StaffSchedule.get({ visibleId: sid }));
+        const staffResults = await Promise.all(staffPromises);
+        const staffRecords = staffResults.filter(r => r.data?.isActive !== false).map(r => r.data);
+        const working = staffRecords.find(s => isWorkingAt(s));
+        assignedStaffId = working?.visibleId || staffRecords[0]?.visibleId || allowedStaff[0];
       } else {
-        // allowedStaff is null/empty = all staff for this vendor can do it
+        // All staff for this vendor — pick one that's working
         const { data: vendorStaff } = await client.models.StaffSchedule.listStaffScheduleByVendorId({ vendorId } as any);
         const activeStaff = (vendorStaff || []).filter((s: any) => s.isActive !== false);
-        if (activeStaff.length > 0) assignedStaffId = activeStaff[0].visibleId;
+        const working = activeStaff.find(s => isWorkingAt(s));
+        assignedStaffId = working?.visibleId || (activeStaff.length > 0 ? activeStaff[0].visibleId : undefined);
       }
     }
 
