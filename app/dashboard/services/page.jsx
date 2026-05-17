@@ -12,6 +12,7 @@ export default function Services() {
   const [loading, setLoading] = useState(true)
   const [showAddForm, setShowAddForm] = useState(false)
   const [editingService, setEditingService] = useState(null)
+  const [managingAddonsFor, setManagingAddonsFor] = useState(null)
   const [currentUserRole, setCurrentUserRole] = useState(null)
   const [currentUserVendorId, setCurrentUserVendorId] = useState(null)
   const formRef = useRef(null)
@@ -175,6 +176,60 @@ export default function Services() {
     setEditingService(null)
     setShowAddForm(false)
     setNewService({ name: '', category: '', description: '', duration: 30, price: 0, requiresConsultation: false, cardPaymentDisabled: false, resourceType: 'staff', staffRestriction: 'all', allowedStaff: [], parentServiceIds: [], maxQuantityPerBooking: 1, providersRequired: 1, houseFeeEnabled: false, houseFeeAmount: 0 })
+  }
+
+  const handleAttachAddon = async (addonServiceId, parentServiceId) => {
+    const addon = services.find(s => s.serviceId === addonServiceId)
+    const currentParents = addon?.parentServiceIds || []
+    if (currentParents.includes(parentServiceId)) return
+
+    const updatedParents = [...currentParents, parentServiceId]
+    try {
+      await fetch('/api/services', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serviceId: addonServiceId, parentServiceIds: updatedParents })
+      })
+      const data = await fetch(`/api/services?vendorId=${selectedVendor}&includeInactive=true`).then(r => r.json())
+      setServices(data.services || [])
+    } catch (e) { console.error('Error attaching add-on:', e) }
+  }
+
+  const handleDetachAddon = async (addonServiceId, parentServiceId) => {
+    const addon = services.find(s => s.serviceId === addonServiceId)
+    const updatedParents = (addon?.parentServiceIds || []).filter(id => id !== parentServiceId)
+
+    try {
+      await fetch('/api/services', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serviceId: addonServiceId, parentServiceIds: updatedParents.length > 0 ? updatedParents : null })
+      })
+      const data = await fetch(`/api/services?vendorId=${selectedVendor}&includeInactive=true`).then(r => r.json())
+      setServices(data.services || [])
+    } catch (e) { console.error('Error detaching add-on:', e) }
+  }
+
+  const handleCreateAddon = async (parentServiceId, name, price, duration) => {
+    const serviceId = `svc-addon-${Date.now()}`
+    try {
+      await fetch('/api/services', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          serviceId,
+          vendorId: selectedVendor,
+          name,
+          price,
+          duration,
+          parentServiceIds: [parentServiceId],
+          isActive: true,
+          resourceType: 'staff',
+        })
+      })
+      const data = await fetch(`/api/services?vendorId=${selectedVendor}&includeInactive=true`).then(r => r.json())
+      setServices(data.services || [])
+    } catch (e) { console.error('Error creating add-on:', e) }
   }
 
   const handleDelete = async (service) => {
@@ -451,30 +506,9 @@ export default function Services() {
             </p>
           </div>
 
-          <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Add-on of Service(s)</label>
-            <select
-              multiple
-              value={newService.parentServiceIds}
-              onChange={(e) => {
-                const selected = Array.from(e.target.selectedOptions, option => option.value)
-                setNewService({ ...newService, parentServiceIds: selected })
-              }}
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                borderRadius: '8px',
-                border: '1px solid var(--color-border)',
-                fontSize: '1rem',
-                minHeight: '100px'
-              }}
-            >
-              {services.filter(s => !(s.parentServiceIds?.length > 0) && s.serviceId !== editingService?.serviceId).map(s => (
-                <option key={s.serviceId} value={s.serviceId}>{s.name}</option>
-              ))}
-            </select>
-            <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.5rem' }}>
-              Hold Ctrl (Cmd on Mac) to select multiple parent services. Leave empty for a standalone service.
+          <div style={{ marginBottom: '1rem', padding: '0.75rem', background: '#f3e8ff', borderRadius: '8px' }}>
+            <p style={{ fontSize: '0.85rem', color: '#6A1B9A', margin: 0 }}>
+              💡 To make this an add-on of another service, use the <strong>🧩 Add-ons</strong> button on the parent service after creating it.
             </p>
           </div>
 
@@ -668,19 +702,14 @@ export default function Services() {
               </p>
             </div>
 
-            <div style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.5rem' }}>Add-on of Service(s)</label>
-              <select multiple value={newService.parentServiceIds}
-                onChange={(e) => { setNewService({ ...newService, parentServiceIds: Array.from(e.target.selectedOptions, option => option.value) }) }}
-                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem', minHeight: '100px' }}>
-                {services.filter(s => !(s.parentServiceIds?.length > 0) && s.serviceId !== editingService?.serviceId).map(s => (
-                  <option key={s.serviceId} value={s.serviceId}>{s.name}</option>
-                ))}
-              </select>
-              <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.5rem' }}>
-                Hold Ctrl (Cmd on Mac) to select multiple parent services. Leave empty for a standalone service.
-              </p>
-            </div>
+            {editingService?.parentServiceIds?.length > 0 && (
+              <div style={{ marginBottom: '1rem', padding: '0.75rem', background: '#f3e8ff', borderRadius: '8px' }}>
+                <p style={{ fontSize: '0.85rem', color: '#6A1B9A', margin: 0 }}>
+                  🧩 This is an add-on of: <strong>{editingService.parentServiceIds.map(id => services.find(s => s.serviceId === id)?.name || id).join(', ')}</strong>
+                  <br /><span style={{ fontSize: '0.8rem', color: 'var(--color-text-light)' }}>Manage add-on assignments from the parent service&apos;s 🧩 Add-ons button.</span>
+                </p>
+              </div>
+            )}
 
             <div style={{ marginBottom: '1rem' }}>
               <label style={{ display: 'block', marginBottom: '0.5rem' }}>Resource Type</label>
@@ -734,6 +763,95 @@ export default function Services() {
           </form>
         )
 
+        const ManageAddonsPanel = ({ parentService }) => {
+          const [newAddonName, setNewAddonName] = useState('')
+          const [newAddonPrice, setNewAddonPrice] = useState(0)
+          const [newAddonDuration, setNewAddonDuration] = useState(15)
+          const [creating, setCreating] = useState(false)
+
+          const currentAddons = services.filter(s => s.parentServiceIds?.includes(parentService.serviceId))
+          // Services that could be attached as add-ons: not already an add-on of this service, not a parent service itself that has add-ons, not the service itself
+          const attachable = services.filter(s =>
+            s.serviceId !== parentService.serviceId &&
+            !s.parentServiceIds?.includes(parentService.serviceId) &&
+            s.isActive !== false
+          )
+
+          return (
+            <div style={{ background: '#f3e8ff', padding: '1.25rem 1.5rem', borderTop: '2px solid #9C27B0' }}>
+              <h4 style={{ margin: '0 0 1rem', color: '#6A1B9A' }}>🧩 Manage Add-ons for: {parentService.name}</h4>
+
+              {/* Current add-ons */}
+              {currentAddons.length > 0 ? (
+                <div style={{ marginBottom: '1rem' }}>
+                  <p style={{ fontSize: '0.85rem', fontWeight: '600', marginBottom: '0.5rem' }}>Current Add-ons:</p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                    {currentAddons.map(addon => (
+                      <div key={addon.serviceId} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'white', border: '1px solid var(--color-border)', borderRadius: '6px', padding: '0.4rem 0.75rem', fontSize: '0.85rem' }}>
+                        <span>{addon.name} (${addon.price})</span>
+                        <button onClick={() => handleDetachAddon(addon.serviceId, parentService.serviceId)}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f44336', fontWeight: 'bold', fontSize: '1.1rem', lineHeight: 1, padding: '0 0.25rem' }}
+                          title="Remove from this service">✕</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginBottom: '1rem' }}>No add-ons attached yet.</p>
+              )}
+
+              {/* Attach existing service */}
+              {attachable.length > 0 && (
+                <div style={{ marginBottom: '1rem' }}>
+                  <p style={{ fontSize: '0.85rem', fontWeight: '600', marginBottom: '0.5rem' }}>Attach existing service as add-on:</p>
+                  <select
+                    defaultValue=""
+                    onChange={(e) => { if (e.target.value) { handleAttachAddon(e.target.value, parentService.serviceId); e.target.value = '' } }}
+                    style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', minWidth: '200px' }}>
+                    <option value="">Select a service...</option>
+                    {attachable.map(s => (
+                      <option key={s.serviceId} value={s.serviceId}>{s.name} (${s.price}, {s.duration} min)</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Create new add-on */}
+              <div style={{ borderTop: '1px solid #d1c4e9', paddingTop: '0.75rem' }}>
+                <p style={{ fontSize: '0.85rem', fontWeight: '600', marginBottom: '0.5rem' }}>Create new add-on:</p>
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--color-text-light)' }}>Name</label>
+                    <input type="text" value={newAddonName} onChange={(e) => setNewAddonName(e.target.value)} placeholder="e.g. Mini Facial"
+                      style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', width: '160px' }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--color-text-light)' }}>Price ($)</label>
+                    <input type="number" min="0" step="0.01" value={newAddonPrice} onChange={(e) => setNewAddonPrice(parseFloat(e.target.value) || 0)}
+                      style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', width: '80px' }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--color-text-light)' }}>Duration (min)</label>
+                    <input type="number" min="5" step="5" value={newAddonDuration} onChange={(e) => setNewAddonDuration(parseInt(e.target.value) || 15)}
+                      style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', width: '80px' }} />
+                  </div>
+                  <button
+                    disabled={!newAddonName || creating}
+                    onClick={async () => {
+                      setCreating(true)
+                      await handleCreateAddon(parentService.serviceId, newAddonName, newAddonPrice, newAddonDuration)
+                      setNewAddonName(''); setNewAddonPrice(0); setNewAddonDuration(15)
+                      setCreating(false)
+                    }}
+                    style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: 'none', cursor: newAddonName ? 'pointer' : 'not-allowed', background: '#9C27B0', color: 'white', fontSize: '0.9rem', opacity: !newAddonName || creating ? 0.5 : 1 }}>
+                    {creating ? 'Creating...' : '+ Create'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )
+        }
+
         const ServiceRow = ({ service, isAddon }) => {
           const staffNames = service.allowedStaff && service.allowedStaff.length > 0
             ? service.allowedStaff.map(id => {
@@ -741,6 +859,7 @@ export default function Services() {
                 return staff?.staffName?.split(' ')[0] || id.replace('staff-', '')
               })
             : null
+          const addons = getAddons(service.serviceId)
 
           return (
           <div key={service.serviceId}>
@@ -774,9 +893,16 @@ export default function Services() {
                   {staffNames && ` • 👤 ${staffNames.join(', ')}`}
                   {service.requiresConsultation && ' • ⚠️ Requires Consultation'}
                   {service.cardPaymentDisabled && ' • 💳 Card Payment Disabled'}
+                  {!isAddon && addons.length > 0 && ` • 🧩 ${addons.length} add-on${addons.length > 1 ? 's' : ''}`}
                 </p>
               </div>
               <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexShrink: 0 }}>
+                {!isAddon && (
+                  <button onClick={() => setManagingAddonsFor(managingAddonsFor?.serviceId === service.serviceId ? null : service)}
+                    style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: managingAddonsFor?.serviceId === service.serviceId ? '#FF9800' : '#9C27B0', color: 'white' }}>
+                    {managingAddonsFor?.serviceId === service.serviceId ? 'Close' : '🧩 Add-ons'}
+                  </button>
+                )}
                 <button onClick={() => handleEdit(service)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: 'var(--color-primary)', color: 'white' }}>Edit</button>
                 <button onClick={() => handleToggleActive(service)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: service.isActive ? '#4CAF50' : '#999', color: 'white' }}>{service.isActive ? 'Active' : 'Inactive'}</button>
                 <button onClick={() => handleDelete(service)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: '#f44336', color: 'white' }}>Delete</button>
@@ -786,6 +912,9 @@ export default function Services() {
               <div style={{ marginTop: '0.5rem' }}>
                 <EditForm />
               </div>
+            )}
+            {!isAddon && managingAddonsFor?.serviceId === service.serviceId && (
+              <ManageAddonsPanel parentService={service} />
             )}
           </div>
           )
