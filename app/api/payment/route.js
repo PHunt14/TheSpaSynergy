@@ -52,18 +52,31 @@ export async function POST(request) {
 }
 
 async function resolveSquareCredentials(dataClient, vendorId, staffId) {
-  if (!staffId) {
-    return { error: 'No staff assigned', details: 'Online payment requires an assigned staff member with Square connected', status: 400 };
+  // Try the assigned staff member first
+  if (staffId) {
+    const { data: staff } = await dataClient.models.StaffSchedule.get({ visibleId: staffId });
+    if (staff) {
+      if (staff.squareOAuthStatus === 'error') {
+        return { error: 'Payment unavailable', details: 'Staff Square account needs to be reconnected', status: 400 };
+      }
+      if (staff.squareAccessToken && staff.squareLocationId) {
+        return { accessToken: staff.squareAccessToken, locationId: staff.squareLocationId };
+      }
+    }
   }
-  const { data: staff } = await dataClient.models.StaffSchedule.get({ visibleId: staffId });
-  if (!staff) return { error: 'Staff not found', status: 404 };
-  if (staff.squareOAuthStatus === 'error') {
-    return { error: 'Payment unavailable', details: 'Staff Square account needs to be reconnected', status: 400 };
+
+  // Fallback: find any connected staff member on this vendor
+  if (vendorId) {
+    const { data: vendorStaff } = await dataClient.models.StaffSchedule.listStaffScheduleByVendorId({ vendorId });
+    const connected = (vendorStaff || []).find(s =>
+      s.isActive !== false && s.squareAccessToken && s.squareLocationId && s.squareOAuthStatus === 'connected'
+    );
+    if (connected) {
+      return { accessToken: connected.squareAccessToken, locationId: connected.squareLocationId };
+    }
   }
-  if (!staff.squareAccessToken || !staff.squareLocationId) {
-    return { error: 'Payment configuration error', details: 'Staff member has not connected Square', status: 400 };
-  }
-  return { accessToken: staff.squareAccessToken, locationId: staff.squareLocationId };
+
+  return { error: 'Payment configuration error', details: 'No staff member with Square connected found for this vendor', status: 400 };
 }
 
 async function processMultiProviderPayment(sourceId, totalAmount, paymentSplit, tipAmount = 0) {

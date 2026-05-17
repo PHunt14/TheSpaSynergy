@@ -163,7 +163,34 @@ function PaymentContent() {
         const apt = (data.appointments || [])[0] || null
         setAppointment(apt)
         setLoading(false)
-        // Fetch the appointment's staff for Square location
+
+        // Resolve Square credentials: try staff → vendor → any connected staff on vendor
+        const loadVendorOrStaffFallback = (vendorId) => {
+          if (!vendorId) return
+          // Try vendor-level Square first
+          fetch(`/api/vendors?vendorId=${vendorId}`)
+            .then(res => res.json())
+            .then(vData => {
+              if (vData.vendor?.squareLocationId) {
+                setVendor(vData.vendor)
+              } else {
+                // No vendor Square — find any connected staff on this vendor
+                fetch(`/api/staff-schedules?vendorId=${vendorId}`)
+                  .then(res => res.json())
+                  .then(sData => {
+                    const connectedStaff = (sData.schedules || []).find(s =>
+                      s.squareLocationId && s.squareOAuthStatus === 'connected'
+                    )
+                    if (connectedStaff) {
+                      setVendor({ squareLocationId: connectedStaff.squareLocationId })
+                    }
+                  })
+                  .catch(() => {})
+              }
+            })
+            .catch(() => {})
+        }
+
         if (apt?.staffId) {
           fetch(`/api/staff-schedules?visibleId=${apt.staffId}`)
             .then(res => res.json())
@@ -171,14 +198,14 @@ function PaymentContent() {
               const staff = sData.schedule
               if (staff?.squareLocationId && staff?.squareOAuthStatus === 'connected') {
                 setVendor({ squareLocationId: staff.squareLocationId })
+              } else {
+                // Assigned staff doesn't have Square — fall back
+                loadVendorOrStaffFallback(apt.vendorId)
               }
             })
-            .catch(() => {})
+            .catch(() => loadVendorOrStaffFallback(apt?.vendorId))
         } else if (apt?.vendorId) {
-          fetch(`/api/vendors?vendorId=${apt.vendorId}`)
-            .then(res => res.json())
-            .then(vData => setVendor(vData.vendor))
-            .catch(() => {})
+          loadVendorOrStaffFallback(apt.vendorId)
         }
       })
       .catch(() => { setError('Failed to load appointment'); setLoading(false) })
