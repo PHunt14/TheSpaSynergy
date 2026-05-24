@@ -4,7 +4,7 @@ body {
   background: var(--color-bg);
   color: var(--color-text);
   font-family: var(--font-quicksand), sans-serif;
-  font-size: 1.1rem;
+  font-size: var(--font-size-base);
 }
 
 a {
@@ -27,7 +27,7 @@ h1, h2, h3, h4, h5, h6 {
 
 p {
   font-family: var(--font-quicksand), sans-serif;
-  font-size: 1.1rem;
+  font-size: var(--font-size-base);
   line-height: 1.7;
 }
 
@@ -43,6 +43,7 @@ p {
   border-radius: 10px;
   margin-top: 1.5rem;
   font-family: var(--font-quicksand), sans-serif;
+  font-size: var(--font-size-sm);
   font-weight: 600;
   box-shadow: 0 4px 12px rgba(0,0,0,0.12);
   transition: background 0.2s ease, transform 0.15s ease;
@@ -189,7 +190,7 @@ p {
 }
 
 .nav-logo {
-  font-size: 1.9rem;
+  font-size: 2.1rem;
   font-weight: 700;
   color: var(--color-primary-dark);
   font-family: var(--font-allura), cursive;
@@ -199,7 +200,7 @@ p {
   margin-left: 1.5rem;
   font-weight: 600;
   color: var(--color-primary-dark);
-  font-size: 1rem;
+  font-size: var(--font-size-sm);
   font-family: var(--font-quicksand), sans-serif;
   transition: color 0.2s ease, background 0.2s ease;
   padding: 0.4rem 0.8rem;
@@ -311,7 +312,7 @@ p {
   text-align: center;
   margin-top: 1.5rem;
   color: var(--color-text-light);
-  font-size: 0.9rem;
+  font-size: var(--font-size-xs);
 }
 
 html, body {

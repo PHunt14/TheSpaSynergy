@@ -35,21 +35,27 @@ export function resolveStaffSync(staffList, dayOfWeek, requestedDate, allowedSta
   const isAllowed = (staff) => !allowedStaffIds || allowedStaffIds.length === 0 || allowedStaffIds.includes(staff.visibleId)
   const eligible = staffList.filter(s => s.isActive && isAllowed(s))
 
-  const autoAssigned = eligible.find(staff => {
-    if (!staff.autoAssignRules) return false
-    const rules = JSON.parse(staff.autoAssignRules)
-    return rules.some(r => r.action === 'auto-assign' && r.days?.includes(dayOfWeek))
-  })
-  if (autoAssigned) return autoAssigned
-
-  return eligible.find(staff => {
+  // Helper: check if a staff member actually works on this specific day (respects recurrence)
+  const isWorkingThisDay = (staff) => {
     if (!staff.schedule) return false
     const schedule = JSON.parse(staff.schedule)
     const daySchedule = schedule[dayOfWeek]
-    if (!daySchedule) return false
+    if (!daySchedule || !daySchedule.start) return false
     if (daySchedule.recurrence) return !!getRecurrenceHours(daySchedule, requestedDate)?.start
-    return !!daySchedule.start
-  }) || null
+    return true
+  }
+
+  // Auto-assign only if the staff member is actually working this day
+  const autoAssigned = eligible.find(staff => {
+    if (!staff.autoAssignRules) return false
+    const rules = JSON.parse(staff.autoAssignRules)
+    const hasAutoAssign = rules.some(r => r.action === 'auto-assign' && r.days?.includes(dayOfWeek))
+    if (!hasAutoAssign) return false
+    return isWorkingThisDay(staff)
+  })
+  if (autoAssigned) return autoAssigned
+
+  return eligible.find(staff => isWorkingThisDay(staff)) || null
 }
 
 export function getDayHoursSync(vendor, service, dayOfWeek, date, ctx) {

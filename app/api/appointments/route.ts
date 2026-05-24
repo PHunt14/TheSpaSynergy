@@ -5,6 +5,7 @@ import config from '../../../amplify_outputs.json' with { type: 'json' };
 import { randomUUID } from 'crypto';
 import { sendBookingNotifications } from '@/lib/appointment-notifications';
 import { assignStaff } from '@/app/utils/staffAssigner.js';
+import { getRecurrenceHours } from '@/app/utils/availability.js';
 
 const client = generateServerClientUsingCookies<Schema>({
   config,
@@ -89,7 +90,7 @@ export async function POST(request: Request) {
       const { data: svcData } = await client.models.Service.get({ serviceId });
       const allowedStaff = (svcData?.allowedStaff as string[]) || [];
 
-      // Helper: check if a staff member is working at the requested dateTime
+      // Helper: check if a staff member is working at the requested dateTime (respects recurrence)
       const isWorkingAt = (staff: any) => {
         if (!staff.schedule) return false;
         const schedule = typeof staff.schedule === 'string' ? JSON.parse(staff.schedule) : staff.schedule;
@@ -98,14 +99,23 @@ export async function POST(request: Request) {
         const dayOfWeek = dayNames[requestedDate.getDay()];
         const daySchedule = schedule[dayOfWeek];
         if (!daySchedule || !daySchedule.start) return false;
+
+        // Handle recurrence patterns (every-other-week, 2nd-of-month)
+        let effectiveHours = { start: daySchedule.start, end: daySchedule.end };
+        if (daySchedule.recurrence) {
+          const recHours = getRecurrenceHours(daySchedule, requestedDate);
+          if (!recHours || !recHours.start) return false;
+          effectiveHours = recHours;
+        }
+
         // Check time falls within working hours
         const time = dateTime.includes('T') ? dateTime.split('T')[1].substring(0, 5) : '00:00';
         const duration = svcData?.duration || 30;
         const [h, m] = time.split(':').map(Number);
         const slotStart = h * 60 + m;
         const slotEnd = slotStart + duration;
-        const [sh, sm] = daySchedule.start.split(':').map(Number);
-        const [eh, em] = daySchedule.end.split(':').map(Number);
+        const [sh, sm] = effectiveHours.start.split(':').map(Number);
+        const [eh, em] = effectiveHours.end.split(':').map(Number);
         return slotStart >= (sh * 60 + sm) && slotEnd <= (eh * 60 + em);
       };
 

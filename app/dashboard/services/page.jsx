@@ -538,11 +538,19 @@ export default function Services() {
                   value={newService.staffRestriction}
                   onChange={(e) => {
                     const value = e.target.value
-                    setNewService({ 
-                      ...newService, 
-                      staffRestriction: value,
-                      allowedStaff: value === 'all' ? [] : newService.allowedStaff
-                    })
+                    if (value === 'specific' && newService.allowedStaff.length === 0) {
+                      // Auto-select all active staff when switching to specific, so user can uncheck individuals
+                      const allStaffIds = staffSchedules
+                        .filter(s => s.vendorId === selectedVendor && s.isActive !== false)
+                        .map(s => s.visibleId)
+                      setNewService({ ...newService, staffRestriction: value, allowedStaff: allStaffIds })
+                    } else {
+                      setNewService({ 
+                        ...newService, 
+                        staffRestriction: value,
+                        allowedStaff: value === 'all' ? [] : newService.allowedStaff
+                      })
+                    }
                   }}
                   style={{
                     width: '100%',
@@ -555,6 +563,11 @@ export default function Services() {
                   <option value="all">All Staff Members</option>
                   <option value="specific">Specific Staff Members</option>
                 </select>
+                {newService.staffRestriction === 'all' && (
+                  <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.5rem' }}>
+                    All staff can perform this service. Switch to &quot;Specific&quot; to choose individual staff members.
+                  </p>
+                )}
               </div>
 
               {newService.staffRestriction === 'specific' && (
@@ -725,11 +738,27 @@ export default function Services() {
                 <div style={{ marginBottom: '1rem' }}>
                   <label style={{ display: 'block', marginBottom: '0.5rem' }}>Staff Assignment</label>
                   <select value={newService.staffRestriction}
-                    onChange={(e) => { setNewService({ ...newService, staffRestriction: e.target.value, allowedStaff: e.target.value === 'all' ? [] : newService.allowedStaff }) }}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      if (value === 'specific' && newService.allowedStaff.length === 0) {
+                        // Auto-select all active staff when switching to specific, so user can uncheck individuals
+                        const allStaffIds = staffSchedules
+                          .filter(s => s.vendorId === selectedVendor && s.isActive !== false)
+                          .map(s => s.visibleId)
+                        setNewService({ ...newService, staffRestriction: value, allowedStaff: allStaffIds })
+                      } else {
+                        setNewService({ ...newService, staffRestriction: value, allowedStaff: value === 'all' ? [] : newService.allowedStaff })
+                      }
+                    }}
                     style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }}>
                     <option value="all">All Staff Members</option>
                     <option value="specific">Specific Staff Members</option>
                   </select>
+                  {newService.staffRestriction === 'all' && (
+                    <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.5rem' }}>
+                      All staff can perform this service. Switch to &quot;Specific&quot; to choose individual staff members.
+                    </p>
+                  )}
                 </div>
 
                 {newService.staffRestriction === 'specific' && (

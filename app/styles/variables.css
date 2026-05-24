@@ -6,4 +6,11 @@
   --color-text: #333333;
   --color-text-light: #3A3A3A;
   --color-warm: #C9A27C;
+
+  /* Font sizes - larger for accessibility */
+  --font-size-base: 1.25rem;
+  --font-size-sm: 1.05rem;
+  --font-size-xs: 0.95rem;
+  --font-size-lg: 1.4rem;
+  --font-size-xl: 1.6rem;
 }
