@@ -179,20 +179,29 @@ function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onEdit, 
       // Check staff change
       if (editForm.staffId !== (appointment.staffId || '')) {
         if (editForm.staffId) {
-          const res = await fetch('/api/appointments/reassign', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              appointmentId: appointment.appointmentId,
-              newStaffId: editForm.staffId,
-              requestingVendorId: vendorId
+          // If the service is also changing, skip the reassign endpoint (it validates
+          // against the current service's allowedStaff which would be stale). Instead,
+          // include staffId and vendorId directly in the PATCH so they update atomically.
+          const serviceAlsoChanging = editForm.serviceId !== (appointment.serviceId || '')
+          if (serviceAlsoChanging) {
+            updates.staffId = editForm.staffId
+            // vendorId will be set by the service change block below
+          } else {
+            const res = await fetch('/api/appointments/reassign', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                appointmentId: appointment.appointmentId,
+                newStaffId: editForm.staffId,
+                requestingVendorId: vendorId
+              })
             })
-          })
-          if (!res.ok) {
-            const data = await res.json()
-            alert('Failed to reassign staff: ' + (data.error || 'Unknown error'))
-            setSaving(false)
-            return
+            if (!res.ok) {
+              const data = await res.json()
+              alert('Failed to reassign staff: ' + (data.error || 'Unknown error'))
+              setSaving(false)
+              return
+            }
           }
         } else {
           // Clear staff assignment via PATCH
@@ -207,9 +216,20 @@ function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onEdit, 
         hasChanges = true
       }
 
-      // Check service change
+      // Check service change — also update vendorId to match the service's vendor
       if (editForm.serviceId !== (appointment.serviceId || '')) {
         updates.serviceId = editForm.serviceId
+        // Find the selected service's vendorId and sync it to the appointment
+        const selectedService = services.find(s => s.serviceId === editForm.serviceId)
+        if (selectedService && selectedService.vendorId) {
+          updates.vendorId = selectedService.vendorId
+        }
+        hasChanges = true
+      }
+
+      // Check vendor change (if vendor was changed without a service change, still sync it)
+      if (!updates.vendorId && editForm.vendorId !== (appointment.vendorId || '')) {
+        updates.vendorId = editForm.vendorId
         hasChanges = true
       }
 
