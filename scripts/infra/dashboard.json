@@ -92,7 +92,11 @@
       "height": 6,
       "properties": {
         "title": "SMS Delivery Rate",
-        "metrics": [["AWS/SNS", "SMSSuccessRate", {"stat": "Average", "label": "Success %", "color": "#2ca02c"}]],
+        "metrics": [
+          [{"expression": "IF(sent > 0, (delivered / sent) * 100, 0)", "label": "Delivery %", "id": "rate", "color": "#2ca02c"}],
+          ["AWS/SMSVoice", "NumberOfTextMessagePartsSent", {"stat": "Sum", "id": "sent", "visible": false}],
+          ["AWS/SMSVoice", "NumberOfTextMessagePartsDelivered", {"stat": "Sum", "id": "delivered", "visible": false}]
+        ],
         "period": 86400,
         "view": "singleValue",
         "region": "us-east-1"
@@ -134,8 +138,12 @@
       "width": 8,
       "height": 6,
       "properties": {
-        "title": "SES Bounce Rate",
-        "metrics": [["AWS/SES", "Reputation.BounceRate", {"stat": "Average", "label": "Bounce Rate %", "color": "#d62728"}]],
+        "title": "SES Delivery Rate",
+        "metrics": [
+          [{"expression": "IF(sent > 0, ((sent - bounces) / sent) * 100, 100)", "label": "Delivery %", "id": "rate", "color": "#2ca02c"}],
+          ["AWS/SES", "Send", {"stat": "Sum", "id": "sent", "visible": false}],
+          ["AWS/SES", "Bounce", {"stat": "Sum", "id": "bounces", "visible": false}]
+        ],
         "period": 86400,
         "view": "singleValue",
         "region": "us-east-1"
@@ -169,7 +177,7 @@
       "type": "metric",
       "x": 0,
       "y": 22,
-      "width": 12,
+      "width": 24,
       "height": 6,
       "properties": {
         "title": "Amplify Deployments",
@@ -178,20 +186,6 @@
         "view": "timeSeries",
         "region": "us-east-1",
         "yAxis": {"left": {"min": 0}}
-      }
-    },
-    {
-      "type": "metric",
-      "x": 12,
-      "y": 22,
-      "width": 12,
-      "height": 6,
-      "properties": {
-        "title": "API Key Days Until Expiry",
-        "metrics": [["SpaSynergy", "ApiKeyDaysUntilExpiry", {"stat": "Minimum", "label": "Days Left", "color": "#ff7f0e"}]],
-        "period": 86400,
-        "view": "singleValue",
-        "region": "us-east-1"
       }
     }
   ]
