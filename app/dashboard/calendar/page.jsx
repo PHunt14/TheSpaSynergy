@@ -941,7 +941,7 @@ export default function Calendar() {
 
   // Load all staff and vendors for the staff selector
   useEffect(() => {
-    if (!userRole || !userVendorId) return
+    if (!userRole) return
     Promise.all([
       fetch('/api/staff-schedules?all=true').then(r => r.json()),
       fetch('/api/vendors').then(r => r.json())
