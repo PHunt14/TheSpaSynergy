@@ -967,7 +967,7 @@ export default function Calendar() {
     }
   }, [selectedStaffId, currentDate, view])
 
-  const loadAppointments = () => {
+  const loadAppointments = (retryCount = 0) => {
     if (!selectedStaffId) return
     setLoading(true)
 
@@ -989,7 +989,12 @@ export default function Calendar() {
       })
       .catch(err => {
         console.error('Error loading appointments:', err)
-        setLoading(false)
+        if (retryCount < 2) {
+          // Retry after a short delay — server auth may not be ready yet
+          setTimeout(() => loadAppointments(retryCount + 1), 1000 * (retryCount + 1))
+        } else {
+          setLoading(false)
+        }
       })
   }
 
