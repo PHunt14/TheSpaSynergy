@@ -839,6 +839,7 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
 export default function Calendar() {
   const [appointments, setAppointments] = useState([])
   const [loading, setLoading] = useState(true)
+  const [initError, setInitError] = useState(null)
   const [userVendorId, setUserVendorId] = useState(null)
   const [userRole, setUserRole] = useState(null)
   const [vendors, setVendors] = useState([])
@@ -918,22 +919,29 @@ export default function Calendar() {
     loadUserVendor()
   }, [])
 
-  const loadUserVendor = async () => {
+  const loadUserVendor = async (retryCount = 0) => {
     try {
       const session = await fetchAuthSession()
       const vendorId = session.tokens?.idToken?.payload['custom:vendorId']
       const role = session.tokens?.idToken?.payload['custom:role'] || 'vendor'
       setUserVendorId(vendorId)
       setUserRole(role)
+      setInitError(null)
     } catch (error) {
       console.error('Error loading user vendor:', error)
+      if (retryCount < 2) {
+        // Retry after a short delay — Amplify may not be fully initialized yet
+        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)))
+        return loadUserVendor(retryCount + 1)
+      }
+      setInitError('Failed to load user session. Please try refreshing the page.')
       setLoading(false)
     }
   }
 
   // Load all staff and vendors for the staff selector
   useEffect(() => {
-    if (!userRole) return
+    if (!userRole || !userVendorId) return
     Promise.all([
       fetch('/api/staff-schedules?all=true').then(r => r.json()),
       fetch('/api/vendors').then(r => r.json())
@@ -946,8 +954,12 @@ export default function Calendar() {
         const myStaff = userVendorId ? staff.find(s => s.vendorId === userVendorId) : null
         setSelectedStaffId(myStaff?.visibleId || staff[0]?.visibleId || null)
       }
+    }).catch(err => {
+      console.error('Error loading staff/vendors:', err)
+      setInitError('Failed to load staff data. Please try refreshing the page.')
+      setLoading(false)
     })
-  }, [userRole])
+  }, [userRole, userVendorId])
 
   useEffect(() => {
     if (selectedStaffId) {
@@ -967,7 +979,10 @@ export default function Calendar() {
     })
 
     fetch(`/api/dashboard?${params}`)
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error(`Server returned ${res.status}`)
+        return res.json()
+      })
       .then(data => {
         setAppointments(data.appointments || [])
         setLoading(false)
@@ -1008,6 +1023,20 @@ export default function Calendar() {
 
   // Time slots for the grid
   const timeSlots = useMemo(() => generateTimeSlots(startHour, endHour), [startHour, endHour])
+
+  if (initError) {
+    return (
+      <div style={{ padding: '2rem', textAlign: 'center' }}>
+        <p style={{ color: '#dc3545', marginBottom: '1rem' }}>{initError}</p>
+        <button
+          onClick={() => { setInitError(null); setLoading(true); loadUserVendor() }}
+          style={{ padding: '0.5rem 1.5rem', borderRadius: '8px', border: 'none', background: 'var(--color-primary)', color: 'white', cursor: 'pointer' }}
+        >
+          Retry
+        </button>
+      </div>
+    )
+  }
 
   if (!userRole || allStaff.length === 0) return <div style={{ padding: '2rem' }}>Loading...</div>
 

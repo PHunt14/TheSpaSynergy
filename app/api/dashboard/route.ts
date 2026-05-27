@@ -10,10 +10,12 @@ Amplify.configure(config, { ssr: true });
 
 const { runWithAmplifyServerContext } = createServerRunner({ config });
 
-const client = generateServerClientUsingCookies<Schema>({
-  config,
-  cookies,
-});
+function getClient() {
+  return generateServerClientUsingCookies<Schema>({
+    config,
+    cookies,
+  });
+}
 
 const getCurrentUser = async () => {
   try {
@@ -35,6 +37,7 @@ const getCurrentUser = async () => {
 };
 
 export async function GET(request: Request) {
+  const client = getClient();
   const { searchParams } = new URL(request.url);
   const vendorId = searchParams.get('vendorId');
   const clientId = searchParams.get('clientId');
