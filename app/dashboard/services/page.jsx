@@ -679,6 +679,16 @@ export default function Services() {
             </div>
 
             <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem' }}>Buffer Time (minutes)</label>
+              <input type="number" min="0" step="5" value={newService.bufferMinutes} onChange={(e) => setNewService({ ...newService, bufferMinutes: e.target.value === '' ? '' : parseInt(e.target.value) })}
+                placeholder="Use vendor default"
+                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />
+              <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.5rem' }}>
+                Time buffer after this service before the next appointment. Leave blank to use the vendor default (15 min).
+              </p>
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
               <label style={{ display: 'block', marginBottom: '0.5rem' }}>Price ($) *</label>
               <input type="number" required min="0" step="0.01" value={newService.price} onChange={(e) => setNewService({ ...newService, price: parseFloat(e.target.value) })}
                 style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />

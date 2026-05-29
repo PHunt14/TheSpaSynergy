@@ -96,6 +96,10 @@ export default function Vendors() {
 
   const handleEdit = (vendor) => {
     setEditingVendor(vendor)
+    let parsedHours = vendor.workingHours
+    if (typeof parsedHours === 'string') {
+      try { parsedHours = JSON.parse(parsedHours) } catch { parsedHours = null }
+    }
     setNewVendor({
       name: vendor.name,
       description: vendor.description || '',
@@ -104,7 +108,7 @@ export default function Vendors() {
       bufferMinutes: vendor.bufferMinutes || 15,
       isActive: vendor.isActive !== undefined ? vendor.isActive : true,
       isHouse: vendor.isHouse || false,
-      workingHours: vendor.workingHours || { ...DEFAULT_WORKING_HOURS }
+      workingHours: parsedHours || { ...DEFAULT_WORKING_HOURS }
     })
     setShowAddForm(true)
     setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
