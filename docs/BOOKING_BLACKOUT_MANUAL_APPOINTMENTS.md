@@ -108,17 +108,24 @@ Staff members can block off personal time on the calendar. Blocked time:
 - Can be assigned to a specific staff member or all staff
 - Can be cancelled like any appointment to free the time back up
 - Does **not** send any notifications (no emails or SMS)
+- Supports **single blocks** (specific duration in minutes) and **multi-day blocks** (consecutive full days)
 
 ### Blocking Time
 
-1. Go to **Dashboard → Appointments**
-2. Click **🚫 Block Time**
-3. Fill in:
-   - **Date & Time** (required) — when the block starts
-   - **Duration** (required) — 30 min, 1 hour, 1.5 hours, 2 hours, 3 hours, 4 hours, or full day
-   - **Staff Member** (optional) — assign to a specific person, or leave as "All staff"
-   - **Reason** (optional) — e.g. "Lunch break", "Personal appointment"
-4. Click **Block Time**
+1. Go to **Dashboard → Calendar**
+2. Click **+ New** then switch to **🚫 Block Time** mode
+3. Choose block type:
+   - **Single Block**: Set a start date/time and duration in minutes (15 min increments)
+   - **Multi-Day Block**: Set a start date and an end date — blocks the full working day for each day in the range
+4. Optionally assign to a specific staff member
+5. Add notes (e.g., "Vacation", "Training")
+6. Click **Block Time**
+
+### Multi-Day Blocking
+
+Multi-day blocks create one full-day entry (720 minutes / 12 hours starting at 8 AM) for each day in the selected range. This effectively blocks the entire working day for the assigned staff member.
+
+**Example**: Blocking July 15–18 for "staff-jane" creates 4 separate blocked-time appointments, one per day. Each blocks 8:00 AM through 8:00 PM on that day.
 
 ### How Blocked Time Appears
 
@@ -131,7 +138,7 @@ Staff members can block off personal time on the calendar. Blocked time:
 
 ### Removing a Block
 
-Click **Cancel** on the blocked time row, same as cancelling any appointment. The time becomes available again immediately.
+Click **Cancel** on the blocked time row, same as cancelling any appointment. The time becomes available again immediately. For multi-day blocks, each day must be cancelled individually.
 
 ### Manual Appointment API
 
@@ -238,7 +245,7 @@ Body:
 
 When `staffIds` is provided with 2+ entries, the API creates one appointment per staff member linked by a shared `groupId`. Each appointment's `vendorId` is resolved from the staff member's record (so providers from different vendors each get their own appointment on their calendar).
 
-**Blocked time:**
+**Blocked time (single):**
 ```json
 {
   "vendorId": "vendor-kera-studio",
@@ -247,6 +254,19 @@ When `staffIds` is provided with 2+ entries, the API creates one appointment per
   "isBlockedTime": true,
   "duration": 60,
   "notes": "Lunch break"
+}
+```
+
+**Blocked time (multi-day):**
+For multi-day blocks, the client sends one request per day in the range. Each request blocks a full day (720 minutes starting at 8 AM):
+```json
+{
+  "vendorId": "vendor-kera-studio",
+  "staffId": "staff-kera-stacey",
+  "dateTime": "2025-07-15T08:00:00",
+  "isBlockedTime": true,
+  "duration": 720,
+  "notes": "Vacation - blocked 3 day(s)"
 }
 ```
 
@@ -295,6 +315,10 @@ Required: `vendorId`, `dateTime`. For blocked time, also send `isBlockedTime: tr
 - [ ] No notifications sent for blocked time (no email, no SMS)
 - [ ] Block time with reason → reason shows in customer column
 - [ ] Block time without reason → shows "—" in customer column
+- [ ] Multi-day block: select start date and end date → creates one block per day
+- [ ] Multi-day block: each day shows as full-day block on calendar
+- [ ] Multi-day block: availability API returns no slots for blocked days
+- [ ] Multi-day block: cancelling one day does not affect other days in the range
 
 ### Automated Testing
 

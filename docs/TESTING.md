@@ -45,6 +45,8 @@ npm run test:e2e:headed
 | `utils/quantityAvailability.test.mjs` | 25 | `getParallelQuantitySlots` — multi-staff simultaneous availability for quantity bookings, conflict handling, inactive/ineligible staff filtering; `getSequentialQuantitySlots` — back-to-back slot finding, total block calculation, mid-block conflict detection, blocked time handling; `calculateQuantityDuration` — parallel vs sequential duration math; `canBookParallel` — staff count eligibility check |
 | `utils/client.test.mjs` | 12 | `normalizePhone` — formatting, +1 prefix, too-short, null/empty; `normalizeEmail` — case/trim, null/empty; `isMatchingClient` — phone match, email match, no match, empty fields, phone priority |
 | `utils/calendar.test.mjs` | 50 | `getWeekStart` — Sunday resolution, immutability; `getWeekDates` — 7 dates, consecutive, month boundary; `getMonthDates` — correct day counts, leap year; `isSameDay` — same/different dates, months, years; `parseAppointmentDate` — valid ISO, null/undefined/empty/invalid; `generateTimeSlots` — slot count, boundaries, edge cases; `getBlockPosition` — top/height calculation, minimum height, half-hour offset, before-start; `getDateRangeForView` — day/week/month ranges; `computeOverlapLayout` — empty input, single/non-overlapping/overlapping appointments, column assignment, adjacent slots, partial overlap, null handling |
+| `unit/serviceBuffer.test.mjs` | 7 | Per-service buffer time in availability: `timeOverlaps` with varying buffer values, `generateTimeSlots` with 0/15/30 min buffers, `hasAnySlot` respects buffer for slot availability |
+| `unit/multiDayBlock.test.mjs` | 7 | Multi-day block time: full-day blocks (720 min) prevent availability, blocks don't affect other days or other staff, date range calculation for multi-day spans |
 
 ### Component Tests (`__tests__/components/`)
 
@@ -59,7 +61,7 @@ npm run test:e2e:headed
 |------|-------|----------------|
 | `smoke.spec.ts` | 6 | Homepage load + title + CTA, booking page loads, vendors page loads, contact page loads, navbar links, footer content |
 
-**Current totals: 298 Jest tests passing, 6 E2E tests ready**
+**Current totals: 566 Jest tests passing (4 pre-existing failures in unrelated areas), 6 E2E tests ready**
 
 ## Architecture
 

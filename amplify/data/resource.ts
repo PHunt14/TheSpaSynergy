@@ -44,6 +44,7 @@ const schema = a.schema({
       resourceType: a.string().default('staff'),
       duration: a.integer().required(),
       price: a.float().required(),
+      bufferMinutes: a.integer(),
       houseFeeEnabled: a.boolean().default(false),
       houseFeeAmount: a.float().default(0),
       houseFeePercent: a.float().default(0),

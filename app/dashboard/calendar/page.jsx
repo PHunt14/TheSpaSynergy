@@ -659,6 +659,7 @@ function MonthView({ currentDate, appointments, onAppointmentClick }) {
 
 function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServiceId, defaultCustomer, onClose, onCreated }) {
   const [mode, setMode] = useState('appointment') // 'appointment' or 'block'
+  const [blockType, setBlockType] = useState('single') // 'single' or 'multiday'
   const [form, setForm] = useState({
     customerName: defaultCustomer?.name || '',
     customerPhone: defaultCustomer?.phone || '',
@@ -666,6 +667,7 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
     notes: '',
     dateTime: dateTime ? dateTime.toISOString().slice(0, 16) : '',
   })
+  const [blockEndDate, setBlockEndDate] = useState('')
   const [services, setServices] = useState([])
   const [staffList, setStaffList] = useState([])
   const [allStaff, setAllStaff] = useState([])
@@ -692,25 +694,66 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
 
   const handleSubmit = async () => {
     if (!form.dateTime) { alert('Please select a date and time'); return }
+    if (mode === 'block' && blockType === 'multiday' && !blockEndDate) { alert('Please select an end date'); return }
     if (isMultiProvider && (!staffId || !staffId2)) { alert('Please select both staff members for this service'); return }
     if (isMultiProvider && staffId === staffId2) { alert('Please select two different staff members'); return }
     setSubmitting(true)
     try {
-      const body = mode === 'block'
-        ? { vendorId, staffId: staffId || undefined, dateTime: form.dateTime, customerName: 'Blocked Time', notes: form.notes, isBlockedTime: true, duration }
-        : { vendorId, serviceId: serviceId || undefined, staffId: staffId || undefined, staffIds: isMultiProvider ? [staffId, staffId2] : undefined, dateTime: form.dateTime, customerName: form.customerName, customerPhone: form.customerPhone, customerEmail: form.customerEmail, notes: form.notes }
+      if (mode === 'block' && blockType === 'multiday') {
+        // Create a blocked time entry for each day in the range (full day blocks)
+        const startDate = new Date(form.dateTime)
+        const endDate = new Date(blockEndDate + 'T23:59:59')
+        const days = []
+        const current = new Date(startDate)
+        current.setHours(0, 0, 0, 0)
+        while (current <= endDate) {
+          days.push(new Date(current))
+          current.setDate(current.getDate() + 1)
+        }
 
-      const res = await fetch('/api/appointments/manual', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      })
-      if (res.ok) {
+        let failed = false
+        for (const day of days) {
+          // Block the full working day (use 8am start, 720 min = 12 hours as a full-day block)
+          const dayDateTime = new Date(day)
+          dayDateTime.setHours(8, 0, 0, 0)
+          const body = {
+            vendorId,
+            staffId: staffId || undefined,
+            dateTime: dayDateTime.toISOString().slice(0, 16),
+            customerName: 'Blocked Time',
+            notes: form.notes || `Blocked ${days.length} day(s)`,
+            isBlockedTime: true,
+            duration: 720
+          }
+          const res = await fetch('/api/appointments/manual', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+          })
+          if (!res.ok) failed = true
+        }
+        if (failed) {
+          alert('Some days failed to block. Please check the calendar.')
+        }
         onCreated()
         onClose()
       } else {
-        const data = await res.json()
-        alert('Failed: ' + (data.error || 'Unknown error'))
+        const body = mode === 'block'
+          ? { vendorId, staffId: staffId || undefined, dateTime: form.dateTime, customerName: 'Blocked Time', notes: form.notes, isBlockedTime: true, duration }
+          : { vendorId, serviceId: serviceId || undefined, staffId: staffId || undefined, staffIds: isMultiProvider ? [staffId, staffId2] : undefined, dateTime: form.dateTime, customerName: form.customerName, customerPhone: form.customerPhone, customerEmail: form.customerEmail, notes: form.notes }
+
+        const res = await fetch('/api/appointments/manual', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        })
+        if (res.ok) {
+          onCreated()
+          onClose()
+        } else {
+          const data = await res.json()
+          alert('Failed: ' + (data.error || 'Unknown error'))
+        }
       }
     } catch (error) {
       alert('Error: ' + (error.message || 'Unknown error'))
@@ -805,12 +848,37 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
             </div>
           </>
         ) : (
-          /* Block time — duration */
-          <div style={{ marginBottom: '1rem' }}>
-            <label htmlFor="new-apt-duration" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Duration (minutes)</label>
-            <input id="new-apt-duration" type="number" min="15" step="15" value={duration} onChange={(e) => setDuration(Number(e.target.value))}
-              style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', boxSizing: 'border-box' }} />
-          </div>
+          <>
+            {/* Block type toggle */}
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+              <button type="button" onClick={() => setBlockType('single')} style={{ flex: 1, padding: '0.4rem', borderRadius: '6px', border: '1px solid var(--color-border)', background: blockType === 'single' ? '#607D8B' : 'white', color: blockType === 'single' ? 'white' : 'var(--color-text)', cursor: 'pointer', fontSize: '0.85rem' }}>
+                Single Block
+              </button>
+              <button type="button" onClick={() => setBlockType('multiday')} style={{ flex: 1, padding: '0.4rem', borderRadius: '6px', border: '1px solid var(--color-border)', background: blockType === 'multiday' ? '#607D8B' : 'white', color: blockType === 'multiday' ? 'white' : 'var(--color-text)', cursor: 'pointer', fontSize: '0.85rem' }}>
+                Multi-Day Block
+              </button>
+            </div>
+
+            {blockType === 'single' ? (
+              /* Single block — duration in minutes */
+              <div style={{ marginBottom: '1rem' }}>
+                <label htmlFor="new-apt-duration" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Duration (minutes)</label>
+                <input id="new-apt-duration" type="number" min="15" step="15" value={duration} onChange={(e) => setDuration(Number(e.target.value))}
+                  style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', boxSizing: 'border-box' }} />
+              </div>
+            ) : (
+              /* Multi-day block — end date */
+              <div style={{ marginBottom: '1rem' }}>
+                <label htmlFor="new-apt-enddate" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>End Date</label>
+                <input id="new-apt-enddate" type="date" value={blockEndDate} onChange={(e) => setBlockEndDate(e.target.value)}
+                  min={form.dateTime ? form.dateTime.slice(0, 10) : ''}
+                  style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', boxSizing: 'border-box' }} />
+                <p style={{ fontSize: '0.8rem', color: 'var(--color-text-light)', marginTop: '0.25rem' }}>
+                  Blocks the full day for each day from the start date through this end date.
+                </p>
+              </div>
+            )}
+          </>
         )}
 
         {/* Notes */}

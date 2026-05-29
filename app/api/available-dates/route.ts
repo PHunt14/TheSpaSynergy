@@ -107,7 +107,7 @@ function buildAvailableDates(
       apt.status !== 'cancelled' && apt.dateTime.startsWith(dateStr)
     );
 
-    if (hasAnySlot(dayHours.start, dayHours.end, service.duration, vendor.bufferMinutes || 15, { appointments: dayAppointments, dateStr, date: d, staff })) {
+    if (hasAnySlot(dayHours.start, dayHours.end, service.duration, service.bufferMinutes != null ? service.bufferMinutes : (vendor.bufferMinutes || 15), { appointments: dayAppointments, dateStr, date: d, staff })) {
       availableDates.push(dateStr);
     }
   }

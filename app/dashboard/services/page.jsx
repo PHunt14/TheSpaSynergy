@@ -22,6 +22,7 @@ export default function Services() {
     description: '',
     duration: 30,
     price: 0,
+    bufferMinutes: '',
     requiresConsultation: false,
     cardPaymentDisabled: false,
     resourceType: 'staff',
@@ -92,6 +93,7 @@ export default function Services() {
       description: newService.description,
       duration: newService.duration,
       price: newService.price,
+      bufferMinutes: newService.bufferMinutes !== '' ? parseInt(newService.bufferMinutes) : null,
       houseFeeEnabled: newService.houseFeeEnabled,
       houseFeeAmount: newService.houseFeeEnabled ? newService.houseFeeAmount : 0,
       requiresConsultation: newService.requiresConsultation,
@@ -115,7 +117,7 @@ export default function Services() {
         alert(editingService ? 'Service updated successfully!' : 'Service added successfully!')
         setShowAddForm(false)
         setEditingService(null)
-        setNewService({ name: '', category: '', description: '', duration: 30, price: 0, requiresConsultation: false, cardPaymentDisabled: false, resourceType: 'staff', staffRestriction: 'all', allowedStaff: [], parentServiceIds: [], maxQuantityPerBooking: 1, providersRequired: 1, houseFeeEnabled: false, houseFeeAmount: 0 })
+        setNewService({ name: '', category: '', description: '', duration: 30, price: 0, bufferMinutes: '', requiresConsultation: false, cardPaymentDisabled: false, resourceType: 'staff', staffRestriction: 'all', allowedStaff: [], parentServiceIds: [], maxQuantityPerBooking: 1, providersRequired: 1, houseFeeEnabled: false, houseFeeAmount: 0 })
         const data = await fetch(`/api/services?vendorId=${selectedVendor}&includeInactive=true`).then(r => r.json())
         setServices(data.services || [])
       } else {
@@ -158,6 +160,7 @@ export default function Services() {
       description: service.description || '',
       duration: service.duration,
       price: service.price,
+      bufferMinutes: service.bufferMinutes != null ? service.bufferMinutes : '',
       houseFeeEnabled: service.houseFeeEnabled || false,
       houseFeeAmount: service.houseFeeAmount || 0,
       requiresConsultation: service.requiresConsultation || false,
@@ -175,7 +178,7 @@ export default function Services() {
   const handleCancelEdit = () => {
     setEditingService(null)
     setShowAddForm(false)
-    setNewService({ name: '', category: '', description: '', duration: 30, price: 0, requiresConsultation: false, cardPaymentDisabled: false, resourceType: 'staff', staffRestriction: 'all', allowedStaff: [], parentServiceIds: [], maxQuantityPerBooking: 1, providersRequired: 1, houseFeeEnabled: false, houseFeeAmount: 0 })
+    setNewService({ name: '', category: '', description: '', duration: 30, price: 0, bufferMinutes: '', requiresConsultation: false, cardPaymentDisabled: false, resourceType: 'staff', staffRestriction: 'all', allowedStaff: [], parentServiceIds: [], maxQuantityPerBooking: 1, providersRequired: 1, houseFeeEnabled: false, houseFeeAmount: 0 })
   }
 
   const handleAttachAddon = async (addonServiceId, parentServiceId) => {
@@ -381,6 +384,28 @@ export default function Services() {
                 fontSize: '1rem'
               }}
             />
+          </div>
+
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Buffer Time (minutes)</label>
+            <input
+              type="number"
+              min="0"
+              step="5"
+              value={newService.bufferMinutes}
+              onChange={(e) => setNewService({ ...newService, bufferMinutes: e.target.value === '' ? '' : parseInt(e.target.value) })}
+              placeholder="Use vendor default"
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                borderRadius: '8px',
+                border: '1px solid var(--color-border)',
+                fontSize: '1rem'
+              }}
+            />
+            <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.5rem' }}>
+              Time buffer after this service before the next appointment. Leave blank to use the vendor default (15 min).
+            </p>
           </div>
 
           <div style={{ marginBottom: '1rem' }}>

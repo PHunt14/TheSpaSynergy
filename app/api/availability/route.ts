@@ -102,7 +102,7 @@ export async function GET(request: Request) {
       dayHours.start,
       dayHours.end,
       service.duration,
-      vendor.bufferMinutes || 15,
+      service.bufferMinutes != null ? service.bufferMinutes : (vendor.bufferMinutes || 15),
       relevantAppointments,
       date
     );

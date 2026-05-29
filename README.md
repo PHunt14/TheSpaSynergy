@@ -74,10 +74,12 @@ Deployed via AWS Amplify with automatic CI/CD from Git. See `AMPLIFY_SETUP.md`.
   - View appointments and filter by day/week
   - View payment totals by week, month, or year
   - Add, edit, and deactivate services
+  - Set per-service buffer time (overrides vendor default) to control spacing between appointments
   - Assign which staff members can perform each service (based on staff logged in for that vendor, excluding admins)
   - Cancel, reschedule, and confirm appointments
   - Edit appointments inline from the calendar view (change time, staff, service, vendor, status, and customer info without leaving the page)
   - Add and manage staff members
+  - Block off time on the calendar (single blocks in minutes, or multi-day blocks for vacations/training)
   - Connect their Square account (Settings → My Settings)
   - Add social media links (Settings → Vendor Settings)
   - Update contact information (Settings → Vendor Settings)
