@@ -399,6 +399,10 @@ const mockStaffGet = jest.fn(async ({ visibleId }) => ({
   data: mockStaffDb[visibleId] || null,
   errors: null,
 }))
+const mockStaffListByVendor = jest.fn(async ({ vendorId }) => ({
+  data: Object.values(mockStaffDb).filter(s => s.vendorId === vendorId),
+  errors: null,
+}))
 const mockVendorDb = {}
 const mockVendorGet = jest.fn(async ({ vendorId }) => ({
   data: mockVendorDb[vendorId] || null,
@@ -421,7 +425,7 @@ jest.unstable_mockModule('aws-amplify/data', () => ({
   generateClient: jest.fn(() => ({
     models: {
       Vendor: { get: mockVendorGet, list: mockVendorList },
-      StaffSchedule: { get: mockStaffGet },
+      StaffSchedule: { get: mockStaffGet, listStaffScheduleByVendorId: mockStaffListByVendor },
     },
   })),
 }))
