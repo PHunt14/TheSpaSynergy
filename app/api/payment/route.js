@@ -55,13 +55,14 @@ async function resolveSquareCredentials(dataClient, vendorId, staffId) {
   // Try the assigned staff member first
   if (staffId) {
     const { data: staff } = await dataClient.models.StaffSchedule.get({ visibleId: staffId });
-    if (staff) {
-      if (staff.squareOAuthStatus === 'error') {
-        return { error: 'Payment unavailable', details: 'Staff Square account needs to be reconnected', status: 400 };
-      }
-      if (staff.squareAccessToken && staff.squareLocationId) {
-        return { accessToken: staff.squareAccessToken, locationId: staff.squareLocationId };
-      }
+    if (!staff) {
+      return { error: 'Staff member not found', details: `No staff with id ${staffId}`, status: 404 };
+    }
+    if (staff.squareOAuthStatus === 'error') {
+      return { error: 'Payment unavailable', details: 'Staff Square account needs to be reconnected', status: 400 };
+    }
+    if (staff.squareAccessToken && staff.squareLocationId) {
+      return { accessToken: staff.squareAccessToken, locationId: staff.squareLocationId };
     }
   }
 

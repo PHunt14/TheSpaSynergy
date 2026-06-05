@@ -51,7 +51,9 @@ export function resolveStaffSync(staffList, dayOfWeek, requestedDate, allowedSta
     const rules = JSON.parse(staff.autoAssignRules)
     const hasAutoAssign = rules.some(r => r.action === 'auto-assign' && r.days?.includes(dayOfWeek))
     if (!hasAutoAssign) return false
-    return isWorkingThisDay(staff)
+    // If staff has a schedule defined, verify they work this day; otherwise trust the auto-assign rule
+    if (staff.schedule) return isWorkingThisDay(staff)
+    return true
   })
   if (autoAssigned) return autoAssigned
 
