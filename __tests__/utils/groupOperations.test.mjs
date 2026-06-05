@@ -67,8 +67,8 @@ describe('Reassignment Authorization Logic', () => {
   function validateReassignment({ appointment, newStaffId, service, existingAppointments, requestingVendorId }) {
     const allowedStaff = service.allowedStaff || []
 
-    // Check allowedStaff
-    if (!allowedStaff.includes(newStaffId)) {
+    // Check allowedStaff (empty/null means all staff are eligible)
+    if (allowedStaff.length > 0 && !allowedStaff.includes(newStaffId)) {
       return { valid: false, status: 400, error: 'Staff member not eligible for this service' }
     }
 

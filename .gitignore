@@ -15,7 +15,5 @@ scripts/dev-tools/
 # Playwright
 test-results/
 playwright-report/
-.kiro/specs/multi-vendor-bundle-booking/.config.kiro
-.kiro/specs/multi-vendor-bundle-booking/design.md
-.kiro/specs/multi-vendor-bundle-booking/requirements.md
-.kiro/specs/multi-vendor-bundle-booking/tasks.md
+# Kiro specs
+.kiro/

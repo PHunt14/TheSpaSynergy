@@ -50,8 +50,9 @@ export async function POST(request: Request) {
     }
 
     // 5. Verify newStaffId is in service.allowedStaff
-    const allowedStaff: string[] = (service.allowedStaff as string[] | null) || [];
-    if (!allowedStaff.includes(newStaffId)) {
+    //    If allowedStaff is null or empty, all staff are eligible (no restriction)
+    const allowedStaff: string[] | null = (service.allowedStaff as string[] | null) || null;
+    if (allowedStaff && allowedStaff.length > 0 && !allowedStaff.includes(newStaffId)) {
       return Response.json(
         { error: 'Staff member not eligible for this service' },
         { status: 400 }
