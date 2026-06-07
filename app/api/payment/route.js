@@ -5,6 +5,7 @@ import config from '../../../amplify_outputs.json';
 import { Amplify } from 'aws-amplify';
 import { buildOrderLineItems } from '../../../lib/square/catalog.js';
 import { calculateMultiProviderSplit } from '../../utils/payment.js';
+import { refreshSquareToken, isTokenExpiringSoon } from '../../../lib/square-token.js';
 
 Amplify.configure(config, { ssr: true });
 
@@ -62,6 +63,16 @@ async function resolveSquareCredentials(dataClient, vendorId, staffId) {
       return { error: 'Payment unavailable', details: 'Staff Square account needs to be reconnected', status: 400 };
     }
     if (staff.squareAccessToken && staff.squareLocationId) {
+      // Check if token is expired or expiring soon and refresh proactively
+      if (isTokenExpiringSoon(staff.squareTokenExpiresAt, 1)) {
+        const refreshed = await refreshSquareToken(staffId);
+        if (!refreshed) {
+          return { error: 'Payment unavailable', details: 'Square token expired. Please reconnect Square in Dashboard → Settings.', status: 400 };
+        }
+        // Re-fetch the staff record with updated credentials
+        const { data: refreshedStaff } = await dataClient.models.StaffSchedule.get({ visibleId: staffId });
+        return { accessToken: refreshedStaff.squareAccessToken, locationId: refreshedStaff.squareLocationId };
+      }
       return { accessToken: staff.squareAccessToken, locationId: staff.squareLocationId };
     }
   }
@@ -73,6 +84,15 @@ async function resolveSquareCredentials(dataClient, vendorId, staffId) {
       s.isActive !== false && s.squareAccessToken && s.squareLocationId && s.squareOAuthStatus === 'connected'
     );
     if (connected) {
+      // Check token expiry for fallback staff too
+      if (isTokenExpiringSoon(connected.squareTokenExpiresAt, 1)) {
+        const refreshed = await refreshSquareToken(connected.visibleId);
+        if (!refreshed) {
+          return { error: 'Payment unavailable', details: 'Square token expired. Please reconnect Square in Dashboard → Settings.', status: 400 };
+        }
+        const { data: refreshedStaff } = await dataClient.models.StaffSchedule.get({ visibleId: connected.visibleId });
+        return { accessToken: refreshedStaff.squareAccessToken, locationId: refreshedStaff.squareLocationId };
+      }
       return { accessToken: connected.squareAccessToken, locationId: connected.squareLocationId };
     }
   }

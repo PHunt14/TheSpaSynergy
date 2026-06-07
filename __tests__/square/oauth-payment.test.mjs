@@ -15,6 +15,7 @@
  *
  * Integration tests for:
  * - Payment route (POST /api/payment) — staff-level Square credentials
+ * - Proactive token refresh (auto-refresh when token expiring within 1 day)
  */
 
 import { jest } from '@jest/globals'
@@ -413,6 +414,8 @@ const mockVendorList = jest.fn(async () => ({
   errors: null,
 }))
 const mockCreatePayment = jest.fn()
+const mockRefreshSquareToken = jest.fn()
+const mockIsTokenExpiringSoon = jest.fn(() => false)
 
 jest.unstable_mockModule('square', () => ({
   Client: jest.fn().mockImplementation(() => ({
@@ -433,6 +436,10 @@ jest.unstable_mockModule('aws-amplify', () => ({
   Amplify: { configure: jest.fn() },
 }))
 jest.unstable_mockModule('../../../amplify_outputs.json', () => ({}), { virtual: true })
+jest.unstable_mockModule('../../lib/square-token.js', () => ({
+  refreshSquareToken: mockRefreshSquareToken,
+  isTokenExpiringSoon: mockIsTokenExpiringSoon,
+}))
 
 function seedStaff(overrides = {}) {
   const s = {
@@ -474,6 +481,7 @@ describe('POST /api/payment (integration — staff-level auth)', () => {
   beforeEach(() => {
     resetDb()
     jest.clearAllMocks()
+    mockIsTokenExpiringSoon.mockReturnValue(false)
   })
 
   test('uses staff access token for payment', async () => {
@@ -707,6 +715,69 @@ describe('POST /api/payment (integration — staff-level auth)', () => {
 
     const paymentArg = mockCreatePayment.mock.calls[0][0]
     expect(paymentArg.tipMoney).toBeUndefined()
+  })
+
+  // ─── Token Auto-Refresh Tests ─────────────────────────────────
+
+  test('refreshes token when expiring soon and proceeds with payment', async () => {
+    seedStaff({
+      visibleId: 'staff-1',
+      squareAccessToken: 'old-tok',
+      squareLocationId: 'SLOC1',
+      squareOAuthStatus: 'connected',
+      squareTokenExpiresAt: new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString(),
+    })
+    mockIsTokenExpiringSoon.mockReturnValue(true)
+    mockRefreshSquareToken.mockResolvedValueOnce(true)
+    // After refresh, re-fetch returns updated token
+    mockStaffGet.mockResolvedValueOnce({
+      data: { ...mockStaffDb['staff-1'], squareAccessToken: 'new-tok' },
+      errors: null,
+    })
+    mockCreatePayment.mockResolvedValueOnce({
+      result: { payment: { id: 'pay-refreshed', status: 'COMPLETED' } },
+    })
+
+    const req = {
+      json: async () => ({
+        sourceId: 'cnon:card-nonce-ok',
+        amount: 50,
+        vendorId: 'vendor-1',
+        staffId: 'staff-1',
+      }),
+    }
+    const res = await handler.POST(req)
+    const body = await res.json()
+
+    expect(body.success).toBe(true)
+    expect(mockRefreshSquareToken).toHaveBeenCalledWith('staff-1')
+  })
+
+  test('returns 400 when token refresh fails', async () => {
+    seedStaff({
+      visibleId: 'staff-1',
+      squareAccessToken: 'expired-tok',
+      squareLocationId: 'SLOC1',
+      squareOAuthStatus: 'connected',
+      squareTokenExpiresAt: new Date(Date.now() - 1000).toISOString(),
+    })
+    mockIsTokenExpiringSoon.mockReturnValue(true)
+    mockRefreshSquareToken.mockResolvedValueOnce(false)
+
+    const req = {
+      json: async () => ({
+        sourceId: 'cnon:card-nonce-ok',
+        amount: 50,
+        vendorId: 'vendor-1',
+        staffId: 'staff-1',
+      }),
+    }
+    const res = await handler.POST(req)
+    const body = await res.json()
+
+    expect(res.status).toBe(400)
+    expect(body.details).toContain('expired')
+    expect(mockRefreshSquareToken).toHaveBeenCalledWith('staff-1')
   })
 
   test('ignores non-numeric tipAmount', async () => {
