@@ -5,7 +5,6 @@ import config from '../../../amplify_outputs.json' with { type: 'json' };
 import { randomUUID } from 'crypto';
 import { sendBookingNotifications } from '@/lib/appointment-notifications';
 import { assignStaff } from '@/app/utils/staffAssigner.js';
-import { getRecurrenceHours } from '@/app/utils/availability.js';
 
 const client = generateServerClientUsingCookies<Schema>({
   config,
@@ -14,7 +13,7 @@ const client = generateServerClientUsingCookies<Schema>({
 
 export async function PATCH(request: Request) {
   try {
-    const { appointmentId, paymentId, paymentStatus, paymentAmount, status, serviceId, staffId, vendorId, customer } = await request.json();
+    const { appointmentId, paymentId, paymentStatus, paymentAmount, status, serviceId, staffId, vendorId, customer, createdBy, confirmOverlap, dateTime } = await request.json();
 
     if (!appointmentId) {
       return Response.json({ error: 'appointmentId required' }, { status: 400 });
@@ -26,9 +25,52 @@ export async function PATCH(request: Request) {
     if (paymentAmount !== undefined) updateFields.paymentAmount = paymentAmount;
     if (status !== undefined) updateFields.status = status;
     if (serviceId !== undefined) updateFields.serviceId = serviceId;
-    if (staffId !== undefined) updateFields.staffId = staffId;
-    if (vendorId !== undefined) updateFields.vendorId = vendorId;
+    if (dateTime !== undefined) updateFields.dateTime = dateTime;
     if (customer !== undefined) updateFields.customer = customer;
+
+    // Record who performed the edit for audit purposes (Req 4.5)
+    if (createdBy !== undefined) updateFields.createdBy = createdBy;
+
+    // If staffId is being changed, resolve vendorId from StaffSchedule (Req 9.7)
+    if (staffId !== undefined) {
+      updateFields.staffId = staffId;
+      const { data: staffSchedule } = await client.models.StaffSchedule.get({ visibleId: staffId });
+      if (staffSchedule?.vendorId) {
+        updateFields.vendorId = staffSchedule.vendorId;
+      }
+    } else if (vendorId !== undefined) {
+      updateFields.vendorId = vendorId;
+    }
+
+    // Overlap detection for edits that change dateTime or staffId (Req 4.6)
+    const targetStaffId = updateFields.staffId;
+    const dateTimeChanged = dateTime !== undefined;
+
+    if ((targetStaffId || dateTimeChanged) && !confirmOverlap) {
+      // Get existing appointment to resolve missing fields
+      const { data: existingAppt } = await client.models.Appointment.get({ appointmentId });
+      const effectiveStaffId = targetStaffId || existingAppt?.staffId;
+      const effectiveDateTime = updateFields.dateTime || existingAppt?.dateTime;
+
+      if (effectiveStaffId && effectiveDateTime) {
+        // Fetch service duration for overlap calculation
+        const targetServiceId = updateFields.serviceId || existingAppt?.serviceId;
+        let duration = 60; // default fallback
+        if (targetServiceId) {
+          const { data: svc } = await client.models.Service.get({ serviceId: targetServiceId });
+          if (svc?.duration) duration = svc.duration as number;
+        }
+
+        const overlap = await detectOverlap(client, effectiveStaffId, effectiveDateTime, duration, appointmentId);
+        if (overlap) {
+          return Response.json({
+            warning: 'Scheduling conflict detected',
+            conflict: overlap,
+            message: 'This appointment overlaps with an existing appointment. Resubmit with confirmOverlap=true to save anyway.',
+          }, { status: 409 });
+        }
+      }
+    }
 
     const { errors } = await client.models.Appointment.update(updateFields);
 
@@ -47,9 +89,9 @@ export async function PATCH(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { vendorId, serviceId, bundleId, dateTime, customer, status, paymentId, paymentStatus, paymentAmount, staffId } = body;
+    const { serviceId, bundleId, dateTime, customer, status, paymentId, paymentStatus, paymentAmount, staffId, createdBy, confirmOverlap } = body;
 
-    if (!vendorId || !serviceId || !dateTime || !customer) {
+    if (!serviceId || !dateTime || !customer) {
       return Response.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
@@ -57,13 +99,6 @@ export async function POST(request: Request) {
     const { data: globalSetting } = await client.models.SiteSettings.get({ settingKey: 'globalBookingDisabledUntil' });
     if (globalSetting?.settingValue && new Date(globalSetting.settingValue) > new Date()) {
       return Response.json({ error: 'Online booking is temporarily disabled' }, { status: 403 });
-    }
-
-    // Check vendor-level booking blackout
-    const { data: vendorCheck } = await client.models.Vendor.get({ vendorId });
-    const vendorUntil = vendorCheck?.bookingDisabledUntil as string | null;
-    if (vendorUntil && new Date(vendorUntil) > new Date()) {
-      return Response.json({ error: 'Booking is temporarily disabled for this vendor' }, { status: 403 });
     }
 
     // Multi-provider booking path
@@ -84,60 +119,101 @@ export async function POST(request: Request) {
 
     const appointmentId = randomUUID();
 
-    // Auto-assign staff if none provided — respects schedule
+    // Auto-assign staff if none provided — uses staffAssigner with fewest-bookings algorithm (Req 5.5, 5.6)
     let assignedStaffId = staffId;
     if (!assignedStaffId) {
       const { data: svcData } = await client.models.Service.get({ serviceId });
       const allowedStaff = (svcData?.allowedStaff as string[]) || [];
 
-      // Helper: check if a staff member is working at the requested dateTime (respects recurrence)
-      const isWorkingAt = (staff: any) => {
-        if (!staff.schedule) return false;
-        const schedule = typeof staff.schedule === 'string' ? JSON.parse(staff.schedule) : staff.schedule;
-        const requestedDate = new Date(dateTime.split('T')[0] + 'T00:00:00');
-        const dayNames = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
-        const dayOfWeek = dayNames[requestedDate.getDay()];
-        const daySchedule = schedule[dayOfWeek];
-        if (!daySchedule || !daySchedule.start) return false;
-
-        // Handle recurrence patterns (every-other-week, 2nd-of-month)
-        let effectiveHours = { start: daySchedule.start, end: daySchedule.end };
-        if (daySchedule.recurrence) {
-          const recHours = getRecurrenceHours(daySchedule, requestedDate);
-          if (!recHours || !recHours.start) return false;
-          effectiveHours = recHours;
-        }
-
-        // Check time falls within working hours
-        const time = dateTime.includes('T') ? dateTime.split('T')[1].substring(0, 5) : '00:00';
-        const duration = svcData?.duration || 30;
-        const [h, m] = time.split(':').map(Number);
-        const slotStart = h * 60 + m;
-        const slotEnd = slotStart + duration;
-        const [sh, sm] = effectiveHours.start.split(':').map(Number);
-        const [eh, em] = effectiveHours.end.split(':').map(Number);
-        return slotStart >= (sh * 60 + sm) && slotEnd <= (eh * 60 + em);
-      };
-
+      // Fetch staff schedules
+      let staffSchedules: any[] = [];
       if (allowedStaff.length > 0) {
-        // Fetch schedules for allowed staff and pick one that's working
         const staffPromises = allowedStaff.map((sid: string) => client.models.StaffSchedule.get({ visibleId: sid }));
         const staffResults = await Promise.all(staffPromises);
-        const staffRecords = staffResults.filter(r => r.data?.isActive !== false).map(r => r.data);
-        const working = staffRecords.find(s => isWorkingAt(s));
-        assignedStaffId = working?.visibleId || staffRecords[0]?.visibleId || allowedStaff[0];
+        staffSchedules = staffResults.filter(r => r.data && r.data.isActive !== false).map(r => r.data);
       } else {
-        // All staff for this vendor — pick one that's working
-        const { data: vendorStaff } = await client.models.StaffSchedule.listStaffScheduleByVendorId({ vendorId } as any);
-        const activeStaff = (vendorStaff || []).filter((s: any) => s.isActive !== false);
-        const working = activeStaff.find(s => isWorkingAt(s));
-        assignedStaffId = working?.visibleId || (activeStaff.length > 0 ? activeStaff[0].visibleId : undefined);
+        // All active staff
+        const { data: allStaff } = await client.models.StaffSchedule.list();
+        staffSchedules = (allStaff || []).filter((s: any) => s.isActive !== false);
       }
+
+      if (staffSchedules.length > 0) {
+        // Parse date and time from dateTime
+        const date = dateTime.includes('T') ? dateTime.split('T')[0] : dateTime.split(' ')[0];
+        const time = dateTime.includes('T') ? dateTime.split('T')[1].substring(0, 5) : '00:00';
+
+        // Fetch existing appointments on the date for booking count and conflict detection
+        const vendorIds = [...new Set(staffSchedules.map((s: any) => s.vendorId).filter(Boolean))] as string[];
+        const appointmentPromises = vendorIds.map((vid: string) =>
+          client.models.Appointment.listAppointmentByVendorIdAndDateTime({
+            vendorId: vid,
+            dateTime: { beginsWith: date },
+          } as any)
+        );
+        const appointmentResults = await Promise.all(appointmentPromises);
+        const existingAppointments = appointmentResults
+          .flatMap((result: any) => result.data || []);
+
+        // Get buffer minutes from vendor
+        const bufferMinutes = svcData?.bufferMinutes || 15;
+
+        try {
+          const assigned = assignStaff({
+            service: { ...svcData, providersRequired: 1 },
+            staffSchedules,
+            appointments: existingAppointments,
+            date,
+            time,
+            bufferMinutes,
+          });
+          if (assigned.length > 0) {
+            assignedStaffId = assigned[0].staffId;
+          }
+        } catch {
+          // If assignStaff throws (no eligible staff), fall back to first active staff
+          assignedStaffId = staffSchedules[0]?.visibleId;
+        }
+      }
+    }
+
+    // Resolve vendorId from StaffSchedule (Req 9.7) rather than from request body
+    let resolvedVendorId = body.vendorId; // fallback to body if staff not found
+    if (assignedStaffId) {
+      const { data: staffSchedule } = await client.models.StaffSchedule.get({ visibleId: assignedStaffId });
+      if (staffSchedule?.vendorId) {
+        resolvedVendorId = staffSchedule.vendorId;
+      }
+
+      // Overlap detection (Req 4.6): check before saving
+      if (!confirmOverlap) {
+        const svcDuration = serviceCheck?.duration || 60;
+        const overlap = await detectOverlap(client, assignedStaffId, dateTime, svcDuration as number, undefined);
+        if (overlap) {
+          return Response.json({
+            warning: 'Scheduling conflict detected',
+            conflict: overlap,
+            message: 'This appointment overlaps with an existing appointment. Resubmit with confirmOverlap=true to save anyway.',
+          }, { status: 409 });
+        }
+      }
+    }
+
+    // Check vendor-level booking blackout (using resolved vendorId)
+    if (resolvedVendorId) {
+      const { data: vendorCheck } = await client.models.Vendor.get({ vendorId: resolvedVendorId });
+      const vendorUntil = vendorCheck?.bookingDisabledUntil as string | null;
+      if (vendorUntil && new Date(vendorUntil) > new Date()) {
+        return Response.json({ error: 'Booking is temporarily disabled for this provider' }, { status: 403 });
+      }
+    }
+
+    if (!resolvedVendorId) {
+      return Response.json({ error: 'Could not resolve vendor for this appointment' }, { status: 400 });
     }
 
     const { data, errors } = await client.models.Appointment.create({
       appointmentId,
-      vendorId,
+      vendorId: resolvedVendorId,
       serviceId,
       staffId: assignedStaffId || undefined,
       bundleId: bundleId || undefined,
@@ -147,6 +223,7 @@ export async function POST(request: Request) {
       paymentId,
       paymentStatus: paymentStatus || undefined,
       paymentAmount: paymentAmount || undefined,
+      createdBy: createdBy || undefined,
       createdAt: new Date().toISOString(),
     } as any);
 
@@ -169,13 +246,77 @@ export async function POST(request: Request) {
       }
     } catch (e) { console.error('Client auto-populate failed:', e); }
 
-    await sendBookingNotifications({ appointmentId, vendorId, serviceId, staffId: assignedStaffId, dateTime, customer });
+    await sendBookingNotifications({ appointmentId, vendorId: resolvedVendorId, serviceId, staffId: assignedStaffId, dateTime, customer });
 
-    return Response.json({ success: true, appointmentId });
+    return Response.json({ success: true, appointmentId, staffId: assignedStaffId, vendorId: resolvedVendorId });
   } catch (error) {
     console.error('Error creating appointment:', error);
     return Response.json({ error: 'Failed to create appointment' }, { status: 500 });
   }
+}
+
+/**
+ * Overlap detection helper (Req 4.6)
+ * Two time intervals overlap if: slot1Start < slot2End AND slot1End > slot2Start
+ * Returns the conflicting appointment info if overlap exists, null otherwise.
+ */
+async function detectOverlap(
+  amplifyClient: any,
+  staffId: string,
+  dateTime: string,
+  durationMinutes: number,
+  excludeAppointmentId?: string
+): Promise<{ appointmentId: string; dateTime: string; staffId: string } | null> {
+  const date = dateTime.includes('T') ? dateTime.split('T')[0] : dateTime.split(' ')[0];
+  const timeStr = dateTime.includes('T') ? dateTime.split('T')[1].substring(0, 5) : '00:00';
+  const [h, m] = timeStr.split(':').map(Number);
+  const newStart = h * 60 + m;
+  const newEnd = newStart + durationMinutes;
+
+  // Fetch existing appointments for this staff on the same date
+  // We look up the staff's vendorId to query by vendor index, then filter by staffId
+  const { data: staffSchedule } = await amplifyClient.models.StaffSchedule.get({ visibleId: staffId });
+  if (!staffSchedule?.vendorId) return null;
+
+  const { data: appointments } = await amplifyClient.models.Appointment.listAppointmentByVendorIdAndDateTime({
+    vendorId: staffSchedule.vendorId,
+    dateTime: { beginsWith: date },
+  } as any);
+
+  if (!appointments || appointments.length === 0) return null;
+
+  for (const apt of appointments) {
+    // Skip cancelled appointments
+    if (apt.status === 'cancelled') continue;
+    // Skip the appointment being edited (if updating)
+    if (excludeAppointmentId && apt.appointmentId === excludeAppointmentId) continue;
+    // Only check appointments for the same staff member
+    if (apt.staffId !== staffId) continue;
+
+    // Get the existing appointment's time range
+    const aptTime = apt.dateTime?.includes('T') ? apt.dateTime.split('T')[1].substring(0, 5) : '00:00';
+    const [ah, am] = aptTime.split(':').map(Number);
+    const existStart = ah * 60 + am;
+
+    // Get duration of existing appointment's service
+    let existDuration = 60; // default fallback
+    if (apt.serviceId) {
+      const { data: existService } = await amplifyClient.models.Service.get({ serviceId: apt.serviceId });
+      if (existService?.duration) existDuration = existService.duration as number;
+    }
+    const existEnd = existStart + existDuration;
+
+    // Overlap check: newStart < existEnd AND newEnd > existStart
+    if (newStart < existEnd && newEnd > existStart) {
+      return {
+        appointmentId: apt.appointmentId,
+        dateTime: apt.dateTime,
+        staffId: apt.staffId,
+      };
+    }
+  }
+
+  return null;
 }
 
 async function handleMultiProviderBooking(body: any, amplifyClient: any) {

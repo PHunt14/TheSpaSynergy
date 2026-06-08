@@ -4,6 +4,7 @@ import type { Schema } from '../../../amplify/data/resource';
 import config from '../../../amplify_outputs.json' with { type: 'json' };
 import { getRecurrenceHours, generateTimeSlots, getMultiProviderSlots } from '../../utils/availability.js';
 import { getParallelQuantitySlots, getSequentialQuantitySlots } from '../../utils/quantityAvailability.js';
+import { getEligibleStaff } from '../../utils/staffEligibility';
 
 const client = generateServerClientUsingCookies<Schema>({
   config,
@@ -16,26 +17,22 @@ export async function GET(request: Request) {
   const serviceId = searchParams.get('serviceId');
   const date = searchParams.get('date'); // YYYY-MM-DD format
   const excludeAppointmentId = searchParams.get('excludeAppointmentId');
+  const staffId = searchParams.get('staffId'); // Optional: specific staff member
 
-  if (!vendorId || !serviceId || !date) {
-    return Response.json({ error: 'Missing required parameters' }, { status: 400 });
+  if (!serviceId || !date) {
+    return Response.json({ error: 'Missing required parameters: serviceId and date are required' }, { status: 400 });
   }
 
   try {
-    const [vendorRes, serviceRes, globalSettingRes] = await Promise.all([
-      client.models.Vendor.get({ vendorId }),
+    const [serviceRes, globalSettingRes] = await Promise.all([
       client.models.Service.get({ serviceId }),
       client.models.SiteSettings.get({ settingKey: 'globalBookingDisabledUntil' }),
     ]);
 
-    if (vendorRes.errors || !vendorRes.data) {
-      return Response.json({ error: 'Vendor not found' }, { status: 404 });
-    }
     if (serviceRes.errors || !serviceRes.data) {
       return Response.json({ error: 'Service not found' }, { status: 404 });
     }
 
-    const vendor = vendorRes.data;
     const service = serviceRes.data;
 
     // Check global booking blackout
@@ -44,16 +41,67 @@ export async function GET(request: Request) {
       return Response.json({ availableSlots: [], bookingDisabled: true, disabledUntil: globalUntil });
     }
 
-    // Check vendor-level booking blackout
-    const vendorUntil = vendor.bookingDisabledUntil as string | null;
-    if (vendorUntil && new Date(vendorUntil) > new Date()) {
-      return Response.json({ availableSlots: [], bookingDisabled: true, disabledUntil: vendorUntil });
+    // Fetch all staff schedules for eligibility resolution
+    const { data: allStaffData } = await client.models.StaffSchedule.list();
+    const allStaff = (allStaffData || []) as any[];
+
+    // Use Staff Eligibility Resolver to determine which staff can perform this service
+    const eligibleStaff = getEligibleStaff(
+      {
+        serviceId: service.serviceId,
+        name: service.name,
+        allowedStaff: service.allowedStaff as string[] | null,
+      },
+      allStaff.map((s: any) => ({
+        visibleId: s.visibleId,
+        staffName: s.staffName,
+        vendorId: s.vendorId,
+        isActive: s.isActive !== false,
+        schedule: s.schedule,
+        autoAssignRules: s.autoAssignRules,
+        squareAccessToken: s.squareAccessToken,
+        squareLocationId: s.squareLocationId,
+        squareOAuthStatus: s.squareOAuthStatus,
+        smsAlertsEnabled: s.smsAlertsEnabled,
+        emailAlertsEnabled: s.emailAlertsEnabled,
+      }))
+    );
+
+    // If no staff are eligible, return empty slots with message (Req 5.7)
+    if (eligibleStaff.length === 0) {
+      return Response.json({
+        availableSlots: [],
+        message: 'No providers are available for this service',
+      });
+    }
+
+    // If a specific staffId is provided, filter to only that staff member
+    let targetStaff = eligibleStaff;
+    if (staffId) {
+      targetStaff = eligibleStaff.filter(s => s.visibleId === staffId);
+      if (targetStaff.length === 0) {
+        return Response.json({
+          availableSlots: [],
+          message: 'The selected provider is not available for this service',
+        });
+      }
+    }
+
+    // Check vendor-level booking blackout if vendorId is provided (backward compat)
+    if (vendorId) {
+      const vendorRes = await client.models.Vendor.get({ vendorId });
+      if (vendorRes.data) {
+        const vendorUntil = vendorRes.data.bookingDisabledUntil as string | null;
+        if (vendorUntil && new Date(vendorUntil) > new Date()) {
+          return Response.json({ availableSlots: [], bookingDisabled: true, disabledUntil: vendorUntil });
+        }
+      }
     }
 
     // Multi-provider availability path
     const multiProvider = searchParams.get('multiProvider');
     if (multiProvider === 'true' || (service.providersRequired && service.providersRequired > 1)) {
-      return await handleMultiProviderAvailability(service, date, vendor);
+      return await handleMultiProviderAvailability(service, date, targetStaff, allStaff);
     }
 
     // Multi-quantity availability path
@@ -62,149 +110,199 @@ export async function GET(request: Request) {
     const mode = searchParams.get('mode') || 'sequential'; // 'parallel' or 'sequential'
 
     if (quantity > 1) {
-      return await handleQuantityAvailability(service, date, vendor, quantity, mode);
+      return await handleQuantityAvailability(service, date, targetStaff, quantity, mode);
     }
 
     const isSauna = (service.resourceType || 'staff') === 'sauna';
 
-    const requestedDate = new Date(date + 'T00:00:00');
-    const dayOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][requestedDate.getDay()];
+    // For "Any Available" (no staffId), merge slots across all eligible staff
+    // For specific staff (staffId provided), compute slots for that one staff member
+    if (!isSauna && targetStaff.length > 0) {
+      const allSlots = await computeSlotsForStaff(targetStaff, service, date, excludeAppointmentId);
 
-    // Determine working hours for this day
-    const dayHours = await getDayHours(vendor, service, dayOfWeek, requestedDate);
-    if (!dayHours || !dayHours.start || !dayHours.end) {
-      return Response.json({ availableSlots: [] });
+      // Sort chronologically and remove duplicates (Req 5.3, 5.4)
+      const sortedUniqueSlots = deduplicateAndSort(allSlots);
+
+      return Response.json({
+        availableSlots: sortedUniqueSlots,
+        ...(staffId && targetStaff.length === 1
+          ? { assignedStaff: { id: targetStaff[0].visibleId, name: targetStaff[0].staffName } }
+          : {}),
+      });
     }
 
-    // Resolve staff assignment
-    let assignedStaff = null;
-    if (!isSauna) {
-      assignedStaff = await resolveStaff(vendorId, dayOfWeek, requestedDate, service.allowedStaff as string[] | null);
+    // Sauna resource type path — use vendor working hours
+    if (isSauna && vendorId) {
+      const vendorRes = await client.models.Vendor.get({ vendorId });
+      if (!vendorRes.data) {
+        return Response.json({ availableSlots: [] });
+      }
+      const vendor = vendorRes.data;
+      const requestedDate = new Date(date + 'T00:00:00');
+      const dayOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][requestedDate.getDay()];
+
+      let dayHours = null;
+      if (vendor.saunaHours) {
+        const saunaHours = JSON.parse(vendor.saunaHours as string);
+        dayHours = saunaHours[dayOfWeek] || null;
+      }
+      if (!dayHours || !dayHours.start || !dayHours.end) {
+        return Response.json({ availableSlots: [] });
+      }
+
+      // Get existing sauna appointments
+      let allAppointments: any[] = [];
+      let nextToken: string | undefined;
+      do {
+        const result = await client.models.Appointment.listAppointmentByVendorIdAndDateTime({
+          vendorId,
+          dateTime: { beginsWith: date },
+          ...(nextToken ? { nextToken } : {})
+        } as any);
+        allAppointments = allAppointments.concat(result.data || []);
+        nextToken = (result as any).nextToken;
+      } while (nextToken);
+
+      const relevantAppointments = allAppointments.filter(apt => {
+        if (apt.status === 'cancelled') return false;
+        if (excludeAppointmentId && apt.appointmentId === excludeAppointmentId) return false;
+        return true;
+      });
+
+      const slots = generateTimeSlots(
+        dayHours.start,
+        dayHours.end,
+        service.duration,
+        service.bufferMinutes != null ? service.bufferMinutes : 15,
+        relevantAppointments,
+        date
+      );
+
+      return Response.json({ availableSlots: slots });
     }
 
-    // Get existing appointments for conflict checking
-    let allAppointments: any[] = [];
-    let nextToken: string | undefined;
-    do {
-      const result = await client.models.Appointment.listAppointmentByVendorIdAndDateTime({
-        vendorId,
-        dateTime: { beginsWith: date },
-        ...(nextToken ? { nextToken } : {})
-      } as any);
-      allAppointments = allAppointments.concat(result.data || []);
-      nextToken = (result as any).nextToken;
-    } while (nextToken);
-
-    // Filter by resource type — sauna appointments don't block staff and vice versa
-    const relevantAppointments = await filterRelevantAppointments(allAppointments || [], isSauna, assignedStaff, serviceId, excludeAppointmentId);
-
-    const slots = generateTimeSlots(
-      dayHours.start,
-      dayHours.end,
-      service.duration,
-      service.bufferMinutes != null ? service.bufferMinutes : (vendor.bufferMinutes || 15),
-      relevantAppointments,
-      date
-    );
-
-    return Response.json({
-      availableSlots: slots,
-      ...(assignedStaff ? { assignedStaff: { id: assignedStaff.visibleId, name: assignedStaff.staffName } } : {})
-    });
+    // Fallback: no slots available
+    return Response.json({ availableSlots: [] });
   } catch (error) {
     console.error('Error fetching availability:', error);
     return Response.json({ error: 'Failed to fetch availability' }, { status: 500 });
   }
 }
 
-async function filterRelevantAppointments(appointments: any[], isSauna: boolean, assignedStaff: any, serviceId: string, excludeAppointmentId?: string | null) {
-  const relevant = [];
-  for (const apt of appointments) {
-    if (apt.status === 'cancelled') continue;
-    if (excludeAppointmentId && apt.appointmentId === excludeAppointmentId) continue;
-    const { data: aptService } = await client.models.Service.get({ serviceId: apt.serviceId });
-    const aptIsSauna = (aptService?.resourceType || 'staff') === 'sauna';
-    if (isSauna && aptIsSauna) {
-      relevant.push(apt);
-    } else if (!isSauna && !aptIsSauna) {
-      if (!assignedStaff || !apt.staffId || apt.staffId === assignedStaff.visibleId) {
-        relevant.push(apt);
-      }
-    }
+/**
+ * Computes time slots for one or more staff members, merging results.
+ * Each staff member's available slots are calculated based on their schedule
+ * and existing appointments.
+ */
+async function computeSlotsForStaff(
+  staffMembers: any[],
+  service: any,
+  date: string,
+  excludeAppointmentId?: string | null
+) {
+  const requestedDate = new Date(date + 'T00:00:00');
+  const dayOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][requestedDate.getDay()];
+  const allSlots: { time: string; display: string }[] = [];
+
+  for (const staff of staffMembers) {
+    // Get this staff member's working hours for the day
+    const hours = getStaffWorkingHoursForDay(staff, dayOfWeek, requestedDate);
+    if (!hours || !hours.start || !hours.end) continue;
+
+    // Get appointments for this staff member on the requested date
+    const staffAppointments = await getStaffAppointments(staff.vendorId, staff.visibleId, date, excludeAppointmentId);
+
+    // Generate time slots
+    const slots = generateTimeSlots(
+      hours.start,
+      hours.end,
+      service.duration,
+      service.bufferMinutes != null ? service.bufferMinutes : 15,
+      staffAppointments,
+      date
+    );
+
+    allSlots.push(...slots);
   }
-  return relevant;
+
+  return allSlots;
 }
 
-async function getDayHours(vendor: any, service: any, dayOfWeek: string, requestedDate: Date) {
-  const isSauna = (service.resourceType || 'staff') === 'sauna';
+/**
+ * Retrieves working hours for a staff member on a specific day,
+ * handling recurrence rules.
+ */
+function getStaffWorkingHoursForDay(staff: any, dayOfWeek: string, requestedDate: Date) {
+  if (!staff.schedule) return null;
+  const schedule = typeof staff.schedule === 'string' ? JSON.parse(staff.schedule) : staff.schedule;
+  const daySchedule = schedule[dayOfWeek];
+  if (!daySchedule || !daySchedule.start) return null;
 
-  if (isSauna && vendor.saunaHours) {
-    const saunaHours = JSON.parse(vendor.saunaHours as string);
-    return saunaHours[dayOfWeek] || null;
+  if (daySchedule.recurrence) {
+    return getRecurrenceHours(daySchedule, requestedDate);
   }
 
-  if (!isSauna) {
-    const staff = await resolveStaff(vendor.vendorId, dayOfWeek, requestedDate, service.allowedStaff as string[] | null);
-    if (staff) {
-      const schedule = JSON.parse(staff.schedule as string);
-      const daySchedule = schedule[dayOfWeek];
-      if (daySchedule?.recurrence) {
-        return getRecurrenceHours(daySchedule, requestedDate);
-      }
-      return daySchedule || null;
-    }
-  }
-
-  const workingHours = JSON.parse(vendor.workingHours as string);
-  return workingHours[dayOfWeek] || null;
+  return { start: daySchedule.start, end: daySchedule.end };
 }
 
-async function resolveStaff(vendorId: string, dayOfWeek: string, requestedDate: Date, allowedStaffIds?: string[] | null) {
-  const { data: staffList } = await client.models.StaffSchedule.listStaffScheduleByVendorId({ vendorId });
-  if (!staffList || staffList.length === 0) return null;
+/**
+ * Fetches appointments for a specific staff member on a given date.
+ * Filters out cancelled appointments and the excluded appointment.
+ */
+async function getStaffAppointments(
+  vendorId: string,
+  staffVisibleId: string,
+  date: string,
+  excludeAppointmentId?: string | null
+) {
+  let allAppointments: any[] = [];
+  let nextToken: string | undefined;
+  do {
+    const result = await client.models.Appointment.listAppointmentByVendorIdAndDateTime({
+      vendorId,
+      dateTime: { beginsWith: date },
+      ...(nextToken ? { nextToken } : {})
+    } as any);
+    allAppointments = allAppointments.concat(result.data || []);
+    nextToken = (result as any).nextToken;
+  } while (nextToken);
 
-  const isAllowed = (staff: any) => !allowedStaffIds || allowedStaffIds.length === 0 || allowedStaffIds.includes(staff.visibleId);
-  const eligible = staffList.filter(s => s.isActive && isAllowed(s));
-
-  // Helper: check if a staff member actually works on this specific day (respects recurrence)
-  const isWorkingThisDay = (staff: any): boolean => {
-    if (!staff.schedule) return false;
-    const schedule = JSON.parse(staff.schedule as string);
-    const daySchedule = schedule[dayOfWeek];
-    if (!daySchedule || !daySchedule.start) return false;
-    if (daySchedule.recurrence) return !!getRecurrenceHours(daySchedule, requestedDate)?.start;
+  return allAppointments.filter(apt => {
+    if (apt.status === 'cancelled') return false;
+    if (excludeAppointmentId && apt.appointmentId === excludeAppointmentId) return false;
+    // Only include appointments for this specific staff member
+    if (apt.staffId && apt.staffId !== staffVisibleId) return false;
     return true;
-  };
-
-  // Auto-assign only if the staff member is actually working this day
-  const autoAssigned = eligible.find(staff => {
-    if (!staff.autoAssignRules) return false;
-    const rules = JSON.parse(staff.autoAssignRules as string);
-    const hasAutoAssign = rules.some((r: any) => r.action === 'auto-assign' && r.days?.includes(dayOfWeek));
-    if (!hasAutoAssign) return false;
-    return isWorkingThisDay(staff);
   });
-  if (autoAssigned) return autoAssigned;
-
-  return eligible.find(staff => isWorkingThisDay(staff)) || null;
 }
 
-async function handleMultiProviderAvailability(service: any, date: string, vendor: any) {
-  let allowedStaff = (service.allowedStaff as string[]) || [];
+/**
+ * Sorts time slots in ascending chronological order and removes duplicates.
+ * Duplicates are identified by the `time` value (e.g., "09:00").
+ */
+function deduplicateAndSort(slots: { time: string; display: string }[]): { time: string; display: string }[] {
+  // Sort chronologically by time string (HH:MM format sorts naturally)
+  const sorted = [...slots].sort((a, b) => a.time.localeCompare(b.time));
 
-  // If allowedStaff is empty (null = all staff), fetch all active staff across all vendors
-  if (allowedStaff.length === 0) {
-    const { data: allStaff } = await client.models.StaffSchedule.list();
-    allowedStaff = (allStaff || []).filter((s: any) => s.isActive !== false).map((s: any) => s.visibleId);
+  // Remove duplicates based on time value
+  const seen = new Set<string>();
+  const unique: { time: string; display: string }[] = [];
+  for (const slot of sorted) {
+    if (!seen.has(slot.time)) {
+      seen.add(slot.time);
+      unique.push(slot);
+    }
   }
 
-  if (allowedStaff.length === 0) {
-    return Response.json({ availableSlots: [] });
-  }
+  return unique;
+}
 
-  // Fetch staff schedules for ALL staff in service.allowedStaff
-  // Staff may span multiple vendors, so fetch each individually
-  const staffSchedulePromises = allowedStaff.map(staffId =>
+async function handleMultiProviderAvailability(service: any, date: string, eligibleStaff: any[], allStaff: any[]) {
+  const bufferMinutes = service.bufferMinutes != null ? service.bufferMinutes : 15;
+
+  // Map eligible staff to full schedule records for getMultiProviderSlots
+  const staffScheduleIds = eligibleStaff.map(s => s.visibleId);
+  const staffSchedulePromises = staffScheduleIds.map(staffId =>
     client.models.StaffSchedule.get({ visibleId: staffId } as any)
   );
   const staffScheduleResults = await Promise.all(staffSchedulePromises);
@@ -214,7 +312,7 @@ async function handleMultiProviderAvailability(service: any, date: string, vendo
     .map(result => result.data);
 
   if (staffSchedules.length === 0) {
-    return Response.json({ availableSlots: [] });
+    return Response.json({ availableSlots: [], message: 'No providers are available for this service' });
   }
 
   // Collect unique vendorIds from the staff schedules to fetch appointments
@@ -231,7 +329,7 @@ async function handleMultiProviderAvailability(service: any, date: string, vendo
 
   const allAppointments = appointmentResults
     .flatMap(result => (result as any).data || [])
-    .filter(apt => apt.status !== 'cancelled' && allowedStaff.includes(apt.staffId));
+    .filter(apt => apt.status !== 'cancelled' && staffScheduleIds.includes(apt.staffId));
 
   // Call getMultiProviderSlots
   const slots = getMultiProviderSlots({
@@ -239,18 +337,17 @@ async function handleMultiProviderAvailability(service: any, date: string, vendo
     staffSchedules,
     appointments: allAppointments,
     date,
-    bufferMinutes: vendor.bufferMinutes || 15
+    bufferMinutes
   });
 
-  return Response.json({ availableSlots: slots });
+  // Sort and deduplicate slots
+  const sortedUniqueSlots = deduplicateAndSort(slots);
+
+  return Response.json({ availableSlots: sortedUniqueSlots });
 }
 
-async function handleQuantityAvailability(service: any, date: string, vendor: any, quantity: number, mode: string) {
-  const allowedStaff = (service.allowedStaff as string[]) || [];
-
-  if (allowedStaff.length === 0) {
-    return Response.json({ availableSlots: [] });
-  }
+async function handleQuantityAvailability(service: any, date: string, eligibleStaff: any[], quantity: number, mode: string) {
+  const bufferMinutes = service.bufferMinutes != null ? service.bufferMinutes : 15;
 
   // Enforce maxQuantityPerBooking
   const maxQuantity = service.maxQuantityPerBooking || 1;
@@ -258,8 +355,9 @@ async function handleQuantityAvailability(service: any, date: string, vendor: an
     return Response.json({ error: `Maximum quantity for this service is ${maxQuantity}` }, { status: 400 });
   }
 
-  // Fetch staff schedules
-  const staffSchedulePromises = allowedStaff.map(staffId =>
+  // Map eligible staff to full schedule records
+  const staffScheduleIds = eligibleStaff.map(s => s.visibleId);
+  const staffSchedulePromises = staffScheduleIds.map(staffId =>
     client.models.StaffSchedule.get({ visibleId: staffId } as any)
   );
   const staffScheduleResults = await Promise.all(staffSchedulePromises);
@@ -269,7 +367,7 @@ async function handleQuantityAvailability(service: any, date: string, vendor: an
     .map(result => result.data);
 
   if (staffSchedules.length === 0) {
-    return Response.json({ availableSlots: [] });
+    return Response.json({ availableSlots: [], message: 'No providers are available for this service' });
   }
 
   // Collect unique vendorIds to fetch appointments
@@ -285,9 +383,7 @@ async function handleQuantityAvailability(service: any, date: string, vendor: an
 
   const allAppointments = appointmentResults
     .flatMap(result => (result as any).data || [])
-    .filter(apt => apt.status !== 'cancelled' && allowedStaff.includes(apt.staffId));
-
-  const bufferMinutes = vendor.bufferMinutes || 15;
+    .filter(apt => apt.status !== 'cancelled' && staffScheduleIds.includes(apt.staffId));
 
   let slots;
   if (mode === 'parallel') {
@@ -310,8 +406,11 @@ async function handleQuantityAvailability(service: any, date: string, vendor: an
     });
   }
 
+  // Sort and deduplicate slots
+  const sortedUniqueSlots = deduplicateAndSort(slots);
+
   return Response.json({
-    availableSlots: slots,
+    availableSlots: sortedUniqueSlots,
     quantity,
     mode,
     totalDuration: mode === 'parallel'

@@ -3,5 +3,6 @@
     "sonarlint.connectedMode.project": {
         "connectionId": "phunt14",
         "projectKey": "PHunt14_TheSpaSynergy"
-    }
+    },
+    "javascript.autoClosingTags": false
 }

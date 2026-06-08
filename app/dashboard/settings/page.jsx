@@ -79,7 +79,7 @@ export default function Settings() {
 
   if (loading) return <div>Loading...</div>
 
-  const isPrivileged = currentUser.role === 'owner' || currentUser.role === 'admin'
+  const isPrivileged = currentUser.role === 'admin'
 
   const tabStyle = (tab) => ({
     padding: '0.75rem 1.5rem',

@@ -64,6 +64,15 @@ describe('Group Cancellation Logic', () => {
 })
 
 describe('Reassignment Authorization Logic', () => {
+  /**
+   * Validates reassignment in the unified business model.
+   * Authorization is based on:
+   * - Staff eligibility (allowedStaff list)
+   * - Requesting user owns the appointment's staff (vendorId on appointment matches requestingVendorId)
+   * - Or requesting user's staff is in the service's allowedStaff (or allowedStaff is empty)
+   * Per Requirement 9.6: vendor/owner roles may update only services where their staff is
+   * listed in allowedStaff or allowedStaff is empty.
+   */
   function validateReassignment({ appointment, newStaffId, service, existingAppointments, requestingVendorId }) {
     const allowedStaff = service.allowedStaff || []
 
@@ -72,10 +81,10 @@ describe('Reassignment Authorization Logic', () => {
       return { valid: false, status: 400, error: 'Staff member not eligible for this service' }
     }
 
-    // Check authorization
-    const isLeadVendor = requestingVendorId === service.leadVendorId
+    // Check authorization: requestor must own the appointment's staff or have staff in allowedStaff
     const ownsStaff = requestingVendorId === appointment.vendorId
-    if (!isLeadVendor && !ownsStaff) {
+    const hasStaffInAllowed = allowedStaff.length === 0 // empty means all staff, so any vendor is authorized
+    if (!ownsStaff && !hasStaffInAllowed) {
       return { valid: false, status: 403, error: 'Not authorized to reassign this appointment' }
     }
 
@@ -99,31 +108,20 @@ describe('Reassignment Authorization Logic', () => {
     duration: 60,
     providersRequired: 2,
     allowedStaff: ['staff-1', 'staff-2', 'staff-3'],
-    leadVendorId: 'vendor-lead',
+    // NOTE: leadVendorId removed per unified business model (Requirement 9.5)
   }
 
   const appointment = {
     appointmentId: 'apt-1',
     groupId: 'group-1',
-    vendorId: 'vendor-a',
+    vendorId: 'vendor-a', // resolved from StaffSchedule, not from Service
     staffId: 'staff-1',
     serviceId: 'svc-1',
     dateTime: '2025-01-06T10:00',
     status: 'confirmed',
   }
 
-  test('lead vendor can reassign any staff', () => {
-    const result = validateReassignment({
-      appointment,
-      newStaffId: 'staff-2',
-      service,
-      existingAppointments: [],
-      requestingVendorId: 'vendor-lead',
-    })
-    expect(result.valid).toBe(true)
-  })
-
-  test('non-lead vendor who owns the staff can reassign', () => {
+  test('vendor who owns the appointment staff can reassign', () => {
     const result = validateReassignment({
       appointment,
       newStaffId: 'staff-2',
@@ -134,7 +132,7 @@ describe('Reassignment Authorization Logic', () => {
     expect(result.valid).toBe(true)
   })
 
-  test('non-lead vendor who does not own the staff cannot reassign', () => {
+  test('vendor who does not own the appointment staff cannot reassign (when allowedStaff is specific)', () => {
     const result = validateReassignment({
       appointment,
       newStaffId: 'staff-2',
@@ -146,13 +144,25 @@ describe('Reassignment Authorization Logic', () => {
     expect(result.status).toBe(403)
   })
 
+  test('any vendor can reassign when allowedStaff is empty (all staff eligible)', () => {
+    const openService = { ...service, allowedStaff: [] }
+    const result = validateReassignment({
+      appointment,
+      newStaffId: 'staff-2',
+      service: openService,
+      existingAppointments: [],
+      requestingVendorId: 'vendor-other',
+    })
+    expect(result.valid).toBe(true)
+  })
+
   test('reassignment to staff not in allowedStaff is rejected', () => {
     const result = validateReassignment({
       appointment,
       newStaffId: 'staff-99',
       service,
       existingAppointments: [],
-      requestingVendorId: 'vendor-lead',
+      requestingVendorId: 'vendor-a', // owns the appointment
     })
     expect(result.valid).toBe(false)
     expect(result.status).toBe(400)
@@ -167,7 +177,7 @@ describe('Reassignment Authorization Logic', () => {
       newStaffId: 'staff-2',
       service,
       existingAppointments,
-      requestingVendorId: 'vendor-lead',
+      requestingVendorId: 'vendor-a', // owns the appointment
     })
     expect(result.valid).toBe(false)
     expect(result.status).toBe(409)
@@ -179,7 +189,7 @@ describe('Reassignment Authorization Logic', () => {
       newStaffId: 'staff-1', // same as current
       service,
       existingAppointments: [],
-      requestingVendorId: 'vendor-lead',
+      requestingVendorId: 'vendor-a', // owns the appointment
     })
     expect(result.valid).toBe(true)
   })
@@ -193,7 +203,7 @@ describe('Reassignment Authorization Logic', () => {
       newStaffId: 'staff-2',
       service,
       existingAppointments,
-      requestingVendorId: 'vendor-lead',
+      requestingVendorId: 'vendor-a', // owns the appointment
     })
     expect(result.valid).toBe(true)
   })

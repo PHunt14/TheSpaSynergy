@@ -30,7 +30,7 @@ Object.defineProperty(window, 'innerWidth', { value: 1024, writable: true })
 
 const mockResponses = {
   '/api/vendors': { vendors: [{ vendorId: 'v1', name: 'Test Vendor', phone: '555-1234', description: 'A test vendor' }] },
-  '/api/services': { services: [{ serviceId: 's1', vendorId: 'v1', name: 'Test Service', duration: 60, price: 100, category: 'Wellness' }] },
+  '/api/services': { services: [{ serviceId: 's1', name: 'Test Service', duration: 60, price: 100, categories: ['Wellness'], isActive: true }] },
   '/api/availability': { availableSlots: [{ time: '14:00', display: '2:00 PM' }] },
   '/api/available-dates': { availableDates: ['2025-07-15'] },
   '/api/bundles': { bundles: [{ bundleId: 'b1', name: 'Test Bundle', serviceIds: ['s1'], price: 200, description: 'A bundle' }] },
@@ -67,26 +67,34 @@ import SuccessPage from '../../app/booking/success/page.jsx'
 describe('Booking Page (/booking)', () => {
   test('renders without crashing', async () => {
     render(<BookingPage />)
-    await waitFor(() => expect(screen.getByText('Our Professionals')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Book a Service')).toBeInTheDocument())
   })
 
-  test('renders vendor cards after fetch', async () => {
+  test('renders unified service catalog after fetch', async () => {
     render(<BookingPage />)
-    await waitFor(() => expect(screen.getByText('Test Vendor')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Test Service')).toBeInTheDocument())
+  })
+
+  test('displays category filter with All selected by default', async () => {
+    render(<BookingPage />)
+    await waitFor(() => {
+      const allButton = screen.getByRole('button', { name: 'All' })
+      expect(allButton).toBeInTheDocument()
+    })
+  })
+
+  test('groups services by category', async () => {
+    render(<BookingPage />)
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Wellness' })).toBeInTheDocument())
   })
 })
 
 describe('Service Page (/booking/service)', () => {
   beforeEach(() => searchParams.set('vendor', 'v1'))
 
-  test('renders without crashing', async () => {
+  test('renders and redirects to /booking', async () => {
     render(<ServicePage />)
-    await waitFor(() => expect(screen.getByText('Select a Service')).toBeInTheDocument())
-  })
-
-  test('renders services after fetch', async () => {
-    render(<ServicePage />)
-    await waitFor(() => expect(screen.getByText('Test Service')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Redirecting to booking...')).toBeInTheDocument())
   })
 })
 

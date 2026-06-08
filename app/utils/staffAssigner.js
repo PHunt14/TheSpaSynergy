@@ -3,11 +3,17 @@ import { DAY_NAMES, getRecurrenceHours } from './availability.js'
 /**
  * Automatically assigns the required number of staff members for a multi-provider service.
  *
- * Pure function — no I/O, no side effects.
+ * Algorithm:
+ * 1. Filter to eligible staff: in allowedStaff (or all if empty), active, working at time, no conflicts
+ * 2. Count non-cancelled bookings on the date for each eligible staff member
+ * 3. Select staff with fewest bookings; ties broken randomly
+ * 4. Return exactly providersRequired staff members
+ *
+ * Pure function — no I/O, no side effects (except random tie-breaking).
  *
  * @param {Object} params
  * @param {Object} params.service - Service with providersRequired, allowedStaff, duration
- * @param {Array} params.staffSchedules - Staff schedule records (visibleId, vendorId, isActive, schedule, autoAssignRules, name)
+ * @param {Array} params.staffSchedules - Staff schedule records (visibleId, vendorId, isActive, schedule, name)
  * @param {Array} params.appointments - Existing appointments for the date (dateTime, staffId, customer, status)
  * @param {string} params.date - Date string in YYYY-MM-DD format
  * @param {string} params.time - Time string in HH:MM format
@@ -38,20 +44,22 @@ export function assignStaff({ service, staffSchedules, appointments, date, time,
     )
   }
 
-  // 2. Prefer staff with auto-assign rules matching the requested day
-  const withAutoAssign = []
-  const withoutAutoAssign = []
-
+  // 2. Count non-cancelled bookings on the date for each eligible staff member
+  const bookingCounts = new Map()
   for (const staff of eligible) {
-    if (hasAutoAssignRule(staff, dayOfWeek)) {
-      withAutoAssign.push(staff)
-    } else {
-      withoutAutoAssign.push(staff)
-    }
+    const count = appointments.filter(
+      apt => apt.staffId === staff.visibleId && apt.status !== 'cancelled'
+    ).length
+    bookingCounts.set(staff.visibleId, count)
   }
 
-  // Prioritize auto-assign staff, then fill with remaining
-  const sorted = [...withAutoAssign, ...withoutAutoAssign]
+  // Sort by fewest bookings; break ties randomly
+  const sorted = [...eligible].sort((a, b) => {
+    const countA = bookingCounts.get(a.visibleId)
+    const countB = bookingCounts.get(b.visibleId)
+    if (countA !== countB) return countA - countB
+    return Math.random() - 0.5
+  })
 
   // 3. Return exactly providersRequired staff members
   const assigned = sorted.slice(0, providersRequired)
@@ -108,17 +116,6 @@ function hasConflict(staffId, appointments, time, duration, bufferMinutes) {
 
     return slotStart < aptEnd && slotEnd > aptStart
   })
-}
-
-/**
- * Checks if a staff member has an auto-assign rule for the given day.
- */
-function hasAutoAssignRule(staff, dayOfWeek) {
-  if (!staff.autoAssignRules) return false
-  const rules = typeof staff.autoAssignRules === 'string'
-    ? JSON.parse(staff.autoAssignRules)
-    : staff.autoAssignRules
-  return rules.some(r => r.action === 'auto-assign' && r.days?.includes(dayOfWeek))
 }
 
 /**

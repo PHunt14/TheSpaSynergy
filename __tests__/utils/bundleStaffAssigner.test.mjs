@@ -15,6 +15,10 @@ import { assignBundleStaff } from '../../app/utils/bundleStaffAssigner.js'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+// NOTE: vendorId in these service fixtures represents the vendor context resolved at runtime
+// from the assigned staff member's provider (StaffSchedule.vendorId), not a persisted field
+// on the Service data model. The Service model no longer contains vendorId (Requirement 9.1).
+// These bundle utilities still accept vendorId as input for payment routing purposes.
 const makeService = (id, vendorId, duration, opts = {}) => ({
   serviceId: id,
   vendorId,

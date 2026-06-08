@@ -25,7 +25,6 @@ const couplesService = {
   price: 200,
   providersRequired: 2,
   allowedStaff: ['staff-alice', 'staff-bob', 'staff-carol'],
-  leadVendorId: 'vendor-house',
   paymentSplitRules: { type: 'equal', houseFeeEnabled: true, houseFeeAmount: 40 },
 }
 
@@ -178,12 +177,18 @@ describe('Multi-Provider Booking Flow Integration', () => {
     expect(cancelled.every(apt => apt.groupId === groupId)).toBe(true)
   })
 
-  test('auto-assign preference in staff assignment', () => {
-    // Alice and Carol have auto-assign for Monday, Bob doesn't
+  test('fewest bookings preference in staff assignment', () => {
+    // With existing bookings, the algorithm should prefer staff with fewer bookings
+    // Alice has 2 bookings, Bob has 1, Carol has 0
+    const existingAppointments = [
+      { dateTime: '2025-01-06T08:00', staffId: 'staff-alice', status: 'confirmed', customer: JSON.stringify({ name: 'Test' }) },
+      { dateTime: '2025-01-06T12:00', staffId: 'staff-alice', status: 'confirmed', customer: JSON.stringify({ name: 'Test' }) },
+      { dateTime: '2025-01-06T08:00', staffId: 'staff-bob', status: 'confirmed', customer: JSON.stringify({ name: 'Test' }) },
+    ]
     const assigned = assignStaff({
       service: couplesService,
       staffSchedules,
-      appointments: [],
+      appointments: existingAppointments,
       date: '2025-01-06', // Monday
       time: '10:00',
       bufferMinutes: 15,
@@ -191,9 +196,9 @@ describe('Multi-Provider Booking Flow Integration', () => {
 
     expect(assigned).toHaveLength(2)
     const assignedIds = assigned.map(a => a.staffId)
-    // Should prefer Alice and Carol (both have auto-assign for Monday)
-    expect(assignedIds).toContain('staff-alice')
+    // Should prefer Carol (0 bookings) and Bob (1 booking) over Alice (2 bookings)
     expect(assignedIds).toContain('staff-carol')
+    expect(assignedIds).toContain('staff-bob')
   })
 
   test('payment split with percentage rules', () => {

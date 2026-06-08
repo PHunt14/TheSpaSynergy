@@ -5,7 +5,13 @@ const config = {
     {
       displayName: 'unit',
       testEnvironment: 'node',
-      transform: {},
+      transform: {
+        '\\.ts$': ['ts-jest', {
+          tsconfig: 'tsconfig.json',
+          useESM: true,
+        }],
+      },
+      extensionsToTreatAsEsm: ['.ts'],
       testMatch: ['**/__tests__/**/*.test.mjs'],
       testPathIgnorePatterns: ['/node_modules/', '/services/'],
     },

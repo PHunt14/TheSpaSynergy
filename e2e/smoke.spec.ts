@@ -13,8 +13,8 @@ test.describe('Public pages smoke tests', () => {
     await expect(page.locator('h1')).toContainText('Professionals')
   })
 
-  test('vendors page loads', async ({ page }) => {
-    await page.goto('/vendors')
+  test('providers page loads', async ({ page }) => {
+    await page.goto('/providers')
     await expect(page.locator('h1')).toBeVisible()
   })
 
@@ -26,7 +26,7 @@ test.describe('Public pages smoke tests', () => {
   test('navbar contains expected links', async ({ page }) => {
     await page.goto('/')
     await expect(page.locator('a[href="/booking"]').first()).toBeVisible()
-    await expect(page.locator('a[href="/vendors"]').first()).toBeVisible()
+    await expect(page.locator('a[href="/providers"]').first()).toBeVisible()
     await expect(page.locator('a[href="/contact"]').first()).toBeVisible()
   })
 

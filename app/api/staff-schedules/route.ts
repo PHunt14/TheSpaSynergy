@@ -66,14 +66,15 @@ export async function GET(request: Request) {
   const currentUser = await getCurrentUser();
   if (!currentUser) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
+  // Role-based filtering:
+  // - Admin role: sees all staff across all providers
+  // - Vendor/owner role: sees only staff belonging to their own vendorId
+  //   UNLESS ?all=true is passed (used by calendar view per Req 4.1-4.3 for unified calendar access)
+  const isVendorRole = currentUser.role === 'vendor' || currentUser.role === 'owner';
   const allParam = searchParams.get('all');
-
-  // Vendor/owner can only see their own vendor's schedules (unless all=true for multi-provider booking)
-  const effectiveVendorId = allParam === 'true'
-    ? null
-    : (currentUser.role === 'vendor' || currentUser.role === 'owner')
-      ? currentUser.vendorId
-      : vendorId;
+  const effectiveVendorId = isVendorRole && allParam !== 'true'
+    ? currentUser.vendorId
+    : vendorId;
 
   try {
     if (effectiveVendorId) {
@@ -82,6 +83,7 @@ export async function GET(request: Request) {
       return Response.json({ schedules: data || [] });
     }
 
+    // Admin with no vendorId filter: return all staff
     const { data, errors } = await client.models.StaffSchedule.list();
     if (errors) return Response.json({ error: 'Failed to fetch' }, { status: 500 });
     return Response.json({ schedules: data || [] });
@@ -99,8 +101,12 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { staffName, staffEmail, vendorId, schedule, autoAssignRules, smsAlertsEnabled, smsAlertPhone, emailAlertsEnabled } = body;
 
-    if (!staffName || !vendorId) {
-      return Response.json({ error: 'Staff name and vendor required' }, { status: 400 });
+    if (!staffName) {
+      return Response.json({ error: 'Staff name is required' }, { status: 400 });
+    }
+
+    if (!vendorId) {
+      return Response.json({ error: 'vendorId is required: staff must be assigned to a provider' }, { status: 400 });
     }
 
     // Vendor/owner can only create schedules for their own vendor
@@ -132,7 +138,7 @@ export async function POST(request: Request) {
 
 function buildScheduleUpdateData(visibleId: string, body: any): any {
   const updateData: any = { visibleId };
-  const directFields = ['staffName', 'staffEmail', 'isActive', 'smsAlertsEnabled', 'smsAlertPhone', 'emailAlertsEnabled'];
+  const directFields = ['staffName', 'staffEmail', 'isActive', 'smsAlertsEnabled', 'smsAlertPhone', 'emailAlertsEnabled', 'vendorId'];
   for (const field of directFields) {
     if (body[field] !== undefined) updateData[field] = body[field];
   }
@@ -165,10 +171,24 @@ export async function PATCH(request: Request) {
       return Response.json({ error: 'Staff schedule not found' }, { status: 404 });
     }
 
-    if ((currentUser.role === 'vendor' || currentUser.role === 'owner') && existing.vendorId !== currentUser.vendorId) {
-      return Response.json({ error: 'Unauthorized: Can only manage schedules for your own vendor' }, { status: 403 });
+    const isVendorRole = currentUser.role === 'vendor' || currentUser.role === 'owner';
+    const isReassignment = body.vendorId !== undefined && body.vendorId !== existing.vendorId;
+
+    // Vendor/owner role: can only manage their own staff and cannot reassign to another provider
+    if (isVendorRole) {
+      if (existing.vendorId !== currentUser.vendorId) {
+        return Response.json({ error: 'Unauthorized: Can only manage schedules for your own vendor' }, { status: 403 });
+      }
+      if (isReassignment) {
+        return Response.json({ error: 'Unauthorized: Only admins can reassign staff to a different provider' }, { status: 403 });
+      }
     }
 
+    // Staff reassignment: only update vendorId, preserve all other attributes
+    // The buildScheduleUpdateData function includes vendorId as a direct field,
+    // so when vendorId is in the body, it will be set on the update.
+    // All other attributes (Square credentials, schedule, name, email, alerts, catalog mappings)
+    // remain unchanged because we only update fields explicitly provided in the request body.
     const updateData = buildScheduleUpdateData(visibleId, body);
     const { data, errors } = await client.models.StaffSchedule.update(updateData as any);
     if (errors) {

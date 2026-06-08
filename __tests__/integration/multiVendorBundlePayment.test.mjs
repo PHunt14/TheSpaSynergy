@@ -122,7 +122,7 @@ describe('POST /api/payment (multi-vendor bundle branch)', () => {
   let handler
 
   beforeAll(async () => {
-    handler = await import('../../app/api/payment/route.js')
+    handler = await import('../../app/api/payment/route.ts')
   })
 
   beforeEach(() => {

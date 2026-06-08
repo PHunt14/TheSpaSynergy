@@ -5,19 +5,19 @@ import { useState, useEffect } from 'react'
 import CherryBlossomBorder from './CherryBlossomBorder'
 
 export default function Navbar() {
-  const [vendors, setVendors] = useState([])
-  const [showVendorDropdown, setShowVendorDropdown] = useState(false)
+  const [providers, setProviders] = useState([])
+  const [showProviderDropdown, setShowProviderDropdown] = useState(false)
 
   useEffect(() => {
-    fetch('/api/vendors')
+    fetch('/api/providers')
       .then(res => {
         if (!res.ok) throw new Error('Failed to fetch')
         return res.json()
       })
-      .then(data => setVendors(data.vendors || []))
+      .then(data => setProviders(data.vendors || []))
       .catch(err => {
-        console.error('Error loading vendors for navbar:', err)
-        setVendors([])
+        console.error('Error loading providers for navbar:', err)
+        setProviders([])
       })
   }, [])
 
@@ -31,16 +31,16 @@ export default function Navbar() {
         <div className="nav-links">
           <div 
             className="nav-dropdown"
-            onMouseEnter={() => setShowVendorDropdown(true)}
-            onMouseLeave={() => setShowVendorDropdown(false)}
+            onMouseEnter={() => setShowProviderDropdown(true)}
+            onMouseLeave={() => setShowProviderDropdown(false)}
           >
-            <Link href="/vendors">Practitioners</Link>
-            {showVendorDropdown && (
+            <Link href="/providers">Practitioners</Link>
+            {showProviderDropdown && (
               <div className="dropdown-menu">
-                {vendors.length > 0 ? (
-                  vendors.map(vendor => (
-                    <Link key={vendor.vendorId} href={`/vendors/${vendor.vendorId}`}>
-                      {vendor.name}
+                {providers.length > 0 ? (
+                  providers.map(provider => (
+                    <Link key={provider.vendorId} href={`/providers/${provider.vendorId}`}>
+                      {provider.name}
                     </Link>
                   ))
                 ) : (

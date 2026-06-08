@@ -18,6 +18,10 @@ import {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+// NOTE: vendorId in these service fixtures represents the vendor context resolved at runtime
+// from the assigned staff member's provider (StaffSchedule.vendorId), not a persisted field
+// on the Service data model. The Service model no longer contains vendorId (Requirement 9.1).
+// These bundle discount utilities still accept vendorId as input for payment routing purposes.
 const makeService = (id, vendorId, price, opts = {}) => ({
   serviceId: id,
   vendorId,
