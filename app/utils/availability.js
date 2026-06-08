@@ -78,6 +78,10 @@ export function getDayHoursSync(vendor, service, dayOfWeek, date, ctx) {
       }
       return daySchedule || null
     }
+    // If staff schedules exist but no one is working this day, don't fall back to vendor hours
+    if (staffList && staffList.length > 0) {
+      return null
+    }
   }
 
   return workingHours[dayOfWeek] || null

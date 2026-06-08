@@ -125,13 +125,15 @@ export async function POST(request: Request) {
         const staffResults = await Promise.all(staffPromises);
         const staffRecords = staffResults.filter(r => r.data?.isActive !== false).map(r => r.data);
         const working = staffRecords.find(s => isWorkingAt(s));
-        assignedStaffId = working?.visibleId || staffRecords[0]?.visibleId || allowedStaff[0];
+        // Only assign staff who are actually working — don't fall back to someone who isn't scheduled
+        assignedStaffId = working?.visibleId || undefined;
       } else {
         // All staff for this vendor — pick one that's working
         const { data: vendorStaff } = await client.models.StaffSchedule.listStaffScheduleByVendorId({ vendorId } as any);
         const activeStaff = (vendorStaff || []).filter((s: any) => s.isActive !== false);
         const working = activeStaff.find(s => isWorkingAt(s));
-        assignedStaffId = working?.visibleId || (activeStaff.length > 0 ? activeStaff[0].visibleId : undefined);
+        // Only assign staff who are actually working — don't fall back to someone who isn't scheduled
+        assignedStaffId = working?.visibleId || undefined;
       }
     }
 

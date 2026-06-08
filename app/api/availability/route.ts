@@ -144,6 +144,7 @@ async function getDayHours(vendor: any, service: any, dayOfWeek: string, request
   }
 
   if (!isSauna) {
+    const { data: staffList } = await client.models.StaffSchedule.listStaffScheduleByVendorId({ vendorId: vendor.vendorId });
     const staff = await resolveStaff(vendor.vendorId, dayOfWeek, requestedDate, service.allowedStaff as string[] | null);
     if (staff) {
       const schedule = JSON.parse(staff.schedule as string);
@@ -152,6 +153,10 @@ async function getDayHours(vendor: any, service: any, dayOfWeek: string, request
         return getRecurrenceHours(daySchedule, requestedDate);
       }
       return daySchedule || null;
+    }
+    // If staff schedules exist but no one is working this day, don't fall back to vendor hours
+    if (staffList && staffList.length > 0) {
+      return null;
     }
   }
 
