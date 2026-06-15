@@ -66,6 +66,7 @@ export async function GET(request: Request) {
     }
 
     const isSauna = (service.resourceType || 'staff') === 'sauna';
+    const isRoom = (service.resourceType || 'staff') === 'room';
 
     const requestedDate = new Date(date + 'T00:00:00');
     const dayOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][requestedDate.getDay()];
@@ -78,25 +79,30 @@ export async function GET(request: Request) {
 
     // Resolve staff assignment
     let assignedStaff = null;
-    if (!isSauna) {
+    if (!isSauna && !isRoom) {
       assignedStaff = await resolveStaff(vendorId, dayOfWeek, requestedDate, service.allowedStaff as string[] | null);
     }
 
     // Get existing appointments for conflict checking
     let allAppointments: any[] = [];
-    let nextToken: string | undefined;
-    do {
-      const result = await client.models.Appointment.listAppointmentByVendorIdAndDateTime({
-        vendorId,
-        dateTime: { beginsWith: date },
-        ...(nextToken ? { nextToken } : {})
-      } as any);
-      allAppointments = allAppointments.concat(result.data || []);
-      nextToken = (result as any).nextToken;
-    } while (nextToken);
+    if (isRoom) {
+      // Room resources are cross-vendor — fetch appointments from ALL vendors for this date
+      allAppointments = await getAllRoomAppointments(date);
+    } else {
+      let nextToken: string | undefined;
+      do {
+        const result = await client.models.Appointment.listAppointmentByVendorIdAndDateTime({
+          vendorId,
+          dateTime: { beginsWith: date },
+          ...(nextToken ? { nextToken } : {})
+        } as any);
+        allAppointments = allAppointments.concat(result.data || []);
+        nextToken = (result as any).nextToken;
+      } while (nextToken);
+    }
 
     // Filter by resource type — sauna appointments don't block staff and vice versa
-    const relevantAppointments = await filterRelevantAppointments(allAppointments || [], isSauna, assignedStaff, serviceId, excludeAppointmentId);
+    const relevantAppointments = await filterRelevantAppointments(allAppointments || [], isSauna, isRoom, assignedStaff, serviceId, excludeAppointmentId);
 
     const slots = generateTimeSlots(
       dayHours.start,
@@ -117,16 +123,22 @@ export async function GET(request: Request) {
   }
 }
 
-async function filterRelevantAppointments(appointments: any[], isSauna: boolean, assignedStaff: any, serviceId: string, excludeAppointmentId?: string | null) {
+async function filterRelevantAppointments(appointments: any[], isSauna: boolean, isRoom: boolean, assignedStaff: any, serviceId: string, excludeAppointmentId?: string | null) {
   const relevant = [];
   for (const apt of appointments) {
     if (apt.status === 'cancelled') continue;
     if (excludeAppointmentId && apt.appointmentId === excludeAppointmentId) continue;
     const { data: aptService } = await client.models.Service.get({ serviceId: apt.serviceId });
-    const aptIsSauna = (aptService?.resourceType || 'staff') === 'sauna';
-    if (isSauna && aptIsSauna) {
+    const aptResourceType = aptService?.resourceType || 'staff';
+    const aptIsSauna = aptResourceType === 'sauna';
+    const aptIsRoom = aptResourceType === 'room';
+
+    if (isRoom && aptIsRoom) {
+      // Cross-vendor room conflict: any room appointment blocks any other room appointment
       relevant.push(apt);
-    } else if (!isSauna && !aptIsSauna) {
+    } else if (isSauna && aptIsSauna) {
+      relevant.push(apt);
+    } else if (!isSauna && !isRoom && !aptIsSauna && !aptIsRoom) {
       if (!assignedStaff || !apt.staffId || apt.staffId === assignedStaff.visibleId) {
         relevant.push(apt);
       }
@@ -135,15 +147,36 @@ async function filterRelevantAppointments(appointments: any[], isSauna: boolean,
   return relevant;
 }
 
+async function getAllRoomAppointments(date: string): Promise<any[]> {
+  // Room resources are shared across all vendors — fetch all vendors and their appointments
+  const { data: allVendors } = await client.models.Vendor.list();
+  if (!allVendors || allVendors.length === 0) return [];
+
+  const appointmentPromises = allVendors.map(v =>
+    client.models.Appointment.listAppointmentByVendorIdAndDateTime({
+      vendorId: v.vendorId,
+      dateTime: { beginsWith: date }
+    } as any)
+  );
+  const results = await Promise.all(appointmentPromises);
+  return results.flatMap(r => (r as any).data || []);
+}
+
 async function getDayHours(vendor: any, service: any, dayOfWeek: string, requestedDate: Date) {
   const isSauna = (service.resourceType || 'staff') === 'sauna';
+  const isRoom = (service.resourceType || 'staff') === 'room';
 
   if (isSauna && vendor.saunaHours) {
     const saunaHours = JSON.parse(vendor.saunaHours as string);
     return saunaHours[dayOfWeek] || null;
   }
 
-  if (!isSauna) {
+  if (isRoom && vendor.spaRoomHours) {
+    const spaRoomHours = JSON.parse(vendor.spaRoomHours as string);
+    return spaRoomHours[dayOfWeek] || null;
+  }
+
+  if (!isSauna && !isRoom) {
     const { data: staffList } = await client.models.StaffSchedule.listStaffScheduleByVendorId({ vendorId: vendor.vendorId });
     const staff = await resolveStaff(vendor.vendorId, dayOfWeek, requestedDate, service.allowedStaff as string[] | null);
     if (staff) {
