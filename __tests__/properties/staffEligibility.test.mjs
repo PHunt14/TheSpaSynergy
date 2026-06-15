@@ -5,7 +5,7 @@
  * against acceptance criteria from Requirements 3.3, 3.4, 3.7, 5.1.
  */
 
-import { getEligibleStaff, isServiceBookable } from '../../app/utils/staffEligibility.ts'
+import { getEligibleStaff, isServiceBookable } from '../../app/utils/staffEligibility.js'
 
 const staff = [
   { visibleId: 's1', staffName: 'Alice', vendorId: 'v1', isActive: true },
