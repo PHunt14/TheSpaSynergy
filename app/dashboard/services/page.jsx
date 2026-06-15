@@ -943,6 +943,10 @@ export default function Services() {
           <div key={service.serviceId}>
             <div
               onClick={() => { if (isMobile) setExpandedServiceId(isExpanded ? null : service.serviceId) }}
+              onKeyDown={(e) => { if (isMobile && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setExpandedServiceId(isExpanded ? null : service.serviceId) } }}
+              role={isMobile ? 'button' : undefined}
+              tabIndex={isMobile ? 0 : undefined}
+              aria-expanded={isMobile ? isExpanded : undefined}
               style={{
                 background: isAddon ? '#f9f5f0' : 'var(--color-accent)',
                 padding: isAddon ? '1rem 1.5rem 1rem 2.5rem' : '1.5rem',
@@ -1005,7 +1009,7 @@ export default function Services() {
 
               {/* Mobile: show actions when expanded */}
               {isMobile && isExpanded && (
-                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.75rem', width: '100%' }} onClick={(e) => e.stopPropagation()}>
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.75rem', width: '100%' }} onClick={(e) => e.stopPropagation()} role="group" aria-label="Service actions" onKeyDown={(e) => e.stopPropagation()}>
                   {!isAddon && (
                     <button onClick={() => setManagingAddonsFor(managingAddonsFor?.serviceId === service.serviceId ? null : service)}
                       style={{ padding: '0.5rem 0.75rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: managingAddonsFor?.serviceId === service.serviceId ? '#FF9800' : '#9C27B0', color: 'white', fontSize: '0.85rem', flex: '1 1 auto' }}>

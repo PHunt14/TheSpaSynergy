@@ -54,8 +54,8 @@ export default function Sidebar() {
 
         {/* Overlay */}
         {mobileOpen && (
-          <div className="sidebar-overlay" onClick={() => setMobileOpen(false)}>
-            <aside className="sidebar sidebar-mobile" onClick={(e) => e.stopPropagation()}>
+          <div className="sidebar-overlay" onClick={() => setMobileOpen(false)} onKeyDown={(e) => { if (e.key === 'Escape') setMobileOpen(false) }} role="presentation">
+            <aside className="sidebar sidebar-mobile" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Navigation menu">
               <div className="sidebar-header">
                 <h2 className="sidebar-title">Dashboard</h2>
                 <button className="sidebar-close" onClick={() => setMobileOpen(false)} aria-label="Close menu">✕</button>
