@@ -3,6 +3,17 @@
 import { useState, useEffect, useRef } from 'react'
 import { fetchAuthSession } from 'aws-amplify/auth'
 
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < breakpoint)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [breakpoint])
+  return isMobile
+}
+
 export default function Services() {
   const [services, setServices] = useState([])
   const [vendors, setVendors] = useState([])
@@ -15,6 +26,8 @@ export default function Services() {
   const [managingAddonsFor, setManagingAddonsFor] = useState(null)
   const [currentUserRole, setCurrentUserRole] = useState(null)
   const [currentUserVendorId, setCurrentUserVendorId] = useState(null)
+  const [expandedServiceId, setExpandedServiceId] = useState(null)
+  const isMobile = useIsMobile()
   const formRef = useRef(null)
   const [newService, setNewService] = useState({
     name: '',
@@ -924,32 +937,45 @@ export default function Services() {
               })
             : null
           const addons = getAddons(service.serviceId)
+          const isExpanded = expandedServiceId === service.serviceId
 
           return (
           <div key={service.serviceId}>
             <div
+              onClick={() => { if (isMobile) setExpandedServiceId(isExpanded ? null : service.serviceId) }}
+              onKeyDown={(e) => { if (isMobile && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setExpandedServiceId(isExpanded ? null : service.serviceId) } }}
+              role={isMobile ? 'button' : undefined}
+              tabIndex={isMobile ? 0 : undefined}
+              aria-expanded={isMobile ? isExpanded : undefined}
               style={{
                 background: isAddon ? '#f9f5f0' : 'var(--color-accent)',
                 padding: isAddon ? '1rem 1.5rem 1rem 2.5rem' : '1.5rem',
                 borderRadius: isAddon ? '0' : '8px',
                 display: 'flex',
                 justifyContent: 'space-between',
-                alignItems: 'center',
+                alignItems: isMobile ? 'flex-start' : 'center',
+                flexDirection: isMobile ? 'column' : 'row',
+                cursor: isMobile ? 'pointer' : 'default',
                 ...(isAddon ? { borderTop: '1px dashed var(--color-border)' } : {})
               }}
             >
-              <div>
+              <div style={{ width: '100%' }}>
                 <h3 style={{ marginBottom: '0.5rem', fontSize: isAddon ? '1rem' : undefined }}>
                   {isAddon && <span style={{ color: 'var(--color-text-light)', marginRight: '0.5rem' }}>↳</span>}
                   {service.name}
                   {isAddon && <span style={{ fontSize: '0.8rem', color: 'var(--color-primary)', marginLeft: '0.5rem', fontWeight: 'normal' }}>Add-on</span>}
+                  {isMobile && (
+                    <span style={{ float: 'right', fontSize: '0.75rem', color: 'var(--color-text-light)' }}>
+                      {isExpanded ? '▲' : '▼'}
+                    </span>
+                  )}
                 </h3>
                 {service.description && (
                   <p style={{ color: 'var(--color-text)', fontSize: '0.9rem', marginBottom: '0.5rem' }}>
                     {service.description}
                   </p>
                 )}
-                <p style={{ color: 'var(--color-text-light)', fontSize: '0.9rem' }}>
+                <p style={{ color: 'var(--color-text-light)', fontSize: '0.85rem' }}>
                   {service.category && `${service.category} • `}{service.duration} min • ${service.price}
                   {service.houseFeeEnabled && ` • 🏠 $${service.houseFeeAmount} → You keep $${(service.price - (service.houseFeeAmount || 0)).toFixed(0)}`}
                   {service.maxQuantityPerBooking > 1 && ` • 🔢 Up to ${service.maxQuantityPerBooking}`}
@@ -959,18 +985,42 @@ export default function Services() {
                   {service.cardPaymentDisabled && ' • 💳 Card Payment Disabled'}
                   {!isAddon && addons.length > 0 && ` • 🧩 ${addons.length} add-on${addons.length > 1 ? 's' : ''}`}
                 </p>
-              </div>
-              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexShrink: 0 }}>
-                {!isAddon && (
-                  <button onClick={() => setManagingAddonsFor(managingAddonsFor?.serviceId === service.serviceId ? null : service)}
-                    style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: managingAddonsFor?.serviceId === service.serviceId ? '#FF9800' : '#9C27B0', color: 'white' }}>
-                    {managingAddonsFor?.serviceId === service.serviceId ? 'Close' : '🧩 Add-ons'}
-                  </button>
+                {isMobile && !isExpanded && (
+                  <span style={{ display: 'inline-block', marginTop: '0.4rem', fontSize: '0.75rem', padding: '0.2rem 0.5rem', borderRadius: '4px', background: service.isActive ? '#e8f5e9' : '#eee', color: service.isActive ? '#2e7d32' : '#666' }}>
+                    {service.isActive ? '● Active' : '○ Inactive'}
+                  </span>
                 )}
-                <button onClick={() => handleEdit(service)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: 'var(--color-primary)', color: 'white' }}>Edit</button>
-                <button onClick={() => handleToggleActive(service)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: service.isActive ? '#4CAF50' : '#999', color: 'white' }}>{service.isActive ? 'Active' : 'Inactive'}</button>
-                <button onClick={() => handleDelete(service)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: '#f44336', color: 'white' }}>Delete</button>
               </div>
+
+              {/* Desktop: always show buttons */}
+              {!isMobile && (
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexShrink: 0 }}>
+                  {!isAddon && (
+                    <button onClick={() => setManagingAddonsFor(managingAddonsFor?.serviceId === service.serviceId ? null : service)}
+                      style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: managingAddonsFor?.serviceId === service.serviceId ? '#FF9800' : '#9C27B0', color: 'white' }}>
+                      {managingAddonsFor?.serviceId === service.serviceId ? 'Close' : '🧩 Add-ons'}
+                    </button>
+                  )}
+                  <button onClick={() => handleEdit(service)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: 'var(--color-primary)', color: 'white' }}>Edit</button>
+                  <button onClick={() => handleToggleActive(service)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: service.isActive ? '#4CAF50' : '#999', color: 'white' }}>{service.isActive ? 'Active' : 'Inactive'}</button>
+                  <button onClick={() => handleDelete(service)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: '#f44336', color: 'white' }}>Delete</button>
+                </div>
+              )}
+
+              {/* Mobile: show actions when expanded */}
+              {isMobile && isExpanded && (
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.75rem', width: '100%' }} onClick={(e) => e.stopPropagation()} role="group" aria-label="Service actions" onKeyDown={(e) => e.stopPropagation()}>
+                  {!isAddon && (
+                    <button onClick={() => setManagingAddonsFor(managingAddonsFor?.serviceId === service.serviceId ? null : service)}
+                      style={{ padding: '0.5rem 0.75rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: managingAddonsFor?.serviceId === service.serviceId ? '#FF9800' : '#9C27B0', color: 'white', fontSize: '0.85rem', flex: '1 1 auto' }}>
+                      {managingAddonsFor?.serviceId === service.serviceId ? 'Close' : '🧩 Add-ons'}
+                    </button>
+                  )}
+                  <button onClick={() => handleEdit(service)} style={{ padding: '0.5rem 0.75rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: 'var(--color-primary)', color: 'white', fontSize: '0.85rem', flex: '1 1 auto' }}>✏️ Edit</button>
+                  <button onClick={() => handleToggleActive(service)} style={{ padding: '0.5rem 0.75rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: service.isActive ? '#4CAF50' : '#999', color: 'white', fontSize: '0.85rem', flex: '1 1 auto' }}>{service.isActive ? '✓ Active' : '○ Inactive'}</button>
+                  <button onClick={() => handleDelete(service)} style={{ padding: '0.5rem 0.75rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: '#f44336', color: 'white', fontSize: '0.85rem', flex: '1 1 auto' }}>🗑 Delete</button>
+                </div>
+              )}
             </div>
             {editingService?.serviceId === service.serviceId && (
               <div style={{ marginTop: '0.5rem' }}>
