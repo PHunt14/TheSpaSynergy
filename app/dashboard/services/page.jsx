@@ -565,7 +565,13 @@ export default function Services() {
             >
               <option value="staff">Staff</option>
               <option value="sauna">Sauna</option>
+              <option value="room">Spa Room</option>
             </select>
+            <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.5rem' }}>
+              {newService.resourceType === 'staff' && 'Service is performed by a staff member. Availability is based on staff schedules.'}
+              {newService.resourceType === 'sauna' && 'Uses the sauna facility. Only one booking at a time per vendor.'}
+              {newService.resourceType === 'room' && 'Uses the shared spa room. Only one booking at a time across all vendors (e.g., head bath, facial).'}
+            </p>
           </div>
 
           {newService.resourceType === 'staff' && (
@@ -778,7 +784,13 @@ export default function Services() {
                 style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }}>
                 <option value="staff">Staff</option>
                 <option value="sauna">Sauna</option>
+                <option value="room">Spa Room</option>
               </select>
+              <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.5rem' }}>
+                {newService.resourceType === 'staff' && 'Availability based on staff schedules.'}
+                {newService.resourceType === 'sauna' && 'One booking at a time per vendor.'}
+                {newService.resourceType === 'room' && 'One booking at a time across all vendors.'}
+              </p>
             </div>
 
             {newService.resourceType === 'staff' && (
