@@ -175,7 +175,7 @@ function TimePageContent() {
             selected={selectedDate}
             onChange={setSelectedDate}
             onMonthChange={fetchAvailableDates}
-            minDate={serviceInfo?.resourceType === 'sauna' ? new Date() : new Date(Date.now() + 86400000)}
+            minDate={serviceInfo?.resourceType === 'sauna' || serviceInfo?.resourceType === 'room' ? new Date() : new Date(Date.now() + 86400000)}
             filterDate={isDateAvailable}
             dayClassName={getDayClassName}
             inline

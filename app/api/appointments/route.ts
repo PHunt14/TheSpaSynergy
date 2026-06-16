@@ -84,6 +84,44 @@ export async function POST(request: Request) {
 
     const appointmentId = randomUUID();
 
+    // Room resource conflict check — prevent double-booking the spa room across all vendors
+    const { data: serviceCheck2 } = await client.models.Service.get({ serviceId });
+    const isRoomResource = (serviceCheck2?.resourceType || 'staff') === 'room';
+    if (isRoomResource) {
+      const bookingDate = dateTime.split('T')[0];
+      const bookingTime = dateTime.includes('T') ? dateTime.split('T')[1].substring(0, 5) : '00:00';
+      const duration = serviceCheck2?.duration || 60;
+      const [bh, bm] = bookingTime.split(':').map(Number);
+      const slotStart = bh * 60 + bm;
+      const slotEnd = slotStart + duration;
+
+      // Fetch all appointments across all vendors for this date
+      const { data: allVendors } = await client.models.Vendor.list();
+      const aptPromises = (allVendors || []).map(v =>
+        client.models.Appointment.listAppointmentByVendorIdAndDateTime({
+          vendorId: v.vendorId,
+          dateTime: { beginsWith: bookingDate }
+        } as any)
+      );
+      const aptResults = await Promise.all(aptPromises);
+      const allApts = aptResults.flatMap(r => (r as any).data || []);
+
+      for (const apt of allApts) {
+        if (apt.status === 'cancelled') continue;
+        const { data: aptSvc } = await client.models.Service.get({ serviceId: apt.serviceId });
+        if ((aptSvc?.resourceType || 'staff') !== 'room') continue;
+
+        const aptTime = apt.dateTime.includes('T') ? apt.dateTime.split('T')[1].substring(0, 5) : '00:00';
+        const [ah, am] = aptTime.split(':').map(Number);
+        const aptStart = ah * 60 + am;
+        const aptEnd = aptStart + (aptSvc?.duration || 60);
+
+        if (slotStart < aptEnd && slotEnd > aptStart) {
+          return Response.json({ error: 'Spa room is already booked at this time' }, { status: 409 });
+        }
+      }
+    }
+
     // Auto-assign staff if none provided — respects schedule
     let assignedStaffId = staffId;
     if (!assignedStaffId) {

@@ -234,7 +234,7 @@ function ConfirmPageContent() {
 
   const createAppointments = async (paymentId, pMethod) => {
     const dateTimeISO = buildDateTimeISO()
-    const isResource = allServiceDetails.every(s => s.resourceType === 'sauna')
+    const isResource = allServiceDetails.every(s => s.resourceType === 'sauna' || s.resourceType === 'room')
     const status = isResource ? 'confirmed' : 'pending-confirmation'
 
     // Multi-provider booking: single API call creates all appointments
@@ -383,7 +383,7 @@ function ConfirmPageContent() {
   const hasConsultation = allServiceDetails.some(s => s.requiresConsultation)
   const cardDisabled = allServiceDetails.some(s => s.cardPaymentDisabled)
   const squareAvailable = !!staffSquareConnected
-  const requiresConfirmation = !allServiceDetails.every(s => s.resourceType === 'sauna')
+  const requiresConfirmation = !allServiceDetails.every(s => s.resourceType === 'sauna' || s.resourceType === 'room')
 
   return (
     <main>

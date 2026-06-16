@@ -61,14 +61,19 @@ export function resolveStaffSync(staffList, dayOfWeek, requestedDate, allowedSta
 }
 
 export function getDayHoursSync(vendor, service, dayOfWeek, date, ctx) {
-  const { staffList, workingHours, saunaHours, allowedStaffIds } = ctx
+  const { staffList, workingHours, saunaHours, spaRoomHours, allowedStaffIds } = ctx
   const isSauna = (service.resourceType || 'staff') === 'sauna'
+  const isRoom = (service.resourceType || 'staff') === 'room'
 
   if (isSauna && saunaHours) {
     return saunaHours[dayOfWeek] || null
   }
 
-  if (!isSauna) {
+  if (isRoom && spaRoomHours) {
+    return spaRoomHours[dayOfWeek] || null
+  }
+
+  if (!isSauna && !isRoom) {
     const staff = resolveStaffSync(staffList, dayOfWeek, date, allowedStaffIds)
     if (staff) {
       const schedule = JSON.parse(staff.schedule)

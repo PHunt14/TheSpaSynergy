@@ -2,7 +2,7 @@ import { client } from '@/lib/appointment-notifications';
 
 export async function POST(request: Request) {
   try {
-    const { appointmentId, newStaffId, requestingVendorId } = await request.json();
+    const { appointmentId, newStaffId, requestingVendorId, role } = await request.json();
 
     if (!appointmentId || !newStaffId || !requestingVendorId) {
       return Response.json(
@@ -38,11 +38,13 @@ export async function POST(request: Request) {
 
     // 4. Authorization check: requestingVendorId must be the leadVendorId
     //    OR must equal the vendorId on the appointment being reassigned
+    //    OR the user must have an admin/owner role
     const leadVendorId = service.leadVendorId;
     const isLeadVendor = requestingVendorId === leadVendorId;
     const ownsCurrentStaff = requestingVendorId === appointment.vendorId;
+    const isPrivilegedRole = role === 'admin' || role === 'owner';
 
-    if (!isLeadVendor && !ownsCurrentStaff) {
+    if (!isLeadVendor && !ownsCurrentStaff && !isPrivilegedRole) {
       return Response.json(
         { error: 'Not authorized to reassign this appointment' },
         { status: 403 }

@@ -89,7 +89,7 @@ function AppointmentBlock({ appointment, startHour, onClick, column = 0, totalCo
 
 // ── Appointment Detail Modal ──────────────────────────────────
 
-function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onEdit, onRebook, vendorId }) {
+function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onEdit, onRebook, vendorId, userRole }) {
   const [editing, setEditing] = useState(false)
   const [services, setServices] = useState([])
   const [staffList, setStaffList] = useState([])
@@ -112,12 +112,18 @@ function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onEdit, 
   // Initialize edit form when entering edit mode
   const startEditing = () => {
     const dt = appointment.rawDateTime || ''
-    // Convert to datetime-local format
+    // Convert to datetime-local format (must be local time, not UTC)
     let dtLocal = ''
     if (dt) {
       const d = new Date(dt)
       if (!isNaN(d.getTime())) {
-        dtLocal = d.toISOString().slice(0, 16)
+        // Format as YYYY-MM-DDTHH:MM in local timezone
+        const year = d.getFullYear()
+        const month = String(d.getMonth() + 1).padStart(2, '0')
+        const day = String(d.getDate()).padStart(2, '0')
+        const hours = String(d.getHours()).padStart(2, '0')
+        const minutes = String(d.getMinutes()).padStart(2, '0')
+        dtLocal = `${year}-${month}-${day}T${hours}:${minutes}`
       }
     }
     setEditForm({
@@ -193,7 +199,8 @@ function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onEdit, 
               body: JSON.stringify({
                 appointmentId: appointment.appointmentId,
                 newStaffId: editForm.staffId,
-                requestingVendorId: vendorId
+                requestingVendorId: vendorId,
+                role: userRole
               })
             })
             if (!res.ok) {
@@ -1311,6 +1318,7 @@ export default function Calendar() {
           onEdit={handleReschedule}
           onRebook={handleRebook}
           vendorId={selectedStaffVendorId}
+          userRole={userRole}
         />
       )}
 
