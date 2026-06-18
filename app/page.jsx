@@ -4,10 +4,10 @@ import CherryBlossomHeading from './components/CherryBlossomHeading';
 
 export const metadata = {
   title: 'The Spa Synergy | Day Spa in Cascade & Fort Ritchie, MD',
-  description: 'Book massage, hair styling, infrared sauna, and wellness services at The Spa Synergy in Cascade (Fort Ritchie), MD. Serving Hagerstown, Thurmont, Emmitsburg, Frederick, Waynesboro, Chambersburg & surrounding areas.',
+  description: 'Book massage, hair styling, infrared sauna, spa room facials, and wellness services at The Spa Synergy in Cascade (Fort Ritchie), MD. Serving Hagerstown, Thurmont, Emmitsburg, Frederick, Waynesboro, Chambersburg & surrounding areas.',
   openGraph: {
     title: 'The Spa Synergy | Day Spa in Cascade & Fort Ritchie, MD',
-    description: 'Luxury spa and wellness services in Cascade (Fort Ritchie), MD. Massage, hair, sauna, and beauty treatments serving Washington County and the tri-state area.',
+    description: 'Luxury spa and wellness services in Cascade (Fort Ritchie), MD. Massage, hair, sauna, private spa room, and beauty treatments serving Washington County and the tri-state area.',
     type: 'website',
     locale: 'en_US',
   },
@@ -92,6 +92,38 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* Spa Room Feature Section */}
+      <section style={{ padding: '4rem 2rem', maxWidth: '1200px', margin: '0 auto' }}>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+          gap: '2.5rem',
+          alignItems: 'center',
+        }}>
+          <div style={{
+            borderRadius: '16px',
+            overflow: 'hidden',
+            height: '350px',
+            backgroundImage: 'url(https://the-spa-synergy-public.s3.us-east-1.amazonaws.com/vendorPictures/SpaRoom04.jpg)',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+          }} />
+          <div>
+            <h2 style={{ marginBottom: '1rem' }}>The Spa Room Experience</h2>
+            <p style={{ color: 'var(--color-text-light)', fontSize: '1.05rem', lineHeight: '1.7', marginBottom: '1rem' }}>
+              Step into our private spa room for an experience unlike anything else in the tri-state area. From rejuvenating head baths to luxurious facials, our spa room services are designed for deep relaxation and total renewal.
+            </p>
+            <p style={{ color: 'var(--color-text-light)', fontSize: '1.05rem', lineHeight: '1.7', marginBottom: '1.5rem' }}>
+              Whether you need a solo escape or want to treat yourself to something special, the spa room offers an intimate, tranquil space dedicated entirely to your comfort.
+            </p>
+            <a href="/spa-room" className="cta" style={{ background: 'var(--color-warm)' }}>
+              Explore Spa Room Services →
+            </a>
+          </div>
+        </div>
+      </section>
+
       <section style={{ padding: '3rem 2rem', maxWidth: '1200px', margin: '0 auto' }}>
         <h2 style={{ textAlign: 'center', marginBottom: '1rem' }}>Serving the Tri-State Area</h2>
         <p style={{ textAlign: 'center', color: 'var(--color-text-light)', maxWidth: '700px', margin: '0 auto 1.5rem' }}>
