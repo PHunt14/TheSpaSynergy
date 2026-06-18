@@ -27,7 +27,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Model name → { idField, jsonFields (fields that need JSON.stringify) }
 const MODEL_CONFIG = {
-  Vendor:        { idField: 'vendorId',      jsonFields: ['workingHours', 'saunaHours'] },
+  Vendor:        { idField: 'vendorId',      jsonFields: ['workingHours', 'saunaHours', 'spaRoomHours'] },
   Service:       { idField: 'serviceId',     jsonFields: [] },
   Appointment:   { idField: 'appointmentId', jsonFields: ['customer'] },
   StaffSchedule: { idField: 'visibleId',     jsonFields: ['schedule', 'autoAssignRules'] },

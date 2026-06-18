@@ -4,10 +4,11 @@ import CherryBlossomHeading from './components/CherryBlossomHeading';
 
 export const metadata = {
   title: 'The Spa Synergy | Day Spa in Cascade & Fort Ritchie, MD',
-  description: 'Book massage, hair styling, infrared sauna, and wellness services at The Spa Synergy in Cascade (Fort Ritchie), MD. Serving Hagerstown, Thurmont, Emmitsburg, Frederick, Waynesboro, Chambersburg & surrounding areas.',
+  description: 'Book head spa treatments, scalp facials, massage, hair styling, infrared sauna, and private spa room services at The Spa Synergy in Cascade (Fort Ritchie), MD. Serving Hagerstown, Thurmont, Emmitsburg, Frederick, Waynesboro, Chambersburg & surrounding areas.',
+  keywords: 'head spa, head spa Maryland, scalp facial, spa room, infrared sauna, massage, hair styling, day spa Cascade MD, Fort Ritchie spa, wellness, relaxation, Hagerstown spa',
   openGraph: {
-    title: 'The Spa Synergy | Day Spa in Cascade & Fort Ritchie, MD',
-    description: 'Luxury spa and wellness services in Cascade (Fort Ritchie), MD. Massage, hair, sauna, and beauty treatments serving Washington County and the tri-state area.',
+    title: 'The Spa Synergy | Head Spa, Sauna & Wellness in Cascade, MD',
+    description: 'Head spa treatments, scalp facials, infrared sauna, private spa room, massage, and beauty services in Cascade (Fort Ritchie), MD. Serving Washington County and the tri-state area.',
     type: 'website',
     locale: 'en_US',
   },
@@ -25,6 +26,9 @@ export default function Home() {
           <a href="/services" className="cta">Book an Appointment</a>
           <a href="/sauna" className="cta" style={{ background: 'var(--color-warm)' }}>Book the Sauna</a>
           <a href="/providers" className="cta" style={{ background: 'var(--color-primary)' }}>Get to Know Us</a>
+        </div>
+        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginTop: '1rem', flexWrap: 'wrap' }}>
+          <a href="/spa-room" className="cta" style={{ background: '#7B6D8F' }}>Book the Spa Room</a>
         </div>
       </section>
 
@@ -89,6 +93,38 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* Spa Room Feature Section */}
+      <section style={{ padding: '4rem 2rem', maxWidth: '1200px', margin: '0 auto' }}>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+          gap: '2.5rem',
+          alignItems: 'center',
+        }}>
+          <div style={{
+            borderRadius: '16px',
+            overflow: 'hidden',
+            height: '350px',
+            backgroundImage: 'url(https://the-spa-synergy-public.s3.us-east-1.amazonaws.com/vendorPictures/SpaRoom04.jpg)',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+          }} />
+          <div>
+            <h2 style={{ marginBottom: '1rem' }}>The Spa Room Experience</h2>
+            <p style={{ color: 'var(--color-text-light)', fontSize: '1.05rem', lineHeight: '1.7', marginBottom: '1rem' }}>
+              Step into our private spa room for an experience unlike anything else in the tri-state area. From our signature head spa and scalp facial treatments to rejuvenating full facials, our spa room services are designed for deep relaxation and total renewal.
+            </p>
+            <p style={{ color: 'var(--color-text-light)', fontSize: '1.05rem', lineHeight: '1.7', marginBottom: '1.5rem' }}>
+              Our head spa combines scalp massage, cleansing, and nourishing treatments to promote healthy hair growth and deep stress relief. Whether you need a solo escape or want to treat yourself to something special, the spa room offers an intimate, tranquil space dedicated entirely to your comfort.
+            </p>
+            <a href="/spa-room" className="cta" style={{ background: 'var(--color-warm)' }}>
+              Explore Spa Room Services →
+            </a>
+          </div>
+        </div>
+      </section>
+
       <section style={{ padding: '3rem 2rem', maxWidth: '1200px', margin: '0 auto' }}>
         <h2 style={{ textAlign: 'center', marginBottom: '1rem' }}>Serving the Tri-State Area</h2>
         <p style={{ textAlign: 'center', color: 'var(--color-text-light)', maxWidth: '700px', margin: '0 auto 1.5rem' }}>

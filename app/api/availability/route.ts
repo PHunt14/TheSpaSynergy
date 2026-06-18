@@ -114,6 +114,7 @@ export async function GET(request: Request) {
     }
 
     const isSauna = (service.resourceType || 'staff') === 'sauna';
+    const isRoom = (service.resourceType || 'staff') === 'room';
 
     // For "Any Available" (no staffId), merge slots across all eligible staff
     // For specific staff (staffId provided), compute slots for that one staff member
@@ -129,6 +130,56 @@ export async function GET(request: Request) {
           ? { assignedStaff: { id: targetStaff[0].visibleId, name: targetStaff[0].staffName } }
           : {}),
       });
+    }
+
+    // Room resource type — cross-vendor, use first vendor's spa room hours
+    if (isRoom) {
+      // Fetch all vendors to find spa room hours
+      const { data: allVendors } = await client.models.Vendor.list();
+      const vendorWithRoomHours = (allVendors || []).find((v: any) => v.spaRoomHours);
+      if (!vendorWithRoomHours) {
+        return Response.json({ availableSlots: [] });
+      }
+      
+      const requestedDate = new Date(date + 'T00:00:00');
+      const dayOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][requestedDate.getDay()];
+      const spaRoomHours = JSON.parse(vendorWithRoomHours.spaRoomHours as string);
+      const dayHours = spaRoomHours[dayOfWeek] || null;
+      if (!dayHours || !dayHours.start || !dayHours.end) {
+        return Response.json({ availableSlots: [] });
+      }
+
+      // Get ALL room appointments across all vendors (cross-vendor)
+      const aptPromises = (allVendors || []).map((v: any) =>
+        client.models.Appointment.listAppointmentByVendorIdAndDateTime({
+          vendorId: v.vendorId,
+          dateTime: { beginsWith: date }
+        } as any)
+      );
+      const aptResults = await Promise.all(aptPromises);
+      const allApts = aptResults.flatMap((r: any) => (r as any).data || []);
+
+      // Filter to only room appointments
+      const roomApts = [];
+      for (const apt of allApts) {
+        if (apt.status === 'cancelled') continue;
+        if (excludeAppointmentId && apt.appointmentId === excludeAppointmentId) continue;
+        const { data: aptSvc } = await client.models.Service.get({ serviceId: apt.serviceId });
+        if ((aptSvc?.resourceType || 'staff') === 'room') {
+          roomApts.push(apt);
+        }
+      }
+
+      const slots = generateTimeSlots(
+        dayHours.start,
+        dayHours.end,
+        service.duration,
+        service.bufferMinutes != null ? service.bufferMinutes : 15,
+        roomApts,
+        date
+      );
+
+      return Response.json({ availableSlots: slots });
     }
 
     // Sauna resource type path — use vendor working hours

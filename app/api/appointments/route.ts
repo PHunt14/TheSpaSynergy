@@ -119,6 +119,93 @@ export async function POST(request: Request) {
 
     const appointmentId = randomUUID();
 
+    // --- Double-booking prevention for client bookings ---
+    const { data: serviceCheck2 } = await client.models.Service.get({ serviceId });
+    const resourceType = serviceCheck2?.resourceType || 'staff';
+    const bookingDate = dateTime.split('T')[0];
+    const bookingTime = dateTime.includes('T') ? dateTime.split('T')[1].substring(0, 5) : '00:00';
+    const duration = serviceCheck2?.duration || 60;
+    const bufferMins = serviceCheck2?.bufferMinutes != null ? serviceCheck2.bufferMinutes : 15;
+    const [bh, bm] = bookingTime.split(':').map(Number);
+    const slotStart = bh * 60 + bm;
+    const slotEnd = slotStart + duration;
+
+    // Helper: check if a new slot overlaps with an existing appointment
+    const slotsOverlap = (aptDateTime: string, aptDuration: number, aptBuffer: number, newBuffer: number) => {
+      const aptTime = aptDateTime.includes('T') ? aptDateTime.split('T')[1].substring(0, 5) : '00:00';
+      const [ah, am] = aptTime.split(':').map(Number);
+      const aptStart = ah * 60 + am;
+      const aptEnd = aptStart + aptDuration + aptBuffer;
+      const newEnd = slotEnd + newBuffer;
+      return slotStart < aptEnd && newEnd > aptStart;
+    };
+
+    if (resourceType === 'room') {
+      // Room resources are cross-vendor — check ALL vendors for conflicts
+      const { data: allVendors } = await client.models.Vendor.list();
+      const aptPromises = (allVendors || []).map(v =>
+        client.models.Appointment.listAppointmentByVendorIdAndDateTime({
+          vendorId: v.vendorId,
+          dateTime: { beginsWith: bookingDate }
+        } as any)
+      );
+      const aptResults = await Promise.all(aptPromises);
+      const allApts = aptResults.flatMap(r => (r as any).data || []);
+
+      for (const apt of allApts) {
+        if (apt.status === 'cancelled') continue;
+        const { data: aptSvc } = await client.models.Service.get({ serviceId: apt.serviceId });
+        if ((aptSvc?.resourceType || 'staff') !== 'room') continue;
+        if (slotsOverlap(apt.dateTime, aptSvc?.duration || 60, 0, 0)) {
+          return Response.json({ error: 'Spa room is already booked at this time' }, { status: 409 });
+        }
+      }
+    } else if (resourceType === 'sauna') {
+      // Sauna resource — only one booking per time slot for sauna services
+      // Find vendor from staff or fall back
+      let saunaVendorId = body.vendorId;
+      if (staffId) {
+        const { data: staffSch } = await client.models.StaffSchedule.get({ visibleId: staffId });
+        if (staffSch?.vendorId) saunaVendorId = staffSch.vendorId;
+      }
+      if (saunaVendorId) {
+        const result = await client.models.Appointment.listAppointmentByVendorIdAndDateTime({
+          vendorId: saunaVendorId,
+          dateTime: { beginsWith: bookingDate }
+        } as any);
+        const existingApts = (result as any).data || [];
+
+        for (const apt of existingApts) {
+          if (apt.status === 'cancelled') continue;
+          const { data: aptSvc } = await client.models.Service.get({ serviceId: apt.serviceId });
+          if ((aptSvc?.resourceType || 'staff') !== 'sauna') continue;
+          if (slotsOverlap(apt.dateTime, aptSvc?.duration || 60, 0, 0)) {
+            return Response.json({ error: 'Sauna is already booked at this time' }, { status: 409 });
+          }
+        }
+      }
+    } else if (staffId) {
+      // Staff-based: prevent double-booking the specified staff member (client path)
+      const { data: staffSch } = await client.models.StaffSchedule.get({ visibleId: staffId });
+      if (staffSch?.vendorId) {
+        const result = await client.models.Appointment.listAppointmentByVendorIdAndDateTime({
+          vendorId: staffSch.vendorId,
+          dateTime: { beginsWith: bookingDate }
+        } as any);
+        const existingApts = (result as any).data || [];
+
+        for (const apt of existingApts) {
+          if (apt.status === 'cancelled') continue;
+          if (apt.staffId !== staffId) continue;
+          const { data: aptSvc } = await client.models.Service.get({ serviceId: apt.serviceId });
+          const aptDuration = aptSvc?.duration || 30;
+          if (slotsOverlap(apt.dateTime, aptDuration, bufferMins, bufferMins)) {
+            return Response.json({ error: 'This time slot is no longer available' }, { status: 409 });
+          }
+        }
+      }
+    }
+
     // Auto-assign staff if none provided — uses staffAssigner with fewest-bookings algorithm (Req 5.5, 5.6)
     let assignedStaffId = staffId;
     if (!assignedStaffId) {

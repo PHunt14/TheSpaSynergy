@@ -58,6 +58,15 @@ const vendors = [
       saturday: { start: '10:00', end: '14:00' },
       sunday: { start: null, end: null }
     },
+    spaRoomHours: {
+      monday: { start: '09:00', end: '17:00' },
+      tuesday: { start: '09:00', end: '18:00' },
+      wednesday: { start: null, end: null },
+      thursday: { start: '09:00', end: '18:00' },
+      friday: { start: '09:00', end: '17:00' },
+      saturday: { start: '10:00', end: '14:00' },
+      sunday: { start: null, end: null }
+    },
     bufferMinutes: 15
   },
   {
@@ -98,21 +107,21 @@ const services = [
   { serviceId: 'svc-winsome-salt-soak', vendorId: 'vendor-winsome-woods', category: 'Wellness', name: 'Himalayan Salt Foot Soak', description: 'Relaxing Himalayan mineral salt foot bath', duration: 30, price: 15, houseFeeEnabled: true, houseFeeAmount: 5, requiresConsultation: true, isActive: true },
   { serviceId: 'svc-winsome-salt-soak-detox', vendorId: 'vendor-winsome-woods', category: 'Wellness', name: 'Ionic Foot Detox', description: 'Detoxifying ionic foot bath', duration: 30, price: 20, houseFeeEnabled: true, houseFeeAmount: 6, requiresConsultation: true, isActive: true },
   // Winsome Woods Head Bath + addons
-  { serviceId: 'svc-winsome-head-bath', vendorId: 'vendor-winsome-woods', category: 'Spa Room', name: 'Head Bath', description: 'Luxurious scalp treatment and massage', duration: 60, price: 120, houseFeeEnabled: true, houseFeeAmount: 65, requiresConsultation: true, isActive: true },
-  { serviceId: 'svc-winsome-head-bath-addon-mini-facial', vendorId: 'vendor-winsome-woods', category: 'Spa Room', name: 'Mini Facial', description: 'Quick refresh facial add-on', duration: 15, price: 35, houseFeeEnabled: true, houseFeeAmount: 20, requiresConsultation: false, isActive: true, parentServiceIds: ['svc-winsome-head-bath'] },
-  { serviceId: 'svc-winsome-head-bath-addon-steam', vendorId: 'vendor-winsome-woods', category: 'Spa Room', name: 'Steam Conditioning', description: 'Steam conditioning treatment add-on', duration: 10, price: 18, houseFeeEnabled: true, houseFeeAmount: 13, requiresConsultation: false, isActive: true, parentServiceIds: ['svc-winsome-head-bath'] },
-  { serviceId: 'svc-winsome-head-bath-addon-heat-style', vendorId: 'vendor-winsome-woods', category: 'Spa Room', name: 'Heat Style', description: 'Heat styling finish add-on', duration: 15, price: 15, houseFeeEnabled: true, houseFeeAmount: 10, requiresConsultation: false, isActive: true, parentServiceIds: ['svc-winsome-head-bath'] },
+  { serviceId: 'svc-winsome-head-bath', vendorId: 'vendor-winsome-woods', category: 'Spa Room', resourceType: 'room', name: 'Head Bath', description: 'Luxurious scalp treatment and massage', duration: 60, price: 120, houseFeeEnabled: true, houseFeeAmount: 65, requiresConsultation: true, isActive: true },
+  { serviceId: 'svc-winsome-head-bath-addon-mini-facial', vendorId: 'vendor-winsome-woods', category: 'Spa Room', resourceType: 'room', name: 'Mini Facial', description: 'Quick refresh facial add-on', duration: 15, price: 35, houseFeeEnabled: true, houseFeeAmount: 20, requiresConsultation: false, isActive: true, parentServiceIds: ['svc-winsome-head-bath'] },
+  { serviceId: 'svc-winsome-head-bath-addon-steam', vendorId: 'vendor-winsome-woods', category: 'Spa Room', resourceType: 'room', name: 'Steam Conditioning', description: 'Steam conditioning treatment add-on', duration: 10, price: 18, houseFeeEnabled: true, houseFeeAmount: 13, requiresConsultation: false, isActive: true, parentServiceIds: ['svc-winsome-head-bath'] },
+  { serviceId: 'svc-winsome-head-bath-addon-heat-style', vendorId: 'vendor-winsome-woods', category: 'Spa Room', resourceType: 'room', name: 'Heat Style', description: 'Heat styling finish add-on', duration: 15, price: 15, houseFeeEnabled: true, houseFeeAmount: 10, requiresConsultation: false, isActive: true, parentServiceIds: ['svc-winsome-head-bath'] },
   
   // The Kera Studio (house - no house fees on their own services)
-  { serviceId: 'svc-kera-head-bath-30',vendorId: 'vendor-kera-studio', category: 'Spa Room', name: '30-min Head Bath', description: 'Luxurious scalp treatment and massage', duration: 30, price: 75, houseFeeEnabled: false, requiresConsultation: true, isActive: true },
-  { serviceId: 'svc-kera-head-bath',vendorId: 'vendor-kera-studio', category: 'Spa Room', name: 'Head Bath', description: 'Luxurious scalp treatment and massage', duration: 60, price: 120, houseFeeEnabled: false, requiresConsultation: true, isActive: true },
-  { serviceId: 'svc-kera-head-bath-addon-mini-facial',vendorId: 'vendor-kera-studio', category: 'Spa Room', name: 'Mini Facial', description: 'Quick refresh facial add-on', duration: 15, price: 35, houseFeeEnabled: false, requiresConsultation: false, isActive: true, parentServiceIds: ['svc-kera-head-bath', 'svc-kera-head-bath-30'] },
-  { serviceId: 'svc-kera-head-bath-addon-steam',vendorId: 'vendor-kera-studio', category: 'Spa Room', name: 'Steam Conditioning', description: 'Steam conditioning treatment add-on', duration: 10, price: 18, houseFeeEnabled: false, requiresConsultation: false, isActive: true, parentServiceIds: ['svc-kera-head-bath', 'svc-kera-head-bath-30'] },
-  { serviceId: 'svc-kera-head-bath-addon-heat-style',vendorId: 'vendor-kera-studio', category: 'Spa Room', name: 'Heat Style', description: 'Heat styling finish add-on', duration: 15, price: 15, houseFeeEnabled: false, requiresConsultation: false, isActive: true, parentServiceIds: ['svc-kera-head-bath', 'svc-kera-head-bath-30'] },
-  { serviceId: 'svc-kera-facial',vendorId: 'vendor-kera-studio', category: 'Spa Room', name: 'Facial', description: 'Deep cleansing and rejuvenating facial', duration: 60, price: 65, requiresConsultation: true, isActive: true },
-  { serviceId: 'svc-kera-mini-facial',vendorId: 'vendor-kera-studio', category: 'Spa Room', name: 'Mini Facial', description: 'Quick refresh facial treatment', duration: 30, price: 30, requiresConsultation: true, isActive: true },
-  { serviceId: 'svc-kera-beard-facial',vendorId: 'vendor-kera-studio', category: 'Spa Room', name: 'Beard Facial', description: 'Specialized beard grooming and facial', duration: 60, price: 65, requiresConsultation: true, isActive: true },
-  { serviceId: 'svc-kera-couple-head-bath',vendorId: 'vendor-kera-studio', category: 'Spa Room', name: 'Couples Head Bath', description: 'Relaxing head spa experience for two', duration: 120, price: 230, requiresConsultation: true, isActive: true },
+  { serviceId: 'svc-kera-head-bath-30',vendorId: 'vendor-kera-studio', category: 'Spa Room', resourceType: 'room', name: '30-min Head Bath', description: 'Luxurious scalp treatment and massage', duration: 30, price: 75, houseFeeEnabled: false, requiresConsultation: true, isActive: true },
+  { serviceId: 'svc-kera-head-bath',vendorId: 'vendor-kera-studio', category: 'Spa Room', resourceType: 'room', name: 'Head Bath', description: 'Luxurious scalp treatment and massage', duration: 60, price: 120, houseFeeEnabled: false, requiresConsultation: true, isActive: true },
+  { serviceId: 'svc-kera-head-bath-addon-mini-facial',vendorId: 'vendor-kera-studio', category: 'Spa Room', resourceType: 'room', name: 'Mini Facial', description: 'Quick refresh facial add-on', duration: 15, price: 35, houseFeeEnabled: false, requiresConsultation: false, isActive: true, parentServiceIds: ['svc-kera-head-bath', 'svc-kera-head-bath-30'] },
+  { serviceId: 'svc-kera-head-bath-addon-steam',vendorId: 'vendor-kera-studio', category: 'Spa Room', resourceType: 'room', name: 'Steam Conditioning', description: 'Steam conditioning treatment add-on', duration: 10, price: 18, houseFeeEnabled: false, requiresConsultation: false, isActive: true, parentServiceIds: ['svc-kera-head-bath', 'svc-kera-head-bath-30'] },
+  { serviceId: 'svc-kera-head-bath-addon-heat-style',vendorId: 'vendor-kera-studio', category: 'Spa Room', resourceType: 'room', name: 'Heat Style', description: 'Heat styling finish add-on', duration: 15, price: 15, houseFeeEnabled: false, requiresConsultation: false, isActive: true, parentServiceIds: ['svc-kera-head-bath', 'svc-kera-head-bath-30'] },
+  { serviceId: 'svc-kera-facial',vendorId: 'vendor-kera-studio', category: 'Spa Room', resourceType: 'room', name: 'Facial', description: 'Deep cleansing and rejuvenating facial', duration: 60, price: 65, requiresConsultation: true, isActive: true },
+  { serviceId: 'svc-kera-mini-facial',vendorId: 'vendor-kera-studio', category: 'Spa Room', resourceType: 'room', name: 'Mini Facial', description: 'Quick refresh facial treatment', duration: 30, price: 30, requiresConsultation: true, isActive: true },
+  { serviceId: 'svc-kera-beard-facial',vendorId: 'vendor-kera-studio', category: 'Spa Room', resourceType: 'room', name: 'Beard Facial', description: 'Specialized beard grooming and facial', duration: 60, price: 65, requiresConsultation: true, isActive: true },
+  { serviceId: 'svc-kera-couple-head-bath',vendorId: 'vendor-kera-studio', category: 'Spa Room', resourceType: 'room', name: 'Couples Head Bath', description: 'Relaxing head spa experience for two', duration: 120, price: 230, requiresConsultation: true, isActive: true },
   { serviceId: 'svc-kera-trim',vendorId: 'vendor-kera-studio', category: 'Hair Studio', name: 'Trim', description: 'Quick hair trim and touch-up', duration: 30, price: 15, requiresConsultation: true, isActive: true },
   { serviceId: 'svc-kera-up-do',vendorId: 'vendor-kera-studio', category: 'Hair Studio', name: 'Up-Do', description: 'Elegant updo styling for special occasions', duration: 60, price: 55, requiresConsultation: true, isActive: true },
   { serviceId: 'svc-kera-kids-cut',vendorId: 'vendor-kera-studio', category: 'Hair Studio', name: 'Kids Cut', description: 'Haircut for children 12 and under', duration: 30, price: 15, requiresConsultation: true, isActive: true },
@@ -288,7 +297,8 @@ async function seedData() {
     const vendorData = {
       ...vendor,
       workingHours: JSON.stringify(vendor.workingHours),
-      ...(vendor.saunaHours ? { saunaHours: JSON.stringify(vendor.saunaHours) } : {})
+      ...(vendor.saunaHours ? { saunaHours: JSON.stringify(vendor.saunaHours) } : {}),
+      ...(vendor.spaRoomHours ? { spaRoomHours: JSON.stringify(vendor.spaRoomHours) } : {})
     };
     try {
       const { data, errors } = await client.models.Vendor.update(vendorData);

@@ -2,7 +2,6 @@
 
 import { useSearchParams } from 'next/navigation'
 import { useState, useEffect, Suspense } from 'react'
-import Link from 'next/link'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import BookingDisabled, { isBookingEnabled } from '../../components/BookingDisabled'
@@ -183,7 +182,7 @@ function TimePageContent() {
             selected={selectedDate}
             onChange={setSelectedDate}
             onMonthChange={fetchAvailableDates}
-            minDate={serviceInfo?.resourceType === 'sauna' ? new Date() : new Date(Date.now() + 86400000)}
+            minDate={serviceInfo?.resourceType === 'sauna' || serviceInfo?.resourceType === 'room' ? new Date() : new Date(Date.now() + 86400000)}
             filterDate={isDateAvailable}
             dayClassName={getDayClassName}
             inline
@@ -246,12 +245,35 @@ function TimePageContent() {
       </div>
 
       {selectedTime && (
-        <Link
-          href={`/booking/confirm?service=${service}&date=${selectedDate.toISOString()}&time=${selectedTime}${vendor ? `&vendor=${vendor}` : ''}${staffId ? `&staffId=${staffId}` : ''}${multiProvider ? '&multiProvider=true' : ''}${quantity > 1 ? `&quantity=${quantity}&mode=${quantityMode}` : ''}${assignedStaff ? `&staffId=${assignedStaff.id}&staffName=${encodeURIComponent(assignedStaff.name)}` : ''}`}
+        <button
           className="cta"
+          onClick={async () => {
+            // Re-validate the slot is still available before proceeding
+            const dateStr = selectedDate.toISOString().split('T')[0]
+            const multiProviderParam = multiProvider ? '&multiProvider=true' : ''
+            const quantityParams = quantity > 1 ? `&quantity=${quantity}&mode=${quantityMode}` : ''
+            const vendorParam = vendor ? `&vendorId=${vendor}` : ''
+            const staffParam = staffId ? `&staffId=${staffId}` : ''
+            try {
+              const res = await fetch(`/api/availability?serviceId=${service}&date=${dateStr}${vendorParam}${staffParam}${multiProviderParam}${quantityParams}`)
+              const data = await res.json()
+              const freshSlots = data.availableSlots || []
+              const stillAvailable = freshSlots.some(s => s.display === selectedTime)
+              if (!stillAvailable) {
+                alert('Sorry, this time slot was just booked by someone else. Please select a different time.')
+                setAvailableSlots(freshSlots)
+                setSelectedTime(null)
+                return
+              }
+            } catch (e) {
+              // If re-check fails, proceed anyway — server-side check will catch conflicts
+            }
+            const url = `/booking/confirm?service=${service}&date=${selectedDate.toISOString()}&time=${selectedTime}${vendor ? `&vendor=${vendor}` : ''}${staffId ? `&staffId=${staffId}` : ''}${multiProvider ? '&multiProvider=true' : ''}${quantity > 1 ? `&quantity=${quantity}&mode=${quantityMode}` : ''}${assignedStaff ? `&staffId=${assignedStaff.id}&staffName=${encodeURIComponent(assignedStaff.name)}` : ''}`
+            window.location.href = url
+          }}
         >
           Continue
-        </Link>
+        </button>
       )}
     </main>
   )

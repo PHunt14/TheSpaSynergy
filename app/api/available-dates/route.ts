@@ -47,6 +47,7 @@ export async function GET(request: Request) {
     }
 
     const isSauna = (service.resourceType || 'staff') === 'sauna';
+    const isRoom = (service.resourceType || 'staff') === 'room';
     const monthNum = Number.parseInt(month);
     const yearNum = Number.parseInt(year);
 
@@ -56,25 +57,38 @@ export async function GET(request: Request) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // Minimum bookable date: tomorrow for non-sauna, today for sauna
+    // Minimum bookable date: tomorrow for non-sauna/non-room, today for sauna/room
     const minDate = new Date(today);
-    if (!isSauna) minDate.setDate(minDate.getDate() + 1);
+    if (!isSauna && !isRoom) minDate.setDate(minDate.getDate() + 1);
 
     // Pre-fetch staff schedules once
     const { data: staffList } = await client.models.StaffSchedule.listStaffScheduleByVendorId({ vendorId });
     const workingHours = JSON.parse(vendor.workingHours as string || '{}');
     const saunaHours = vendor.saunaHours ? JSON.parse(vendor.saunaHours as string) : null;
+    const spaRoomHours = vendor.spaRoomHours ? JSON.parse(vendor.spaRoomHours as string) : null;
     const allowedStaffIds = service.allowedStaff as string[] | null;
 
     // Pre-fetch all appointments for this month
     const datePrefix = `${yearNum}-${String(monthNum).padStart(2, '0')}`;
-    const { data: monthAppointments } = await client.models.Appointment.list({
-      filter: { vendorId: { eq: vendorId }, dateTime: { beginsWith: datePrefix } }
-    });
+    let monthAppointments: any[];
+    if (isRoom) {
+      // Room resources are cross-vendor — fetch from all vendors
+      const { data: allVendors } = await client.models.Vendor.list();
+      const aptPromises = (allVendors || []).map(v =>
+        client.models.Appointment.list({ filter: { vendorId: { eq: v.vendorId }, dateTime: { beginsWith: datePrefix } } })
+      );
+      const aptResults = await Promise.all(aptPromises);
+      monthAppointments = aptResults.flatMap(r => r.data || []);
+    } else {
+      const { data: vendorAppointments } = await client.models.Appointment.list({
+        filter: { vendorId: { eq: vendorId }, dateTime: { beginsWith: datePrefix } }
+      });
+      monthAppointments = vendorAppointments || [];
+    }
 
     const availableDates = buildAvailableDates(
-      firstDay, lastDay, minDate, isSauna, vendor, service,
-      { staffList: staffList || [], workingHours, saunaHours, allowedStaffIds, monthAppointments: monthAppointments || [], allowedDays }
+      firstDay, lastDay, minDate, isSauna, isRoom, vendor, service,
+      { staffList: staffList || [], workingHours, saunaHours, spaRoomHours, allowedStaffIds, monthAppointments, allowedDays }
     );
 
     return Response.json({ availableDates });
@@ -85,10 +99,10 @@ export async function GET(request: Request) {
 }
 
 function buildAvailableDates(
-  firstDay: Date, lastDay: Date, minDate: Date, isSauna: boolean,
-  vendor: any, service: any, ctx: { staffList: any[]; workingHours: any; saunaHours: any; allowedStaffIds: string[] | null; monthAppointments: any[]; allowedDays: string[] | null }
+  firstDay: Date, lastDay: Date, minDate: Date, isSauna: boolean, isRoom: boolean,
+  vendor: any, service: any, ctx: { staffList: any[]; workingHours: any; saunaHours: any; spaRoomHours: any; allowedStaffIds: string[] | null; monthAppointments: any[]; allowedDays: string[] | null }
 ): string[] {
-  const { staffList, workingHours, saunaHours, allowedStaffIds, monthAppointments, allowedDays } = ctx;
+  const { staffList, workingHours, saunaHours, spaRoomHours, allowedStaffIds, monthAppointments, allowedDays } = ctx;
   const availableDates: string[] = [];
 
   for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
@@ -99,10 +113,10 @@ function buildAvailableDates(
     // Skip days not in allowedDays
     if (allowedDays && !allowedDays.includes(dayOfWeek)) continue;
 
-    const dayHours = getDayHoursSync(vendor, service, dayOfWeek, d, { staffList, workingHours, saunaHours, allowedStaffIds });
+    const dayHours = getDayHoursSync(vendor, service, dayOfWeek, d, { staffList, workingHours, saunaHours, spaRoomHours, allowedStaffIds });
     if (!dayHours?.start) continue;
 
-    const staff = isSauna ? null : resolveStaffSync(staffList, dayOfWeek, d, allowedStaffIds);
+    const staff = (isSauna || isRoom) ? null : resolveStaffSync(staffList, dayOfWeek, d, allowedStaffIds);
     const dayAppointments = monthAppointments.filter(apt =>
       apt.status !== 'cancelled' && apt.dateTime.startsWith(dateStr)
     );

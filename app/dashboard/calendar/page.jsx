@@ -89,7 +89,7 @@ function AppointmentBlock({ appointment, startHour, onClick, column = 0, totalCo
 
 // ── Appointment Detail Modal ──────────────────────────────────
 
-function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onEdit, onRebook, vendorId, currentUserStaffId }) {
+function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onEdit, onRebook, vendorId, currentUserStaffId, userRole }) {
   const [editing, setEditing] = useState(false)
   const [services, setServices] = useState([])
   const [staffList, setStaffList] = useState([])
@@ -113,12 +113,18 @@ function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onEdit, 
   // Initialize edit form when entering edit mode
   const startEditing = () => {
     const dt = appointment.rawDateTime || ''
-    // Convert to datetime-local format
+    // Convert to datetime-local format (must be local time, not UTC)
     let dtLocal = ''
     if (dt) {
       const d = new Date(dt)
       if (!isNaN(d.getTime())) {
-        dtLocal = d.toISOString().slice(0, 16)
+        // Format as YYYY-MM-DDTHH:MM in local timezone
+        const year = d.getFullYear()
+        const month = String(d.getMonth() + 1).padStart(2, '0')
+        const day = String(d.getDate()).padStart(2, '0')
+        const hours = String(d.getHours()).padStart(2, '0')
+        const minutes = String(d.getMinutes()).padStart(2, '0')
+        dtLocal = `${year}-${month}-${day}T${hours}:${minutes}`
       }
     }
     setEditForm({
@@ -167,7 +173,35 @@ function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onEdit, 
 
       // Check staff change
       if (editForm.staffId !== (appointment.staffId || '')) {
-        updates.staffId = editForm.staffId || null
+        if (editForm.staffId) {
+          // If the service is also changing, skip the reassign endpoint (it validates
+          // against the current service's allowedStaff which would be stale). Instead,
+          // include staffId directly in the PATCH so they update atomically.
+          const serviceAlsoChanging = editForm.serviceId !== (appointment.serviceId || '')
+          if (serviceAlsoChanging) {
+            updates.staffId = editForm.staffId
+          } else {
+            const res = await fetch('/api/appointments/reassign', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                appointmentId: appointment.appointmentId,
+                newStaffId: editForm.staffId,
+                requestingVendorId: vendorId,
+                role: userRole
+              })
+            })
+            if (!res.ok) {
+              const data = await res.json()
+              alert('Failed to reassign staff: ' + (data.error || 'Unknown error'))
+              setSaving(false)
+              return
+            }
+          }
+        } else {
+          // Clear staff assignment
+          updates.staffId = null
+        }
         hasChanges = true
       }
 
@@ -1052,7 +1086,12 @@ export default function Calendar() {
 
   const loadUserVendor = async (retryCount = 0) => {
     try {
-      const session = await fetchAuthSession()
+      // Fetch auth session and staff/vendor data in parallel
+      const [session, staffData, vendorData] = await Promise.all([
+        fetchAuthSession(),
+        fetch('/api/staff-schedules?all=true').then(r => r.json()),
+        fetch('/api/vendors').then(r => r.json())
+      ])
       const vendorId = session.tokens?.idToken?.payload['custom:vendorId']
       const role = session.tokens?.idToken?.payload['custom:role'] || 'vendor'
       const staffId = session.tokens?.idToken?.payload['custom:staffId'] || session.tokens?.idToken?.payload['sub']
@@ -1060,43 +1099,30 @@ export default function Calendar() {
       setUserRole(role)
       setUserStaffId(staffId)
       setInitError(null)
-    } catch (error) {
-      console.error('Error loading user vendor:', error)
-      if (retryCount < 2) {
-        // Retry after a short delay — Amplify may not be fully initialized yet
-        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)))
-        return loadUserVendor(retryCount + 1)
-      }
-      setInitError('Failed to load user session. Please try refreshing the page.')
-      setLoading(false)
-    }
-  }
 
-  // Load all staff and vendors for the staff selector — unified access (Req 4.1, 4.3)
-  useEffect(() => {
-    if (!userRole) return
-    Promise.all([
-      fetch('/api/staff-schedules?all=true').then(r => r.json()),
-      fetch('/api/vendors').then(r => r.json())
-    ]).then(([staffData, vendorData]) => {
       const staff = (staffData.schedules || []).filter(s => s.isActive !== false)
       setAllStaff(staff)
       setVendors(vendorData.vendors || [])
+
       // Default to the current user's staff record, or first staff member
       if (!selectedStaffId) {
-        const myStaff = userVendorId ? staff.find(s => s.vendorId === userVendorId) : null
+        const myStaff = vendorId ? staff.find(s => s.vendorId === vendorId) : null
         setSelectedStaffId(myStaff?.visibleId || staff[0]?.visibleId || null)
         // Set userStaffId if we can match a staff record to the current user
         if (myStaff && !userStaffId) {
           setUserStaffId(myStaff.visibleId)
         }
       }
-    }).catch(err => {
-      console.error('Error loading staff/vendors:', err)
-      setInitError('Failed to load staff data. Please try refreshing the page.')
+    } catch (error) {
+      console.error('Error loading calendar data:', error)
+      if (retryCount < 2) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)))
+        return loadUserVendor(retryCount + 1)
+      }
+      setInitError('Failed to load calendar. Please try refreshing the page.')
       setLoading(false)
-    })
-  }, [userRole, userVendorId])
+    }
+  }
 
   useEffect(() => {
     if (selectedStaffId) {
@@ -1381,6 +1407,7 @@ export default function Calendar() {
           onRebook={handleRebook}
           vendorId={selectedStaffVendorId}
           currentUserStaffId={userStaffId}
+          userRole={userRole}
         />
       )}
 
