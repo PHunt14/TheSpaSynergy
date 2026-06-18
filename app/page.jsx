@@ -27,7 +27,7 @@ export default function Home() {
         </div>
         <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginTop: '1rem', flexWrap: 'wrap' }}>
           <a href="/sauna" className="cta" style={{ background: 'var(--color-warm)' }}>Book the Sauna</a>
-          <a href="/spa-room" className="cta" style={{ background: 'var(--color-warm)' }}>Book the Spa Room</a>
+          <a href="/spa-room" className="cta" style={{ background: '#7B6D8F' }}>Book the Spa Room</a>
         </div>
       </section>
 
