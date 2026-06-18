@@ -95,6 +95,16 @@ export async function POST(request: Request) {
     const slotStart = bh * 60 + bm;
     const slotEnd = slotStart + duration;
 
+    // Helper: check if a new slot overlaps with an existing appointment
+    const slotsOverlap = (aptDateTime: string, aptDuration: number, aptBuffer: number, newBuffer: number) => {
+      const aptTime = aptDateTime.includes('T') ? aptDateTime.split('T')[1].substring(0, 5) : '00:00';
+      const [ah, am] = aptTime.split(':').map(Number);
+      const aptStart = ah * 60 + am;
+      const aptEnd = aptStart + aptDuration + aptBuffer;
+      const newEnd = slotEnd + newBuffer;
+      return slotStart < aptEnd && newEnd > aptStart;
+    };
+
     if (resourceType === 'room') {
       // Room resources are cross-vendor — check ALL vendors for conflicts
       const { data: allVendors } = await client.models.Vendor.list();
@@ -111,13 +121,7 @@ export async function POST(request: Request) {
         if (apt.status === 'cancelled') continue;
         const { data: aptSvc } = await client.models.Service.get({ serviceId: apt.serviceId });
         if ((aptSvc?.resourceType || 'staff') !== 'room') continue;
-
-        const aptTime = apt.dateTime.includes('T') ? apt.dateTime.split('T')[1].substring(0, 5) : '00:00';
-        const [ah, am] = aptTime.split(':').map(Number);
-        const aptStart = ah * 60 + am;
-        const aptEnd = aptStart + (aptSvc?.duration || 60);
-
-        if (slotStart < aptEnd && slotEnd > aptStart) {
+        if (slotsOverlap(apt.dateTime, aptSvc?.duration || 60, 0, 0)) {
           return Response.json({ error: 'Spa room is already booked at this time' }, { status: 409 });
         }
       }
@@ -133,22 +137,14 @@ export async function POST(request: Request) {
         if (apt.status === 'cancelled') continue;
         const { data: aptSvc } = await client.models.Service.get({ serviceId: apt.serviceId });
         if ((aptSvc?.resourceType || 'staff') !== 'sauna') continue;
-
-        const aptTime = apt.dateTime.includes('T') ? apt.dateTime.split('T')[1].substring(0, 5) : '00:00';
-        const [ah, am] = aptTime.split(':').map(Number);
-        const aptStart = ah * 60 + am;
-        const aptEnd = aptStart + (aptSvc?.duration || 60);
-
-        if (slotStart < aptEnd && slotEnd > aptStart) {
+        if (slotsOverlap(apt.dateTime, aptSvc?.duration || 60, 0, 0)) {
           return Response.json({ error: 'Sauna is already booked at this time' }, { status: 409 });
         }
       }
     } else {
       // Staff-based services — prevent double-booking the same staff member
-      // Resolve which staff will be assigned so we can check their existing appointments
       let staffToCheck = staffId;
       if (!staffToCheck) {
-        // Preview the auto-assignment logic to determine who would be assigned
         const allowedStaff = (serviceCheck2?.allowedStaff as string[]) || [];
 
         const isWorkingAt = (staff: any) => {
@@ -185,7 +181,6 @@ export async function POST(request: Request) {
       }
 
       if (staffToCheck) {
-        // Fetch all appointments for this vendor on this date and check if the target staff has a conflict
         const result = await client.models.Appointment.listAppointmentByVendorIdAndDateTime({
           vendorId,
           dateTime: { beginsWith: bookingDate }
@@ -200,14 +195,7 @@ export async function POST(request: Request) {
           const aptDuration = aptSvc?.duration || 30;
           const aptBuffer = aptSvc?.bufferMinutes != null ? aptSvc.bufferMinutes : bufferMins;
 
-          const aptTime = apt.dateTime.includes('T') ? apt.dateTime.split('T')[1].substring(0, 5) : '00:00';
-          const [ah, am] = aptTime.split(':').map(Number);
-          const aptStart = ah * 60 + am;
-          const aptEnd = aptStart + aptDuration + aptBuffer;
-
-          const newSlotEnd = slotEnd + bufferMins;
-
-          if (slotStart < aptEnd && newSlotEnd > aptStart) {
+          if (slotsOverlap(apt.dateTime, aptDuration, aptBuffer, bufferMins)) {
             return Response.json({ error: 'This time slot is no longer available' }, { status: 409 });
           }
         }

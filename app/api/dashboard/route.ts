@@ -172,18 +172,18 @@ export async function GET(request: Request) {
     }
 
     // Enrich appointments with service details — batch-fetch to avoid N+1
-    const uniqueServiceIds = [...new Set((appointments || []).map((a: any) => a.serviceId).filter(Boolean))];
-    const uniqueStaffIds = [...new Set((appointments || []).map((a: any) => a.staffId).filter(Boolean))];
+    const uniqueServiceIds = [...new Set((appointments || []).map((a: any) => a.serviceId).filter(Boolean))] as string[];
+    const uniqueStaffIds = [...new Set((appointments || []).map((a: any) => a.staffId).filter(Boolean))] as string[];
 
     const serviceMap: Record<string, any> = {};
     const staffMap: Record<string, any> = {};
 
     await Promise.all([
-      ...uniqueServiceIds.map(async (sid) => {
+      ...uniqueServiceIds.map(async (sid: string) => {
         const { data } = await client.models.Service.get({ serviceId: sid });
         if (data) serviceMap[sid] = data;
       }),
-      ...uniqueStaffIds.map(async (sid) => {
+      ...uniqueStaffIds.map(async (sid: string) => {
         const { data } = await client.models.StaffSchedule.get({ visibleId: sid });
         if (data) staffMap[sid] = data;
       })
