@@ -664,7 +664,7 @@ export default function Services() {
         const parentServices = services.filter(s => !(s.parentServiceIds?.length > 0))
         const getAddons = (parentId) => services.filter(s => s.parentServiceIds?.includes(parentId))
 
-        const EditForm = () => (
+        const editForm = (
           <form ref={formRef} onSubmit={handleAddService} style={{
             background: '#fff8f0',
             padding: '1.5rem',
@@ -1036,7 +1036,7 @@ export default function Services() {
             </div>
             {editingService?.serviceId === service.serviceId && (
               <div style={{ marginTop: '0.5rem' }}>
-                <EditForm />
+                {editForm}
               </div>
             )}
             {!isAddon && managingAddonsFor?.serviceId === service.serviceId && (

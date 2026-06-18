@@ -29,8 +29,9 @@ export default function SpaRoomPage() {
 
   return (
     <div style={{ padding: '2rem', maxWidth: '800px', margin: '0 auto' }}>
+      {/* Hero image — SpaRoom01, cropped to center */}
       <div style={{
-        height: '300px',
+        height: '400px',
         borderRadius: '16px',
         marginBottom: '2rem',
         overflow: 'hidden',
@@ -39,9 +40,9 @@ export default function SpaRoomPage() {
         <div style={{
           width: '100%',
           height: '100%',
-          backgroundImage: 'url(https://the-spa-synergy-public.s3.us-east-1.amazonaws.com/vendorPictures/spa_lounge-00.JPEG)',
+          backgroundImage: 'url(https://the-spa-synergy-public.s3.us-east-1.amazonaws.com/vendorPictures/SpaRoom04.jpg)',
           backgroundSize: 'cover',
-          backgroundPosition: 'center',
+          backgroundPosition: 'center center',
         }} />
       </div>
 
@@ -88,6 +89,26 @@ export default function SpaRoomPage() {
       {services.length === 0 && (
         <p style={{ textAlign: 'center', color: 'var(--color-text-light)' }}>No spa room services available right now.</p>
       )}
+
+      {/* SpaRoom02 image below services */}
+      <div style={{
+        marginTop: '2.5rem',
+      }}>
+        <div style={{
+          borderRadius: '12px',
+          overflow: 'hidden',
+          height: '380px',
+          backgroundColor: 'var(--color-accent)',
+        }}>
+          <div style={{
+            width: '100%',
+            height: '100%',
+            backgroundImage: 'url(https://the-spa-synergy-public.s3.us-east-1.amazonaws.com/vendorPictures/SpaRoom02.jpeg)',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+          }} />
+        </div>
+      </div>
 
       {selected && (
         <div style={{ textAlign: 'center', marginTop: '2rem' }}>
