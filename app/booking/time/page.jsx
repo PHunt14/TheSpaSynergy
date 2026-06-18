@@ -2,7 +2,6 @@
 
 import { useSearchParams } from 'next/navigation'
 import { useState, useEffect, Suspense } from 'react'
-import Link from 'next/link'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import BookingDisabled, { isBookingEnabled } from '../../components/BookingDisabled'
@@ -238,12 +237,33 @@ function TimePageContent() {
       </div>
 
       {selectedTime && (
-        <Link
-          href={`/booking/confirm?vendor=${vendor}&service=${service}&date=${selectedDate.toISOString()}&time=${selectedTime}${multiProvider ? '&multiProvider=true' : ''}${quantity > 1 ? `&quantity=${quantity}&mode=${quantityMode}` : ''}${assignedStaff ? `&staffId=${assignedStaff.id}&staffName=${encodeURIComponent(assignedStaff.name)}` : ''}`}
+        <button
           className="cta"
+          onClick={async () => {
+            // Re-validate the slot is still available before proceeding
+            const dateStr = selectedDate.toISOString().split('T')[0]
+            const multiProviderParam = multiProvider ? '&multiProvider=true' : ''
+            const quantityParams = quantity > 1 ? `&quantity=${quantity}&mode=${quantityMode}` : ''
+            try {
+              const res = await fetch(`/api/availability?vendorId=${vendor}&serviceId=${service}&date=${dateStr}${multiProviderParam}${quantityParams}`)
+              const data = await res.json()
+              const freshSlots = data.availableSlots || []
+              const stillAvailable = freshSlots.some(s => s.display === selectedTime)
+              if (!stillAvailable) {
+                alert('Sorry, this time slot was just booked by someone else. Please select a different time.')
+                setAvailableSlots(freshSlots)
+                setSelectedTime(null)
+                return
+              }
+            } catch (e) {
+              // If re-check fails, proceed anyway — server-side check will catch conflicts
+            }
+            const url = `/booking/confirm?vendor=${vendor}&service=${service}&date=${selectedDate.toISOString()}&time=${selectedTime}${multiProvider ? '&multiProvider=true' : ''}${quantity > 1 ? `&quantity=${quantity}&mode=${quantityMode}` : ''}${assignedStaff ? `&staffId=${assignedStaff.id}&staffName=${encodeURIComponent(assignedStaff.name)}` : ''}`
+            window.location.href = url
+          }}
         >
           Continue
-        </Link>
+        </button>
       )}
     </main>
   )

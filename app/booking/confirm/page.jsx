@@ -268,7 +268,13 @@ function ConfirmPageContent() {
         if (requiresConfirmation) successUrl.set('confirmation', 'required')
         window.location.href = `/booking/success?${successUrl}`
       } else {
-        alert(result.error || 'Appointment creation failed')
+        const errorMsg = result.error || 'Appointment creation failed'
+        if (errorMsg.includes('already booked') || errorMsg.includes('no longer available')) {
+          alert(`${errorMsg}. Please go back and select a different time.`)
+          window.history.back()
+        } else {
+          alert(errorMsg)
+        }
       }
       return
     }
@@ -317,7 +323,8 @@ function ConfirmPageContent() {
     }
 
     const firstSuccess = results.find(r => r.appointmentId || r.appointmentIds)
-    if (firstSuccess) {
+    const firstError = results.find(r => r.error)
+    if (firstSuccess && !firstError) {
       const successUrl = new URLSearchParams({
         id: firstSuccess.appointmentId || firstSuccess.appointmentIds?.[0] || firstSuccess.groupId,
         dateTime: dateTimeISO,
@@ -331,7 +338,13 @@ function ConfirmPageContent() {
       if (quantity > 1) successUrl.set('quantity', String(quantity))
       window.location.href = `/booking/success?${successUrl}`
     } else {
-      alert('Appointment creation failed')
+      const errorMsg = firstError?.error || 'Appointment creation failed'
+      if (errorMsg.includes('already booked') || errorMsg.includes('no longer available')) {
+        alert(`${errorMsg}. Please go back and select a different time.`)
+        window.history.back()
+      } else {
+        alert(errorMsg)
+      }
     }
   }
 

@@ -107,16 +107,22 @@ export async function GET(request: Request) {
       // Filter to only this staff member's appointments
       appointments = appointments.filter(apt => apt.staffId === staffId);
 
-      // Enrich
-      const enrichedAppointments = await Promise.all(
-        appointments.map(async (appointment) => {
-          const { data: service } = await client.models.Service.get({ serviceId: appointment.serviceId });
-          let customer = appointment.customer;
-          if (typeof customer === 'string') { try { customer = JSON.parse(customer); } catch {} }
-          let staffName = staffRecord.staffName || null;
-          return { ...appointment, rawDateTime: appointment.dateTime, customer, service, staffName };
-        })
-      );
+      // Batch-fetch unique services to avoid N+1 queries
+      const uniqueServiceIds = [...new Set(appointments.map(a => a.serviceId).filter(Boolean))];
+      const serviceMap: Record<string, any> = {};
+      await Promise.all(uniqueServiceIds.map(async (sid) => {
+        const { data } = await client.models.Service.get({ serviceId: sid });
+        if (data) serviceMap[sid] = data;
+      }));
+
+      // Enrich appointments using the pre-fetched service map
+      const enrichedAppointments = appointments.map((appointment) => {
+        const service = serviceMap[appointment.serviceId] || null;
+        let customer = appointment.customer;
+        if (typeof customer === 'string') { try { customer = JSON.parse(customer); } catch {} }
+        const staffName = staffRecord.staffName || null;
+        return { ...appointment, rawDateTime: appointment.dateTime, customer, service, staffName };
+      });
 
       return Response.json({ appointments: enrichedAppointments });
     } catch (error) {
@@ -165,70 +171,63 @@ export async function GET(request: Request) {
       appointments = data || [];
     }
 
-    // Enrich appointments with service details
-    const enrichedAppointments = await Promise.all(
-      (appointments || []).map(async (appointment) => {
-        const { data: service } = await client.models.Service.get({ 
-          serviceId: appointment.serviceId 
-        });
+    // Enrich appointments with service details — batch-fetch to avoid N+1
+    const uniqueServiceIds = [...new Set((appointments || []).map((a: any) => a.serviceId).filter(Boolean))] as string[];
+    const uniqueStaffIds = [...new Set((appointments || []).map((a: any) => a.staffId).filter(Boolean))] as string[];
 
-        // Parse customer JSON if it's a string
-        let customer = appointment.customer;
-        if (typeof customer === 'string') {
-          try {
-            customer = JSON.parse(customer);
-          } catch (e) {
-            console.error('Error parsing customer data:', e);
-          }
-        }
+    const serviceMap: Record<string, any> = {};
+    const staffMap: Record<string, any> = {};
 
-        // Format dateTime to human-readable format
-        let formattedDateTime = appointment.dateTime;
-        try {
-          // Extract just the ISO date part before any space or extra characters
-          let dateStr = appointment.dateTime;
-          if (typeof dateStr === 'string') {
-            // Remove any trailing time format like " 4:00 PM" or "T11:00 AM:00"
-            dateStr = dateStr.split(' ')[0].split('T')[0] + 'T' + dateStr.split('T')[1]?.split(' ')[0];
-            // If there's a malformed part, just take the first valid ISO part
-            if (dateStr.includes('ZT')) {
-              dateStr = dateStr.split('ZT')[0] + 'Z';
-            }
-          }
-          const date = new Date(dateStr);
-          if (!isNaN(date.getTime())) {
-            formattedDateTime = date.toLocaleString('en-US', {
-              month: 'short',
-              day: 'numeric',
-              year: 'numeric',
-              hour: 'numeric',
-              minute: '2-digit',
-              hour12: true
-            });
-          }
-        } catch (e) {
-          console.error('Error formatting date:', e);
-        }
-
-        // Look up staff name if staffId is set
-        let staffName = null;
-        if (appointment.staffId) {
-          try {
-            const { data: staff } = await client.models.StaffSchedule.get({ visibleId: appointment.staffId });
-            staffName = staff?.staffName || null;
-          } catch (e) { /* ignore */ }
-        }
-
-        return {
-          ...appointment,
-          rawDateTime: appointment.dateTime,
-          dateTime: formattedDateTime,
-          customer,
-          service,
-          staffName
-        };
+    await Promise.all([
+      ...uniqueServiceIds.map(async (sid: string) => {
+        const { data } = await client.models.Service.get({ serviceId: sid });
+        if (data) serviceMap[sid] = data;
+      }),
+      ...uniqueStaffIds.map(async (sid: string) => {
+        const { data } = await client.models.StaffSchedule.get({ visibleId: sid });
+        if (data) staffMap[sid] = data;
       })
-    );
+    ]);
+
+    const enrichedAppointments = (appointments || []).map((appointment: any) => {
+      const service = serviceMap[appointment.serviceId] || null;
+
+      // Parse customer JSON if it's a string
+      let customer = appointment.customer;
+      if (typeof customer === 'string') {
+        try { customer = JSON.parse(customer); } catch (e) { console.error('Error parsing customer data:', e); }
+      }
+
+      // Format dateTime to human-readable format
+      let formattedDateTime = appointment.dateTime;
+      try {
+        let dateStr = appointment.dateTime;
+        if (typeof dateStr === 'string') {
+          dateStr = dateStr.split(' ')[0].split('T')[0] + 'T' + dateStr.split('T')[1]?.split(' ')[0];
+          if (dateStr.includes('ZT')) {
+            dateStr = dateStr.split('ZT')[0] + 'Z';
+          }
+        }
+        const date = new Date(dateStr);
+        if (!isNaN(date.getTime())) {
+          formattedDateTime = date.toLocaleString('en-US', {
+            month: 'short', day: 'numeric', year: 'numeric',
+            hour: 'numeric', minute: '2-digit', hour12: true
+          });
+        }
+      } catch (e) { console.error('Error formatting date:', e); }
+
+      const staffName = appointment.staffId ? (staffMap[appointment.staffId]?.staffName || null) : null;
+
+      return {
+        ...appointment,
+        rawDateTime: appointment.dateTime,
+        dateTime: formattedDateTime,
+        customer,
+        service,
+        staffName
+      };
+    });
 
     return Response.json({ appointments: enrichedAppointments });
   } catch (error) {

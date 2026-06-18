@@ -996,45 +996,35 @@ export default function Calendar() {
 
   const loadUserVendor = async (retryCount = 0) => {
     try {
-      const session = await fetchAuthSession()
+      // Fetch auth session and staff/vendor data in parallel
+      const [session, staffData, vendorData] = await Promise.all([
+        fetchAuthSession(),
+        fetch('/api/staff-schedules?all=true').then(r => r.json()),
+        fetch('/api/vendors').then(r => r.json())
+      ])
       const vendorId = session.tokens?.idToken?.payload['custom:vendorId']
       const role = session.tokens?.idToken?.payload['custom:role'] || 'vendor'
       setUserVendorId(vendorId)
       setUserRole(role)
       setInitError(null)
-    } catch (error) {
-      console.error('Error loading user vendor:', error)
-      if (retryCount < 2) {
-        // Retry after a short delay — Amplify may not be fully initialized yet
-        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)))
-        return loadUserVendor(retryCount + 1)
-      }
-      setInitError('Failed to load user session. Please try refreshing the page.')
-      setLoading(false)
-    }
-  }
 
-  // Load all staff and vendors for the staff selector
-  useEffect(() => {
-    if (!userRole) return
-    Promise.all([
-      fetch('/api/staff-schedules?all=true').then(r => r.json()),
-      fetch('/api/vendors').then(r => r.json())
-    ]).then(([staffData, vendorData]) => {
       const staff = (staffData.schedules || []).filter(s => s.isActive !== false)
       setAllStaff(staff)
       setVendors(vendorData.vendors || [])
+
       // Default to the current user's staff record, or first staff member
-      if (!selectedStaffId) {
-        const myStaff = userVendorId ? staff.find(s => s.vendorId === userVendorId) : null
-        setSelectedStaffId(myStaff?.visibleId || staff[0]?.visibleId || null)
+      const myStaff = vendorId ? staff.find(s => s.vendorId === vendorId) : null
+      setSelectedStaffId(myStaff?.visibleId || staff[0]?.visibleId || null)
+    } catch (error) {
+      console.error('Error loading calendar data:', error)
+      if (retryCount < 2) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)))
+        return loadUserVendor(retryCount + 1)
       }
-    }).catch(err => {
-      console.error('Error loading staff/vendors:', err)
-      setInitError('Failed to load staff data. Please try refreshing the page.')
+      setInitError('Failed to load calendar. Please try refreshing the page.')
       setLoading(false)
-    })
-  }, [userRole, userVendorId])
+    }
+  }
 
   useEffect(() => {
     if (selectedStaffId) {
