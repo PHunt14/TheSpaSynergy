@@ -84,18 +84,19 @@ export async function POST(request: Request) {
 
     const appointmentId = randomUUID();
 
-    // Room resource conflict check — prevent double-booking the spa room across all vendors
+    // --- Universal double-booking prevention for all resource types ---
     const { data: serviceCheck2 } = await client.models.Service.get({ serviceId });
-    const isRoomResource = (serviceCheck2?.resourceType || 'staff') === 'room';
-    if (isRoomResource) {
-      const bookingDate = dateTime.split('T')[0];
-      const bookingTime = dateTime.includes('T') ? dateTime.split('T')[1].substring(0, 5) : '00:00';
-      const duration = serviceCheck2?.duration || 60;
-      const [bh, bm] = bookingTime.split(':').map(Number);
-      const slotStart = bh * 60 + bm;
-      const slotEnd = slotStart + duration;
+    const resourceType = serviceCheck2?.resourceType || 'staff';
+    const bookingDate = dateTime.split('T')[0];
+    const bookingTime = dateTime.includes('T') ? dateTime.split('T')[1].substring(0, 5) : '00:00';
+    const duration = serviceCheck2?.duration || 60;
+    const bufferMins = serviceCheck2?.bufferMinutes != null ? serviceCheck2.bufferMinutes : (vendorCheck?.bufferMinutes || 15);
+    const [bh, bm] = bookingTime.split(':').map(Number);
+    const slotStart = bh * 60 + bm;
+    const slotEnd = slotStart + duration;
 
-      // Fetch all appointments across all vendors for this date
+    if (resourceType === 'room') {
+      // Room resources are cross-vendor — check ALL vendors for conflicts
       const { data: allVendors } = await client.models.Vendor.list();
       const aptPromises = (allVendors || []).map(v =>
         client.models.Appointment.listAppointmentByVendorIdAndDateTime({
@@ -118,6 +119,97 @@ export async function POST(request: Request) {
 
         if (slotStart < aptEnd && slotEnd > aptStart) {
           return Response.json({ error: 'Spa room is already booked at this time' }, { status: 409 });
+        }
+      }
+    } else if (resourceType === 'sauna') {
+      // Sauna resource — only one booking per time slot for sauna services under this vendor
+      const result = await client.models.Appointment.listAppointmentByVendorIdAndDateTime({
+        vendorId,
+        dateTime: { beginsWith: bookingDate }
+      } as any);
+      const existingApts = (result as any).data || [];
+
+      for (const apt of existingApts) {
+        if (apt.status === 'cancelled') continue;
+        const { data: aptSvc } = await client.models.Service.get({ serviceId: apt.serviceId });
+        if ((aptSvc?.resourceType || 'staff') !== 'sauna') continue;
+
+        const aptTime = apt.dateTime.includes('T') ? apt.dateTime.split('T')[1].substring(0, 5) : '00:00';
+        const [ah, am] = aptTime.split(':').map(Number);
+        const aptStart = ah * 60 + am;
+        const aptEnd = aptStart + (aptSvc?.duration || 60);
+
+        if (slotStart < aptEnd && slotEnd > aptStart) {
+          return Response.json({ error: 'Sauna is already booked at this time' }, { status: 409 });
+        }
+      }
+    } else {
+      // Staff-based services — prevent double-booking the same staff member
+      // Resolve which staff will be assigned so we can check their existing appointments
+      let staffToCheck = staffId;
+      if (!staffToCheck) {
+        // Preview the auto-assignment logic to determine who would be assigned
+        const allowedStaff = (serviceCheck2?.allowedStaff as string[]) || [];
+
+        const isWorkingAt = (staff: any) => {
+          if (!staff.schedule) return false;
+          const schedule = typeof staff.schedule === 'string' ? JSON.parse(staff.schedule) : staff.schedule;
+          const requestedDate = new Date(bookingDate + 'T00:00:00');
+          const dayNames = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+          const dayOfWeek = dayNames[requestedDate.getDay()];
+          const daySchedule = schedule[dayOfWeek];
+          if (!daySchedule || !daySchedule.start) return false;
+          let effectiveHours = { start: daySchedule.start, end: daySchedule.end };
+          if (daySchedule.recurrence) {
+            const recHours = getRecurrenceHours(daySchedule, requestedDate);
+            if (!recHours || !recHours.start) return false;
+            effectiveHours = recHours;
+          }
+          const [sh, sm] = effectiveHours.start.split(':').map(Number);
+          const [eh, em] = effectiveHours.end.split(':').map(Number);
+          return slotStart >= (sh * 60 + sm) && slotEnd <= (eh * 60 + em);
+        };
+
+        if (allowedStaff.length > 0) {
+          const staffPromises = allowedStaff.map((sid: string) => client.models.StaffSchedule.get({ visibleId: sid }));
+          const staffResults = await Promise.all(staffPromises);
+          const staffRecords = staffResults.filter(r => r.data?.isActive !== false).map(r => r.data);
+          const working = staffRecords.find(s => isWorkingAt(s));
+          staffToCheck = working?.visibleId || undefined;
+        } else {
+          const { data: vendorStaff } = await client.models.StaffSchedule.listStaffScheduleByVendorId({ vendorId } as any);
+          const activeStaff = (vendorStaff || []).filter((s: any) => s.isActive !== false);
+          const working = activeStaff.find(s => isWorkingAt(s));
+          staffToCheck = working?.visibleId || undefined;
+        }
+      }
+
+      if (staffToCheck) {
+        // Fetch all appointments for this vendor on this date and check if the target staff has a conflict
+        const result = await client.models.Appointment.listAppointmentByVendorIdAndDateTime({
+          vendorId,
+          dateTime: { beginsWith: bookingDate }
+        } as any);
+        const existingApts = (result as any).data || [];
+
+        for (const apt of existingApts) {
+          if (apt.status === 'cancelled') continue;
+          if (apt.staffId !== staffToCheck) continue;
+
+          const { data: aptSvc } = await client.models.Service.get({ serviceId: apt.serviceId });
+          const aptDuration = aptSvc?.duration || 30;
+          const aptBuffer = aptSvc?.bufferMinutes != null ? aptSvc.bufferMinutes : bufferMins;
+
+          const aptTime = apt.dateTime.includes('T') ? apt.dateTime.split('T')[1].substring(0, 5) : '00:00';
+          const [ah, am] = aptTime.split(':').map(Number);
+          const aptStart = ah * 60 + am;
+          const aptEnd = aptStart + aptDuration + aptBuffer;
+
+          const newSlotEnd = slotEnd + bufferMins;
+
+          if (slotStart < aptEnd && newSlotEnd > aptStart) {
+            return Response.json({ error: 'This time slot is no longer available' }, { status: 409 });
+          }
         }
       }
     }

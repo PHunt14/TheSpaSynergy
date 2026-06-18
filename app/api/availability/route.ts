@@ -133,14 +133,23 @@ async function filterRelevantAppointments(appointments: any[], isSauna: boolean,
     const aptIsSauna = aptResourceType === 'sauna';
     const aptIsRoom = aptResourceType === 'room';
 
+    // Attach the actual booked service duration to the appointment so generateTimeSlots
+    // uses the correct duration for overlap calculations instead of the new service's duration
+    const enrichedApt = { ...apt };
+    if (aptService?.duration) {
+      // Embed duration into the customer JSON so generateTimeSlots picks it up
+      const existingCustomer = typeof apt.customer === 'string' ? JSON.parse(apt.customer) : (apt.customer || {});
+      enrichedApt.customer = JSON.stringify({ ...existingCustomer, duration: aptService.duration });
+    }
+
     if (isRoom && aptIsRoom) {
       // Cross-vendor room conflict: any room appointment blocks any other room appointment
-      relevant.push(apt);
+      relevant.push(enrichedApt);
     } else if (isSauna && aptIsSauna) {
-      relevant.push(apt);
+      relevant.push(enrichedApt);
     } else if (!isSauna && !isRoom && !aptIsSauna && !aptIsRoom) {
       if (!assignedStaff || !apt.staffId || apt.staffId === assignedStaff.visibleId) {
-        relevant.push(apt);
+        relevant.push(enrichedApt);
       }
     }
   }

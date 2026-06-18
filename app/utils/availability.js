@@ -112,9 +112,9 @@ export function hasAnySlot(startTime, endTime, duration, buffer, ctx) {
       const aptTime = apt.dateTime.includes('T') ? apt.dateTime.split('T')[1].substring(0, 5) : apt.dateTime.split(' ')[1]
       const [aH, aM] = aptTime.split(':').map(Number)
       const aStart = aH * 60 + aM
-      // Use blocked time's actual duration if available, otherwise use new service duration
       const customer = typeof apt.customer === 'string' ? JSON.parse(apt.customer) : apt.customer
-      const aptDuration = (customer?.isBlockedTime && customer?.duration) ? customer.duration : duration
+      // Use the appointment's actual service duration if available, otherwise fall back to current service duration
+      const aptDuration = customer?.duration || duration
       const aEnd = aStart + aptDuration + buffer
       const nStart = current
       const nEnd = nStart + duration + buffer
@@ -169,7 +169,8 @@ export function generateTimeSlots(startTime, endTime, serviceDuration, bufferMin
         ? appointmentDateTime.split('T')[1].substring(0, 5)
         : appointmentDateTime.split(' ')[1]
       const customer = typeof appointment.customer === 'string' ? JSON.parse(appointment.customer) : appointment.customer
-      const aptDuration = (customer?.isBlockedTime && customer?.duration) ? customer.duration : serviceDuration
+      // Use the appointment's actual service duration if available, otherwise fall back to current service duration
+      const aptDuration = customer?.duration || serviceDuration
       return timeOverlaps(timeString, appointmentTime, serviceDuration, bufferMinutes, aptDuration)
     })
 
