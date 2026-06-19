@@ -37,6 +37,21 @@ function KioskContent() {
     } catch { return dateTime }
   }
 
+  // Separate bundle appointments from individual ones
+  const bundleGroups = {}
+  const individualAppointments = []
+
+  appointments.forEach(apt => {
+    if (apt.bundleId) {
+      if (!bundleGroups[apt.bundleId]) {
+        bundleGroups[apt.bundleId] = []
+      }
+      bundleGroups[apt.bundleId].push(apt)
+    } else {
+      individualAppointments.push(apt)
+    }
+  })
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
@@ -70,7 +85,53 @@ function KioskContent() {
 
       {!loading && appointments.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {appointments.map(apt => (
+          {/* Bundle groups */}
+          {Object.entries(bundleGroups).map(([bundleId, bundleApts]) => {
+            const totalPrice = bundleApts.reduce((sum, apt) => sum + (apt.service?.price || 0), 0)
+            const customer = bundleApts[0]?.customer
+            const totalDuration = bundleApts.reduce((sum, apt) => sum + (apt.service?.duration || 0), 0)
+
+            return (
+              <Link
+                key={bundleId}
+                href={`/kiosk/bundle/${bundleId}`}
+                style={{
+                  display: 'block',
+                  padding: '1.5rem', background: 'linear-gradient(135deg, #f3e8ff, #fce4ec)', borderRadius: '12px',
+                  border: '2px solid var(--color-primary)', textDecoration: 'none', color: 'inherit',
+                  cursor: 'pointer'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div>
+                    <div style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--color-primary)', textTransform: 'uppercase', marginBottom: '0.25rem' }}>
+                      📦 Package ({bundleApts.length} services)
+                    </div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: '600', marginBottom: '0.25rem' }}>
+                      {customer?.name || 'Walk-in'}
+                    </div>
+                    <div style={{ color: 'var(--color-text-light)', fontSize: '0.9rem' }}>
+                      {bundleApts.map(apt => apt.service?.name).filter(Boolean).join(' + ')} · {totalDuration} min
+                    </div>
+                    <div style={{ color: 'var(--color-primary)', fontSize: '0.8rem', marginTop: '0.25rem' }}>
+                      {[...new Set(bundleApts.map(apt => apt.vendorName))].join(', ')}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: '1.25rem', fontWeight: '700', color: 'var(--color-primary)' }}>
+                      ${totalPrice.toFixed(2)}
+                    </div>
+                    <div style={{ color: 'var(--color-text-light)', fontSize: '0.85rem' }}>
+                      {formatTime(bundleApts[0]?.dateTime)}
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            )
+          })}
+
+          {/* Individual appointments */}
+          {individualAppointments.map(apt => (
             <Link
               key={apt.appointmentId}
               href={`/kiosk/${apt.appointmentId}`}
