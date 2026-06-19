@@ -7,6 +7,7 @@ import TipSelection from '../components/TipSelection'
 import useSquarePayment, { resolveSquareLocation } from '../components/useSquarePayment'
 import KioskPaymentForm from '../components/KioskPaymentForm'
 import PaymentSuccess from '../components/PaymentSuccess'
+import TotalDueDisplay from '../components/TotalDueDisplay'
 import { calculateBundlePaymentSplit } from '../../utils/bundlePaymentSplit.js'
 
 function MultiPaymentContent() {
@@ -28,7 +29,6 @@ function MultiPaymentContent() {
     if (ids.length === 0) { setLoading(false); return }
 
     Promise.all([
-      // Fetch each appointment individually
       ...ids.map(id => fetch(`/api/kiosk/appointments?appointmentId=${id}`).then(r => r.json())),
       fetch('/api/vendors').then(r => r.json()),
     ])
@@ -66,12 +66,10 @@ function MultiPaymentContent() {
         return
       }
 
-      // Check if all appointments are for the same vendor
       const uniqueVendors = [...new Set(appointments.map(a => a.vendorId))]
-
       let payRes
+
       if (uniqueVendors.length === 1) {
-        // Single vendor — use simple payment, pass all service IDs
         payRes = await fetch('/api/payment', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -85,20 +83,17 @@ function MultiPaymentContent() {
           })
         })
       } else {
-        // Multi-vendor — use bundle payment split
         const services = appointments.map(apt => ({
           price: apt.service?.price || 0,
           vendorId: apt.vendorId,
           houseFeeEnabled: apt.service?.houseFeeEnabled || false,
           houseFeeAmount: apt.service?.houseFeeAmount || 0,
         }))
-
         const split = calculateBundlePaymentSplit({
           services,
           discountAmount: 0,
           houseVendorId: houseVendor?.vendorId || '',
         })
-
         payRes = await fetch('/api/payment', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -119,7 +114,6 @@ function MultiPaymentContent() {
         return
       }
 
-      // Mark all appointments as paid
       await Promise.all(
         appointments.map(apt =>
           fetch('/api/appointments', {
@@ -220,27 +214,10 @@ function MultiPaymentContent() {
       </div>
 
       {squareLocationId && (
-        <TipSelection
-          servicePrice={totalPrice}
-          tipAmount={tipAmount}
-          onTipChange={setTipAmount}
-        />
+        <TipSelection servicePrice={totalPrice} tipAmount={tipAmount} onTipChange={setTipAmount} />
       )}
 
-      <div style={{
-        textAlign: 'center', padding: '1.5rem', background: 'white', borderRadius: '12px',
-        border: '2px solid var(--color-primary)', marginBottom: '2rem'
-      }}>
-        <div style={{ fontSize: '0.9rem', color: 'var(--color-text-light)', marginBottom: '0.25rem' }}>Total Due</div>
-        <div style={{ fontSize: '2.5rem', fontWeight: '700', color: 'var(--color-primary)' }}>
-          ${totalDue.toFixed(2)}
-        </div>
-        {tipAmount > 0 && (
-          <div style={{ fontSize: '0.9rem', color: 'var(--color-text-light)', marginTop: '0.25rem' }}>
-            Services: ${totalPrice.toFixed(2)} + Tip: ${tipAmount.toFixed(2)}
-          </div>
-        )}
-      </div>
+      <TotalDueDisplay totalDue={totalDue} tipAmount={tipAmount} priceLabel="Services" priceAmount={totalPrice} />
 
       {!squareLocationId ? (
         <div style={{ padding: '1.5rem', background: '#fff3cd', borderRadius: '8px', border: '1px solid #ffc107', textAlign: 'center' }}>
