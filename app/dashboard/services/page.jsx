@@ -107,7 +107,7 @@ export default function Services() {
           cats.add(s.category)
         }
       })
-      setExistingCategories([...cats].sort())
+      setExistingCategories([...cats].sort((a, b) => a.localeCompare(b)))
     } catch (err) {
       console.error('Error loading categories:', err)
     }
@@ -494,7 +494,10 @@ export default function Services() {
             {filteredCategories.map(cat => (
               <div
                 key={cat}
+                role="option"
+                tabIndex={0}
                 onClick={() => addCategory(cat)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); addCategory(cat) } }}
                 style={{
                   padding: '0.5rem 0.75rem',
                   cursor: 'pointer',
@@ -510,7 +513,10 @@ export default function Services() {
             {/* Option to add new category if it doesn't exist */}
             {categoryInput.trim().length >= 2 && !existingCategories.some(c => c.toLowerCase() === categoryInput.trim().toLowerCase()) && (
               <div
+                role="option"
+                tabIndex={0}
                 onClick={() => addCategory(categoryInput)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); addCategory(categoryInput) } }}
                 style={{
                   padding: '0.5rem 0.75rem',
                   cursor: 'pointer',

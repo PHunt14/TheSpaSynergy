@@ -14,9 +14,11 @@ export default function ProvidersPage() {
       .then(res => res.json())
       .then(data => {
         const p = [...(data.providers || [])]
-        // Shuffle providers for display
+        // Shuffle providers for display using crypto-safe random
         for (let i = p.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
+          const arr = new Uint32Array(1)
+          crypto.getRandomValues(arr)
+          const j = arr[0] % (i + 1);
           [p[i], p[j]] = [p[j], p[i]]
         }
         setProviders(p)

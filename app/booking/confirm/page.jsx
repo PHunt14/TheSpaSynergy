@@ -245,6 +245,81 @@ function ConfirmPageContent() {
     return paymentData.paymentId
   }
 
+  /**
+   * Handles the "Any Available" payment flow:
+   * 1. Creates appointments (API auto-assigns staff)
+   * 2. Processes payment through assigned staff's Square credentials
+   * 3. Updates appointments with payment info
+   * 4. Navigates to success page
+   */
+  const handleAnyAvailablePayment = async (token) => {
+    const dateTimeISO = buildDateTimeISO()
+    const isResource = allServiceDetails.every(s => s.resourceType === 'sauna' || s.resourceType === 'room')
+    const status = isResource ? 'confirmed' : 'pending-confirmation'
+
+    const appointmentResults = await Promise.all(
+      allServiceDetails.map(svc => {
+        const svcQty = getQty(svc)
+        return fetch('/api/appointments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            serviceId: svc.serviceId,
+            bundleId: bundleId || undefined,
+            dateTime: dateTimeISO,
+            customer: formData,
+            status,
+            ...(people ? { people } : {}),
+            ...(svcQty > 1 ? { quantity: svcQty, quantityMode } : {})
+          })
+        }).then(r => r.json())
+      })
+    )
+
+    const firstSuccess = appointmentResults.find(r => r.success)
+    if (!firstSuccess) {
+      throw new Error(appointmentResults[0]?.error || 'Appointment creation failed')
+    }
+
+    const assignedStaffId = firstSuccess.staffId
+    let paymentId = null
+    try {
+      paymentId = await processPaymentWithToken(token, assignedStaffId)
+    } catch (payError) {
+      console.error('Payment failed after appointment creation:', payError)
+      alert('Appointment booked but payment failed: ' + payError.message + '. Please pay in person.')
+    }
+
+    if (paymentId) {
+      await Promise.all(
+        appointmentResults.filter(r => r.appointmentId).map(r =>
+          fetch('/api/appointments', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              appointmentId: r.appointmentId,
+              paymentId,
+              paymentStatus: 'paid',
+              paymentAmount: totalPrice
+            })
+          })
+        )
+      )
+    }
+
+    const successUrl = new URLSearchParams({
+      id: firstSuccess.appointmentId || firstSuccess.appointmentIds?.[0] || firstSuccess.groupId,
+      dateTime: dateTimeISO,
+      service: allServiceDetails.map(s => s.name).join(', '),
+      payment: paymentId ? 'card' : 'in-person',
+      total: totalPrice.toFixed(2)
+    })
+    if (requiresConfirmation) successUrl.set('confirmation', 'required')
+    if (people) successUrl.set('people', people)
+    if (quantity > 1) successUrl.set('quantity', String(quantity))
+    window.location.href = `/booking/success?${successUrl}`
+  }
+
   const createAppointments = async (paymentId, pMethod, assignedStaffIdOverride) => {
     const dateTimeISO = buildDateTimeISO()
     const isResource = allServiceDetails.every(s => s.resourceType === 'sauna' || s.resourceType === 'room')
@@ -375,73 +450,7 @@ function ConfirmPageContent() {
 
       // "Any Available" with wallet pay: create appointment first for auto-assignment (Req 5.5, 6.1)
       if (!staffId) {
-        const dateTimeISO = buildDateTimeISO()
-        const isResource = allServiceDetails.every(s => s.resourceType === 'sauna')
-        const status = isResource ? 'confirmed' : 'pending-confirmation'
-
-        const appointmentResults = await Promise.all(
-          allServiceDetails.map(svc => {
-            const svcQty = getQty(svc)
-            return fetch('/api/appointments', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                serviceId: svc.serviceId,
-                bundleId: bundleId || undefined,
-                dateTime: dateTimeISO,
-                customer: formData,
-                status,
-                ...(people ? { people } : {}),
-                ...(svcQty > 1 ? { quantity: svcQty, quantityMode } : {})
-              })
-            }).then(r => r.json())
-          })
-        )
-
-        const firstSuccess = appointmentResults.find(r => r.success)
-        if (!firstSuccess) {
-          alert(appointmentResults[0]?.error || 'Appointment creation failed')
-          setLoading(false)
-          return
-        }
-
-        const assignedStaffId = firstSuccess.staffId
-        let paymentId = null
-        try {
-          paymentId = await processPaymentWithToken(result.token, assignedStaffId)
-        } catch (payError) {
-          console.error('Wallet payment failed after appointment creation:', payError)
-          alert('Appointment booked but payment failed: ' + payError.message + '. Please pay in person.')
-        }
-
-        if (paymentId) {
-          await Promise.all(
-            appointmentResults.filter(r => r.appointmentId).map(r =>
-              fetch('/api/appointments', {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  appointmentId: r.appointmentId,
-                  paymentId,
-                  paymentStatus: 'paid',
-                  paymentAmount: totalPrice
-                })
-              })
-            )
-          )
-        }
-
-        const successUrl = new URLSearchParams({
-          id: firstSuccess.appointmentId || firstSuccess.appointmentIds?.[0] || firstSuccess.groupId,
-          dateTime: dateTimeISO,
-          service: allServiceDetails.map(s => s.name).join(', '),
-          payment: paymentId ? 'card' : 'in-person',
-          total: totalPrice.toFixed(2)
-        })
-        if (requiresConfirmation) successUrl.set('confirmation', 'required')
-        if (people) successUrl.set('people', people)
-        if (quantity > 1) successUrl.set('quantity', String(quantity))
-        window.location.href = `/booking/success?${successUrl}`
+        await handleAnyAvailablePayment(result.token)
         return
       }
 
@@ -469,78 +478,7 @@ function ConfirmPageContent() {
         const result = await card.tokenize()
         if (result.status !== 'OK') { alert('Card tokenization failed'); setLoading(false); return }
 
-        // Create appointments without payment first — API auto-assigns staff (Req 5.5)
-        const dateTimeISO = buildDateTimeISO()
-        const isResource = allServiceDetails.every(s => s.resourceType === 'sauna')
-        const status = isResource ? 'confirmed' : 'pending-confirmation'
-
-        const appointmentResults = await Promise.all(
-          allServiceDetails.map(svc => {
-            const svcQty = getQty(svc)
-            return fetch('/api/appointments', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                serviceId: svc.serviceId,
-                bundleId: bundleId || undefined,
-                dateTime: dateTimeISO,
-                customer: formData,
-                status,
-                ...(people ? { people } : {}),
-                ...(svcQty > 1 ? { quantity: svcQty, quantityMode } : {})
-              })
-            }).then(r => r.json())
-          })
-        )
-
-        const firstSuccess = appointmentResults.find(r => r.success)
-        if (!firstSuccess) {
-          alert(appointmentResults[0]?.error || 'Appointment creation failed')
-          setLoading(false)
-          return
-        }
-
-        // Use the auto-assigned staffId for payment routing (Req 6.1)
-        const assignedStaffId = firstSuccess.staffId
-        let paymentId = null
-        try {
-          paymentId = await processPaymentWithToken(result.token, assignedStaffId)
-        } catch (payError) {
-          // Payment failed — appointment already created, inform user
-          console.error('Payment failed after appointment creation:', payError)
-          alert('Appointment booked but payment failed: ' + payError.message + '. Please pay in person.')
-        }
-
-        // Update appointments with payment info if payment succeeded
-        if (paymentId) {
-          await Promise.all(
-            appointmentResults.filter(r => r.appointmentId).map(r =>
-              fetch('/api/appointments', {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  appointmentId: r.appointmentId,
-                  paymentId,
-                  paymentStatus: 'paid',
-                  paymentAmount: totalPrice
-                })
-              })
-            )
-          )
-        }
-
-        // Navigate to success
-        const successUrl = new URLSearchParams({
-          id: firstSuccess.appointmentId || firstSuccess.appointmentIds?.[0] || firstSuccess.groupId,
-          dateTime: dateTimeISO,
-          service: allServiceDetails.map(s => s.name).join(', '),
-          payment: paymentId ? 'card' : 'in-person',
-          total: totalPrice.toFixed(2)
-        })
-        if (requiresConfirmation) successUrl.set('confirmation', 'required')
-        if (people) successUrl.set('people', people)
-        if (quantity > 1) successUrl.set('quantity', String(quantity))
-        window.location.href = `/booking/success?${successUrl}`
+        await handleAnyAvailablePayment(result.token)
         return
       }
 
