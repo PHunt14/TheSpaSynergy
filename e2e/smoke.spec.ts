@@ -8,9 +8,9 @@ test.describe('Public pages smoke tests', () => {
     await expect(page.locator('a[href="/booking"]').first()).toBeVisible()
   })
 
-  test('booking page loads and shows practitioners', async ({ page }) => {
+  test('booking page loads and shows service selection', async ({ page }) => {
     await page.goto('/booking')
-    await expect(page.locator('h1')).toContainText('Professionals')
+    await expect(page.locator('h1')).toContainText('Book a Service')
   })
 
   test('providers page loads', async ({ page }) => {

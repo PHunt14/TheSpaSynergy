@@ -165,6 +165,8 @@ describe('Feature: unified-business-model, Property 6: Appointment records targe
         fc.string({ minLength: 1, maxLength: 15 }).filter((s) => s.trim().length > 0),
         fc.string({ minLength: 1, maxLength: 15 }).filter((s) => s.trim().length > 0),
         (creatorId, targetId, creatorVendorId, targetVendorId) => {
+          // Ensure creator and target are distinct so both records appear separately
+          if (creatorId === targetId) return true;
           const staffRecords = [
             {
               visibleId: creatorId,

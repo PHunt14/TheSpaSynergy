@@ -20,12 +20,13 @@ const config = {
       displayName: 'components',
       testEnvironment: 'jest-environment-jsdom',
       transform: {
-        '^.+\\.(js|jsx|ts|tsx)$': ['ts-jest', {
+        '^.+\\.(js|jsx|ts|tsx|mjs)$': ['ts-jest', {
           tsconfig: 'tsconfig.json',
-          useESM: false,
+          useESM: true,
           jsx: 'react-jsx',
         }],
       },
+      extensionsToTreatAsEsm: ['.ts', '.tsx', '.jsx'],
       testMatch: ['**/__tests__/components/**/*.test.(jsx|tsx)'],
       testPathIgnorePatterns: ['/node_modules/', '/services/'],
       moduleNameMapper: {
