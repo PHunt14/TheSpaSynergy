@@ -8,6 +8,8 @@ import TipSelection from '../components/TipSelection'
 import useSquarePayment, { resolveSquareLocation } from '../components/useSquarePayment'
 import KioskPaymentForm from '../components/KioskPaymentForm'
 import PaymentSuccess from '../components/PaymentSuccess'
+import TotalDueDisplay from '../components/TotalDueDisplay'
+import formatTime from '../components/formatTime'
 
 function PaymentContent() {
   const { appointmentId } = useParams()
@@ -128,12 +130,6 @@ function PaymentContent() {
     )
   }
 
-  const formatTime = (dateTime) => {
-    try {
-      return new Date(dateTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
-    } catch { return dateTime }
-  }
-
   return (
     <div>
       <Link href="/kiosk" style={{ color: 'var(--color-primary)', display: 'inline-block', marginBottom: '1.5rem' }}>
@@ -165,20 +161,7 @@ function PaymentContent() {
         />
       )}
 
-      <div style={{
-        textAlign: 'center', padding: '1.5rem', background: 'white', borderRadius: '12px',
-        border: '2px solid var(--color-primary)', marginBottom: '2rem'
-      }}>
-        <div style={{ fontSize: '0.9rem', color: 'var(--color-text-light)', marginBottom: '0.25rem' }}>Total Due</div>
-        <div style={{ fontSize: '2.5rem', fontWeight: '700', color: 'var(--color-primary)' }}>
-          ${totalDue.toFixed(2)}
-        </div>
-        {tipAmount > 0 && (
-          <div style={{ fontSize: '0.9rem', color: 'var(--color-text-light)', marginTop: '0.25rem' }}>
-            Service: ${appointment.service?.price?.toFixed(2)} + Tip: ${tipAmount.toFixed(2)}
-          </div>
-        )}
-      </div>
+      <TotalDueDisplay totalDue={totalDue} tipAmount={tipAmount} priceLabel="Service" priceAmount={appointment.service?.price || 0} />
 
       {!squareLocationId ? (
         <div style={{ padding: '1.5rem', background: '#fff3cd', borderRadius: '8px', border: '1px solid #ffc107', textAlign: 'center' }}>

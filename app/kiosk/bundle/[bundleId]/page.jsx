@@ -9,6 +9,9 @@ import TipSelection from '../../components/TipSelection'
 import useSquarePayment, { resolveSquareLocation } from '../../components/useSquarePayment'
 import KioskPaymentForm from '../../components/KioskPaymentForm'
 import PaymentSuccess from '../../components/PaymentSuccess'
+import TotalDueDisplay from '../../components/TotalDueDisplay'
+import ServiceLineItems from '../../components/ServiceLineItems'
+import formatTime from '../../components/formatTime'
 
 function BundlePaymentContent() {
   const { bundleId } = useParams()
@@ -135,12 +138,6 @@ function BundlePaymentContent() {
     )
   }
 
-  const formatTime = (dateTime) => {
-    try {
-      return new Date(dateTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
-    } catch { return dateTime }
-  }
-
   const alreadyPaid = appointments.every(apt => apt.paymentId)
 
   if (alreadyPaid) {
@@ -179,22 +176,7 @@ function BundlePaymentContent() {
 
         <div style={{ borderTop: '1px solid var(--color-border)', marginTop: '1rem', paddingTop: '1rem' }}>
           <h4 style={{ margin: '0 0 0.75rem' }}>Included Services</h4>
-          {appointments.map(apt => (
-            <div key={apt.appointmentId} style={{
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              padding: '0.5rem 0', borderBottom: '1px solid rgba(0,0,0,0.05)'
-            }}>
-              <div>
-                <div style={{ fontWeight: '500' }}>{apt.service?.name}</div>
-                <div style={{ fontSize: '0.8rem', color: 'var(--color-text-light)' }}>
-                  {apt.vendorName}{apt.staffName && ` · ${apt.staffName}`} · {apt.service?.duration} min
-                </div>
-              </div>
-              <div style={{ fontWeight: '500', color: 'var(--color-text-light)', fontSize: '0.9rem' }}>
-                ${apt.service?.price?.toFixed(2)}
-              </div>
-            </div>
-          ))}
+          <ServiceLineItems appointments={appointments} />
 
           <div style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '2px solid var(--color-border)' }}>
             {discountAmount > 0 && (
@@ -225,20 +207,7 @@ function BundlePaymentContent() {
         />
       )}
 
-      <div style={{
-        textAlign: 'center', padding: '1.5rem', background: 'white', borderRadius: '12px',
-        border: '2px solid var(--color-primary)', marginBottom: '2rem'
-      }}>
-        <div style={{ fontSize: '0.9rem', color: 'var(--color-text-light)', marginBottom: '0.25rem' }}>Total Due</div>
-        <div style={{ fontSize: '2.5rem', fontWeight: '700', color: 'var(--color-primary)' }}>
-          ${totalDue.toFixed(2)}
-        </div>
-        {tipAmount > 0 && (
-          <div style={{ fontSize: '0.9rem', color: 'var(--color-text-light)', marginTop: '0.25rem' }}>
-            Package: ${bundlePrice.toFixed(2)} + Tip: ${tipAmount.toFixed(2)}
-          </div>
-        )}
-      </div>
+      <TotalDueDisplay totalDue={totalDue} tipAmount={tipAmount} priceLabel="Package" priceAmount={bundlePrice} />
 
       {!squareLocationId ? (
         <div style={{ padding: '1.5rem', background: '#fff3cd', borderRadius: '8px', border: '1px solid #ffc107', textAlign: 'center' }}>

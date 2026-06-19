@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import { Suspense } from 'react'
 import Link from 'next/link'
+import AppointmentCard from './components/AppointmentCard'
+import formatTime from './components/formatTime'
 
 function KioskContent() {
   const [appointments, setAppointments] = useState([])
@@ -31,25 +33,25 @@ function KioskContent() {
     return () => clearInterval(interval)
   }, [])
 
-  const formatTime = (dateTime) => {
-    try {
-      return new Date(dateTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
-    } catch { return dateTime }
-  }
-
   // Separate bundle appointments from individual ones
   const bundleGroups = {}
   const individualAppointments = []
 
   appointments.forEach(apt => {
     if (apt.bundleId) {
-      if (!bundleGroups[apt.bundleId]) {
-        bundleGroups[apt.bundleId] = []
-      }
+      if (!bundleGroups[apt.bundleId]) bundleGroups[apt.bundleId] = []
       bundleGroups[apt.bundleId].push(apt)
     } else {
       individualAppointments.push(apt)
     }
+  })
+
+  // Group individual appointments by customer name
+  const customerGroups = {}
+  individualAppointments.forEach(apt => {
+    const name = apt.customer?.name || 'Walk-in'
+    if (!customerGroups[name]) customerGroups[name] = []
+    customerGroups[name].push(apt)
   })
 
   return (
@@ -88,7 +90,6 @@ function KioskContent() {
           {/* Bundle groups */}
           {Object.entries(bundleGroups).map(([bundleId, bundleApts]) => {
             const totalPrice = bundleApts.reduce((sum, apt) => sum + (apt.service?.price || 0), 0)
-            const customer = bundleApts[0]?.customer
             const totalDuration = bundleApts.reduce((sum, apt) => sum + (apt.service?.duration || 0), 0)
 
             return (
@@ -108,7 +109,7 @@ function KioskContent() {
                       📦 Package ({bundleApts.length} services)
                     </div>
                     <div style={{ fontSize: '1.1rem', fontWeight: '600', marginBottom: '0.25rem' }}>
-                      {customer?.name || 'Walk-in'}
+                      {bundleApts[0]?.customer?.name || 'Walk-in'}
                     </div>
                     <div style={{ color: 'var(--color-text-light)', fontSize: '0.9rem' }}>
                       {bundleApts.map(apt => apt.service?.name).filter(Boolean).join(' + ')} · {totalDuration} min
@@ -130,40 +131,39 @@ function KioskContent() {
             )
           })}
 
-          {/* Individual appointments */}
-          {individualAppointments.map(apt => (
-            <Link
-              key={apt.appointmentId}
-              href={`/kiosk/${apt.appointmentId}`}
-              style={{
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                padding: '1.5rem', background: 'white', borderRadius: '12px',
-                border: '1px solid var(--color-border)', textDecoration: 'none', color: 'inherit',
-                cursor: 'pointer'
-              }}
-            >
-              <div>
-                <div style={{ fontSize: '1.1rem', fontWeight: '600', marginBottom: '0.25rem' }}>
-                  {apt.customer?.name || 'Walk-in'}
-                </div>
-                <div style={{ color: 'var(--color-text-light)', fontSize: '0.9rem' }}>
-                  {apt.service?.name || 'Service'} · {apt.service?.duration} min
-                  {apt.staffName && ` · ${apt.staffName}`}
-                </div>
-                <div style={{ color: 'var(--color-primary)', fontSize: '0.8rem', marginTop: '0.25rem' }}>
-                  {apt.vendorName}
-                </div>
+          {/* Customer groups */}
+          {Object.entries(customerGroups).map(([customerName, custApts]) => {
+            if (custApts.length === 1) {
+              return <AppointmentCard key={custApts[0].appointmentId} apt={custApts[0]} />
+            }
+
+            const totalPrice = custApts.reduce((sum, apt) => sum + (apt.service?.price || 0), 0)
+            const aptIds = custApts.map(a => a.appointmentId).join(',')
+
+            return (
+              <div key={`customer-${customerName}`} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {custApts.map(apt => (
+                  <AppointmentCard key={apt.appointmentId} apt={apt} />
+                ))}
+                <Link
+                  href={`/kiosk/multi?ids=${aptIds}`}
+                  style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    padding: '1rem 1.5rem', background: '#f0f8ff', borderRadius: '8px',
+                    border: '1px dashed var(--color-primary)', textDecoration: 'none', color: 'inherit',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <div style={{ fontSize: '0.9rem', color: 'var(--color-primary)', fontWeight: '600' }}>
+                    💳 Pay all {custApts.length} services for {customerName} at once
+                  </div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: '700', color: 'var(--color-primary)' }}>
+                    ${totalPrice.toFixed(2)}
+                  </div>
+                </Link>
               </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: '1.25rem', fontWeight: '700', color: 'var(--color-primary)' }}>
-                  ${apt.service?.price?.toFixed(2) || '0.00'}
-                </div>
-                <div style={{ color: 'var(--color-text-light)', fontSize: '0.85rem' }}>
-                  {formatTime(apt.dateTime)}
-                </div>
-              </div>
-            </Link>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>
