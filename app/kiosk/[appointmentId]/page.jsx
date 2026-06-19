@@ -4,159 +4,25 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import { Suspense } from 'react'
 import Link from 'next/link'
-
-const TIP_PRESETS = [
-  { label: '15%', multiplier: 0.15 },
-  { label: '20%', multiplier: 0.20 },
-  { label: '25%', multiplier: 0.25 },
-]
-
-function TipSelection({ servicePrice, tipAmount, onTipChange }) {
-  const [customMode, setCustomMode] = useState(false)
-  const [customValue, setCustomValue] = useState('')
-
-  const handlePreset = (multiplier) => {
-    setCustomMode(false)
-    setCustomValue('')
-    onTipChange(Math.round(servicePrice * multiplier * 100) / 100)
-  }
-
-  const handleNoTip = () => {
-    setCustomMode(false)
-    setCustomValue('')
-    onTipChange(0)
-  }
-
-  const handleCustom = () => {
-    setCustomMode(true)
-    onTipChange(0)
-  }
-
-  const handleCustomChange = (e) => {
-    const val = e.target.value.replace(/[^0-9.]/g, '')
-    setCustomValue(val)
-    const parsed = parseFloat(val)
-    onTipChange(isNaN(parsed) || parsed < 0 ? 0 : Math.round(parsed * 100) / 100)
-  }
-
-  const isPresetActive = (multiplier) => {
-    if (customMode) return false
-    const expected = Math.round(servicePrice * multiplier * 100) / 100
-    return tipAmount === expected && tipAmount > 0
-  }
-
-  return (
-    <div style={{
-      background: 'var(--color-accent)', borderRadius: '12px', padding: '1.5rem',
-      border: '1px solid var(--color-border)', marginBottom: '2rem'
-    }}>
-      <h3 style={{ marginTop: 0, marginBottom: '1rem', textAlign: 'center' }}>Add a Tip?</h3>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', marginBottom: '1rem' }}>
-        {TIP_PRESETS.map(({ label, multiplier }) => {
-          const amount = Math.round(servicePrice * multiplier * 100) / 100
-          const active = isPresetActive(multiplier)
-          return (
-            <button
-              key={label}
-              onClick={() => handlePreset(multiplier)}
-              style={{
-                padding: '1rem 0.5rem',
-                borderRadius: '8px',
-                border: active ? '2px solid var(--color-primary)' : '2px solid var(--color-border)',
-                background: active ? 'var(--color-primary)' : 'white',
-                color: active ? 'white' : 'var(--color-text)',
-                cursor: 'pointer',
-                fontWeight: '600',
-                fontSize: '1rem',
-                textAlign: 'center',
-              }}
-            >
-              <div>{label}</div>
-              <div style={{ fontSize: '0.85rem', marginTop: '0.25rem', opacity: 0.8 }}>
-                ${amount.toFixed(2)}
-              </div>
-            </button>
-          )
-        })}
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-        <button
-          onClick={handleCustom}
-          style={{
-            padding: '0.75rem',
-            borderRadius: '8px',
-            border: customMode ? '2px solid var(--color-primary)' : '2px solid var(--color-border)',
-            background: customMode ? 'var(--color-primary)' : 'white',
-            color: customMode ? 'white' : 'var(--color-text)',
-            cursor: 'pointer',
-            fontWeight: '500',
-          }}
-        >
-          Custom
-        </button>
-        <button
-          onClick={handleNoTip}
-          style={{
-            padding: '0.75rem',
-            borderRadius: '8px',
-            border: tipAmount === 0 && !customMode ? '2px solid var(--color-primary)' : '2px solid var(--color-border)',
-            background: tipAmount === 0 && !customMode ? 'var(--color-primary)' : 'white',
-            color: tipAmount === 0 && !customMode ? 'white' : 'var(--color-text)',
-            cursor: 'pointer',
-            fontWeight: '500',
-          }}
-        >
-          No Tip
-        </button>
-      </div>
-
-      {customMode && (
-        <div style={{ marginTop: '1rem' }}>
-          <div style={{ position: 'relative' }}>
-            <span style={{
-              position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)',
-              fontSize: '1.1rem', color: 'var(--color-text-light)'
-            }}>$</span>
-            <input
-              type="text"
-              inputMode="decimal"
-              placeholder="0.00"
-              value={customValue}
-              onChange={handleCustomChange}
-              autoFocus
-              style={{
-                width: '100%',
-                padding: '1rem 1rem 1rem 2rem',
-                borderRadius: '8px',
-                border: '2px solid var(--color-primary)',
-                fontSize: '1.2rem',
-                fontWeight: '600',
-                boxSizing: 'border-box',
-              }}
-            />
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
+import TipSelection from '../components/TipSelection'
+import useSquarePayment, { resolveSquareLocation } from '../components/useSquarePayment'
+import KioskPaymentForm from '../components/KioskPaymentForm'
+import PaymentSuccess from '../components/PaymentSuccess'
 
 function PaymentContent() {
   const { appointmentId } = useParams()
 
   const [appointment, setAppointment] = useState(null)
-  const [vendor, setVendor] = useState(null)
+  const [squareLocationId, setSquareLocationId] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [card, setCard] = useState(null)
   const [paying, setPaying] = useState(false)
   const [paid, setPaid] = useState(false)
   const [error, setError] = useState(null)
   const [tipAmount, setTipAmount] = useState(0)
 
+  const { card } = useSquarePayment(squareLocationId, paid)
+
   useEffect(() => {
-    // Fetch this specific appointment
     fetch(`/api/kiosk/appointments?appointmentId=${appointmentId}`)
       .then(res => res.json())
       .then(data => {
@@ -164,91 +30,24 @@ function PaymentContent() {
         setAppointment(apt)
         setLoading(false)
 
-        // Resolve Square credentials: try staff → vendor → any connected staff on vendor
-        const loadVendorOrStaffFallback = (vendorId) => {
-          if (!vendorId) return
-          // Try vendor-level Square first
-          fetch(`/api/vendors?vendorId=${vendorId}`)
-            .then(res => res.json())
-            .then(vData => {
-              if (vData.vendor?.squareLocationId) {
-                setVendor(vData.vendor)
-              } else {
-                // No vendor Square — find any connected staff on this vendor
-                fetch(`/api/staff-schedules?vendorId=${vendorId}`)
-                  .then(res => res.json())
-                  .then(sData => {
-                    const connectedStaff = (sData.schedules || []).find(s =>
-                      s.squareLocationId && s.squareOAuthStatus === 'connected'
-                    )
-                    if (connectedStaff) {
-                      setVendor({ squareLocationId: connectedStaff.squareLocationId })
-                    }
-                  })
-                  .catch(() => {})
-              }
-            })
-            .catch(() => {})
-        }
-
         if (apt?.staffId) {
           fetch(`/api/staff-schedules?visibleId=${apt.staffId}`)
             .then(res => res.json())
             .then(sData => {
               const staff = sData.schedule
               if (staff?.squareLocationId && staff?.squareOAuthStatus === 'connected') {
-                setVendor({ squareLocationId: staff.squareLocationId })
+                setSquareLocationId(staff.squareLocationId)
               } else {
-                // Assigned staff doesn't have Square — fall back
-                loadVendorOrStaffFallback(apt.vendorId)
+                resolveSquareLocation(apt.vendorId, setSquareLocationId)
               }
             })
-            .catch(() => loadVendorOrStaffFallback(apt?.vendorId))
+            .catch(() => resolveSquareLocation(apt?.vendorId, setSquareLocationId))
         } else if (apt?.vendorId) {
-          loadVendorOrStaffFallback(apt.vendorId)
+          resolveSquareLocation(apt.vendorId, setSquareLocationId)
         }
       })
       .catch(() => { setError('Failed to load appointment'); setLoading(false) })
   }, [appointmentId])
-
-  // Initialize Square when vendor loads
-  useEffect(() => {
-    if (!vendor?.squareLocationId || paid) return
-    let isMounted = true
-
-    const loadSquare = async () => {
-      const src = process.env.NEXT_PUBLIC_SQUARE_ENVIRONMENT === 'production'
-        ? 'https://web.squarecdn.com/v1/square.js'
-        : 'https://sandbox.web.squarecdn.com/v1/square.js'
-
-      if (!window.Square) {
-        const script = document.createElement('script')
-        script.src = src
-        script.async = true
-        script.onload = () => { if (isMounted) initSquare() }
-        document.body.appendChild(script)
-      } else {
-        if (isMounted) initSquare()
-      }
-    }
-
-    const initSquare = async () => {
-      try {
-        const appId = process.env.NEXT_PUBLIC_SQUARE_APPLICATION_ID
-        const locationId = vendor.squareLocationId
-        if (!appId || !locationId) return
-        const payments = await window.Square.payments(appId, locationId)
-        const cardInstance = await payments.card()
-        await cardInstance.attach('#card-container')
-        setCard(cardInstance)
-      } catch (err) {
-        console.error('Square init error:', err)
-      }
-    }
-
-    loadSquare()
-    return () => { isMounted = false }
-  }, [vendor, paid])
 
   const totalDue = (appointment?.service?.price || 0) + tipAmount
 
@@ -265,7 +64,6 @@ function PaymentContent() {
         return
       }
 
-      // Process payment — routes to the correct vendor/staff automatically
       const payRes = await fetch('/api/payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -285,7 +83,6 @@ function PaymentContent() {
         return
       }
 
-      // Mark appointment as paid
       await fetch('/api/appointments', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -323,27 +120,11 @@ function PaymentContent() {
 
   if (paid) {
     return (
-      <div style={{ textAlign: 'center', padding: '3rem 2rem' }}>
-        <div style={{
-          background: '#d4edda', border: '2px solid #c3e6cb', borderRadius: '12px',
-          padding: '2rem', marginBottom: '2rem'
-        }}>
-          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>✓</div>
-          <h1 style={{ color: '#155724', marginBottom: '0.5rem' }}>Payment Received</h1>
-          <p style={{ color: '#155724', fontSize: '1.25rem', fontWeight: '600' }}>
-            ${totalDue.toFixed(2)}
-            {tipAmount > 0 && (
-              <span style={{ fontSize: '0.9rem', fontWeight: '400' }}> (includes ${tipAmount.toFixed(2)} tip)</span>
-            )}
-          </p>
-          <p style={{ color: '#155724' }}>
-            {appointment.customer?.name} · {appointment.vendorName}
-          </p>
-        </div>
-        <Link href="/kiosk" className="cta" style={{ display: 'inline-block' }}>
-          ← Back to checkout list
-        </Link>
-      </div>
+      <PaymentSuccess
+        totalDue={totalDue}
+        tipAmount={tipAmount}
+        customerName={`${appointment.customer?.name} · ${appointment.vendorName}`}
+      />
     )
   }
 
@@ -376,7 +157,7 @@ function PaymentContent() {
         </div>
       </div>
 
-      {vendor?.squareLocationId && (
+      {squareLocationId && (
         <TipSelection
           servicePrice={appointment.service?.price || 0}
           tipAmount={tipAmount}
@@ -399,36 +180,13 @@ function PaymentContent() {
         )}
       </div>
 
-      {!vendor?.squareLocationId ? (
+      {!squareLocationId ? (
         <div style={{ padding: '1.5rem', background: '#fff3cd', borderRadius: '8px', border: '1px solid #ffc107', textAlign: 'center' }}>
           <strong>Card payment not available</strong>
           <p style={{ margin: '0.5rem 0 0', fontSize: '0.9rem' }}>This vendor has not connected Square.</p>
         </div>
       ) : (
-        <>
-          <div style={{ marginBottom: '1.5rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Card Information</label>
-            <div id="card-container" style={{
-              minHeight: '100px', padding: '1rem', background: 'white', borderRadius: '8px',
-              border: '1px solid var(--color-border)'
-            }}></div>
-          </div>
-
-          {error && (
-            <div style={{ padding: '1rem', background: '#fee', border: '1px solid #f5c6cb', borderRadius: '8px', color: '#c33', marginBottom: '1rem', fontWeight: '500' }}>
-              {error}
-            </div>
-          )}
-
-          <button
-            onClick={handlePay}
-            disabled={paying || !card}
-            className="cta"
-            style={{ width: '100%', padding: '1.25rem', fontSize: '1.2rem', opacity: (paying || !card) ? 0.6 : 1 }}
-          >
-            {paying ? 'Processing...' : `Pay $${totalDue.toFixed(2)}`}
-          </button>
-        </>
+        <KioskPaymentForm totalDue={totalDue} paying={paying} card={card} error={error} onPay={handlePay} />
       )}
     </div>
   )

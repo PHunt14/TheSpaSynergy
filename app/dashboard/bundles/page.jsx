@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { fetchAuthSession } from 'aws-amplify/auth'
 import PropTypes from 'prop-types'
+import useIsMobile from '../../hooks/useIsMobile'
 
 const ALL_DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
 
@@ -44,6 +45,9 @@ export default function BundlesManagement() {
   const [editingBundle, setEditingBundle] = useState(null)
   const [currentUserRole, setCurrentUserRole] = useState(null)
   const [bundleSettings, setBundleSettings] = useState(null)
+  const [expandedBundleId, setExpandedBundleId] = useState(null)
+  const isMobile = useIsMobile()
+  const formRef = useRef(null)
   const [newBundle, setNewBundle] = useState({
     name: '',
     description: '',
@@ -199,7 +203,13 @@ export default function BundlesManagement() {
       minPeople: bundle.minPeople || '',
       maxPeople: bundle.maxPeople || ''
     })
-    setShowAddForm(true)
+    setShowAddForm(false)
+  }
+
+  const handleCancelEdit = () => {
+    setEditingBundle(null)
+    setShowAddForm(false)
+    setNewBundle({ name: '', description: '', selectedServices: [], discountPercent: 0, allowedDays: [], contactOnly: false, minPeople: '', maxPeople: '' })
   }
 
   const handleDelete = async (bundle) => {
@@ -328,10 +338,11 @@ export default function BundlesManagement() {
 
       <button
         onClick={() => {
-          setShowAddForm(!showAddForm)
           if (showAddForm) {
+            handleCancelEdit()
+          } else {
             setEditingBundle(null)
-            setNewBundle({ name: '', description: '', selectedServices: [], discountPercent: 0, allowedDays: [], contactOnly: false, minPeople: '', maxPeople: '' })
+            setShowAddForm(true)
           }
         }}
         className="cta"
@@ -340,7 +351,7 @@ export default function BundlesManagement() {
         {showAddForm ? 'Cancel' : '+ Create Pre-built Bundle'}
       </button>
 
-      {showAddForm && (
+      {showAddForm && !editingBundle && (
         <form onSubmit={handleSaveBundle} style={{
           background: 'var(--color-accent)',
           padding: '1.5rem',
@@ -483,70 +494,194 @@ export default function BundlesManagement() {
             )
           })()}
 
-          <button type="submit" className="cta">{editingBundle ? 'Update Bundle' : 'Create Bundle'}</button>
+          <button type="submit" className="cta">Create Bundle</button>
         </form>
       )}
 
       <div style={{ display: 'grid', gap: '1rem' }}>
-        {bundles.map(bundle => (
-          <div
-            key={bundle.bundleId}
-            style={{
-              background: 'var(--color-accent)',
-              padding: '1.5rem',
-              borderRadius: '8px',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'start'
-            }}
-          >
-            <div>
-              <h3 style={{ marginBottom: '0.5rem' }}>{bundle.name}</h3>
-              {bundle.description && (
-                <p style={{ color: 'var(--color-text)', fontSize: '0.9rem', marginBottom: '0.5rem' }}>
-                  {bundle.description}
-                </p>
-              )}
-              <p style={{ color: 'var(--color-text-light)', fontSize: '0.9rem', marginBottom: '0.5rem' }}>
-                {bundle.discountPercent}% discount • ${bundle.price?.toFixed(2)}
-                {bundle.vendorIds?.length > 1 && ` • 🔗 ${bundle.vendorIds.length} vendors`}
-                {bundle.contactOnly && ' • 📞 Contact only'}
-                {(bundle.minPeople || bundle.maxPeople) && ` • 👥 ${bundle.minPeople || 1}–${bundle.maxPeople || '∞'} people`}
-                {bundle.allowedDays?.length > 0 && (
-                  <> • {bundle.allowedDays.map(d => d.charAt(0).toUpperCase() + d.slice(0, 3)).join(', ')}</>
+        {bundles.map(bundle => {
+          const isExpanded = expandedBundleId === bundle.bundleId
+          const isEditing = editingBundle?.bundleId === bundle.bundleId
+
+          return (
+            <div key={bundle.bundleId}>
+              <div
+                onClick={() => { if (isMobile) setExpandedBundleId(isExpanded ? null : bundle.bundleId) }}
+                onKeyDown={(e) => { if (isMobile && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setExpandedBundleId(isExpanded ? null : bundle.bundleId) } }}
+                role={isMobile ? 'button' : undefined}
+                tabIndex={isMobile ? 0 : undefined}
+                aria-expanded={isMobile ? isExpanded : undefined}
+                style={{
+                  background: 'var(--color-accent)',
+                  padding: '1.5rem',
+                  borderRadius: '8px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: isMobile ? 'flex-start' : 'center',
+                  flexDirection: isMobile ? 'column' : 'row',
+                  cursor: isMobile ? 'pointer' : 'default'
+                }}
+              >
+                <div style={{ width: '100%' }}>
+                  <h3 style={{ marginBottom: '0.5rem' }}>
+                    {bundle.name}
+                    {isMobile && (
+                      <span style={{ float: 'right', fontSize: '0.75rem', color: 'var(--color-text-light)' }}>
+                        {isExpanded ? '▲' : '▼'}
+                      </span>
+                    )}
+                  </h3>
+                  {bundle.description && (
+                    <p style={{ color: 'var(--color-text)', fontSize: '0.9rem', marginBottom: '0.5rem' }}>
+                      {bundle.description}
+                    </p>
+                  )}
+                  <p style={{ color: 'var(--color-text-light)', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
+                    {bundle.discountPercent}% discount • ${bundle.price?.toFixed(2)}
+                    {bundle.vendorIds?.length > 1 && ` • 🔗 ${bundle.vendorIds.length} vendors`}
+                    {bundle.contactOnly && ' • 📞 Contact only'}
+                    {(bundle.minPeople || bundle.maxPeople) && ` • 👥 ${bundle.minPeople || 1}–${bundle.maxPeople || '∞'} people`}
+                    {bundle.allowedDays?.length > 0 && (
+                      <> • {bundle.allowedDays.map(d => d.charAt(0).toUpperCase() + d.slice(0, 3)).join(', ')}</>
+                    )}
+                  </p>
+                  <div style={{ fontSize: '0.85rem', color: 'var(--color-text-light)' }}>
+                    <strong>Services:</strong> {bundle.serviceIds?.map(svcId => getServiceName(svcId)).join(', ')}
+                  </div>
+                  {isMobile && !isExpanded && (
+                    <span style={{ display: 'inline-block', marginTop: '0.4rem', fontSize: '0.75rem', padding: '0.2rem 0.5rem', borderRadius: '4px', background: bundle.isActive ? '#e8f5e9' : '#eee', color: bundle.isActive ? '#2e7d32' : '#666' }}>
+                      {bundle.isActive ? '● Active' : '○ Inactive'}
+                    </span>
+                  )}
+                </div>
+
+                {/* Desktop: always show buttons */}
+                {!isMobile && (
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexShrink: 0 }}>
+                    <button onClick={() => handleEdit(bundle)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: 'var(--color-primary)', color: 'white' }}>Edit</button>
+                    <button onClick={() => handleToggleActive(bundle)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: bundle.isActive ? '#4CAF50' : '#999', color: 'white' }}>{bundle.isActive ? 'Active' : 'Inactive'}</button>
+                    <button onClick={() => handleDelete(bundle)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: '#f44336', color: 'white' }}>Delete</button>
+                  </div>
                 )}
-              </p>
-              <div style={{ fontSize: '0.85rem', color: 'var(--color-text-light)' }}>
-                <strong>Services:</strong>
-                <ul style={{ marginTop: '0.25rem', paddingLeft: '1.5rem' }}>
-                  {bundle.serviceIds?.map(svcId => (
-                    <li key={svcId}>{getServiceName(svcId)}</li>
-                  ))}
-                </ul>
+
+                {/* Mobile: show actions when expanded */}
+                {isMobile && isExpanded && (
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.75rem', width: '100%' }} onClick={(e) => e.stopPropagation()} role="group" aria-label="Bundle actions" onKeyDown={(e) => e.stopPropagation()}>
+                    <button onClick={() => handleEdit(bundle)} style={{ padding: '0.5rem 0.75rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: 'var(--color-primary)', color: 'white', fontSize: '0.85rem', flex: '1 1 auto' }}>✏️ Edit</button>
+                    <button onClick={() => handleToggleActive(bundle)} style={{ padding: '0.5rem 0.75rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: bundle.isActive ? '#4CAF50' : '#999', color: 'white', fontSize: '0.85rem', flex: '1 1 auto' }}>{bundle.isActive ? '✓ Active' : '○ Inactive'}</button>
+                    <button onClick={() => handleDelete(bundle)} style={{ padding: '0.5rem 0.75rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: '#f44336', color: 'white', fontSize: '0.85rem', flex: '1 1 auto' }}>🗑 Delete</button>
+                  </div>
+                )}
               </div>
+
+              {/* Inline edit form */}
+              {isEditing && (
+                <form ref={formRef} onSubmit={handleSaveBundle} style={{
+                  background: '#fff8f0',
+                  padding: '1.5rem',
+                  borderRadius: '8px',
+                  border: '2px solid var(--color-primary)',
+                  marginTop: '0.5rem'
+                }}>
+                  <h3>Editing: {editingBundle.name}</h3>
+
+                  <div style={{ marginBottom: '1rem' }}>
+                    <label style={{ display: 'block', marginBottom: '0.5rem' }}>Bundle Name *</label>
+                    <input type="text" required value={newBundle.name} onChange={(e) => setNewBundle(prev => ({ ...prev, name: e.target.value }))}
+                      style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)' }} />
+                  </div>
+
+                  <div style={{ marginBottom: '1rem' }}>
+                    <label style={{ display: 'block', marginBottom: '0.5rem' }}>Description</label>
+                    <textarea value={newBundle.description} onChange={(e) => setNewBundle(prev => ({ ...prev, description: e.target.value }))} rows="3"
+                      style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', resize: 'vertical' }} />
+                  </div>
+
+                  <div style={{ marginBottom: '1rem' }}>
+                    <label style={{ display: 'block', marginBottom: '0.5rem' }}>Discount Percent (%)</label>
+                    <input type="number" min="0" max="100" step="0.1" value={newBundle.discountPercent} onChange={(e) => setNewBundle(prev => ({ ...prev, discountPercent: parseFloat(e.target.value) }))}
+                      style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)' }} />
+                  </div>
+
+                  <div style={{ marginBottom: '1rem' }}>
+                    <label style={{ display: 'block', marginBottom: '0.5rem' }}>Allowed Days (leave empty for any day)</label>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
+                      {ALL_DAYS.map(day => (
+                        <label key={day} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', textTransform: 'capitalize' }}>
+                          <input type="checkbox" checked={newBundle.allowedDays.includes(day)}
+                            onChange={(e) => {
+                              setNewBundle(prev => ({
+                                ...prev,
+                                allowedDays: e.target.checked ? [...prev.allowedDays, day] : prev.allowedDays.filter(d => d !== day)
+                              }))
+                            }}
+                            style={{ width: '18px', height: '18px' }} />
+                          {day}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div style={{ marginBottom: '1rem' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={newBundle.contactOnly} onChange={(e) => setNewBundle(prev => ({ ...prev, contactOnly: e.target.checked }))}
+                        style={{ width: '18px', height: '18px' }} />
+                      <span>Contact Only (customer must call/email to book this bundle)</span>
+                    </label>
+                  </div>
+
+                  <div style={{ marginBottom: '1rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '0.5rem' }}>Min People</label>
+                      <input type="number" min="1" value={newBundle.minPeople} onChange={(e) => setNewBundle(prev => ({ ...prev, minPeople: e.target.value }))}
+                        placeholder="No minimum" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '0.5rem' }}>Max People</label>
+                      <input type="number" min="1" value={newBundle.maxPeople} onChange={(e) => setNewBundle(prev => ({ ...prev, maxPeople: e.target.value }))}
+                        placeholder="No maximum" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)' }} />
+                    </div>
+                  </div>
+
+                  <div style={{ marginBottom: '1rem' }}>
+                    <label style={{ display: 'block', marginBottom: '0.5rem' }}>Select Services *</label>
+                    <div style={{ maxHeight: '300px', overflowY: 'auto', border: '1px solid var(--color-border)', borderRadius: '8px', padding: '1rem' }}>
+                      {vendors.map(vendor => (
+                        <VendorServiceCheckboxes
+                          key={vendor.vendorId}
+                          vendor={vendor}
+                          services={services}
+                          selectedServices={newBundle.selectedServices}
+                          onToggle={(serviceId, checked) => {
+                            setNewBundle(prev => ({
+                              ...prev,
+                              selectedServices: checked
+                                ? [...prev.selectedServices, serviceId]
+                                : prev.selectedServices.filter(id => id !== serviceId)
+                            }))
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  {newBundle.selectedServices.length > 0 && (
+                    <div style={{ background: 'white', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
+                      <p><strong>Total Price:</strong> ${calculateTotal().toFixed(2)}</p>
+                      <p><strong>Discount:</strong> {newBundle.discountPercent}%</p>
+                      <p><strong>Final Price:</strong> ${(calculateTotal() * (1 - newBundle.discountPercent / 100)).toFixed(2)}</p>
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', gap: '1rem' }}>
+                    <button type="submit" className="cta">Update Bundle</button>
+                    <button type="button" onClick={handleCancelEdit} style={{ padding: '0.75rem 1.5rem', borderRadius: '8px', border: '1px solid var(--color-border)', cursor: 'pointer', background: 'white', fontSize: '1rem' }}>Cancel</button>
+                  </div>
+                </form>
+              )}
             </div>
-            <div style={{ display: 'flex', gap: '0.5rem', flexDirection: 'column' }}>
-              <button
-                onClick={() => handleEdit(bundle)}
-                style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: 'var(--color-primary)', color: 'white' }}
-              >
-                Edit
-              </button>
-              <button
-                onClick={() => handleToggleActive(bundle)}
-                style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: bundle.isActive ? '#4CAF50' : '#999', color: 'white' }}
-              >
-                {bundle.isActive ? 'Active' : 'Inactive'}
-              </button>
-              <button
-                onClick={() => handleDelete(bundle)}
-                style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: '#f44336', color: 'white' }}
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       {bundles.length === 0 && (
