@@ -22,17 +22,16 @@ const config = {
       transform: {
         '^.+\\.(js|jsx|ts|tsx|mjs)$': ['ts-jest', {
           tsconfig: 'tsconfig.json',
-          useESM: true,
+          useESM: false,
           jsx: 'react-jsx',
         }],
       },
-      extensionsToTreatAsEsm: ['.ts', '.tsx', '.jsx'],
       testMatch: ['**/__tests__/components/**/*.test.(jsx|tsx)'],
       testPathIgnorePatterns: ['/node_modules/', '/services/'],
       moduleNameMapper: {
         '^@/(.*)$': '<rootDir>/$1',
       },
-      transformIgnorePatterns: ['/node_modules/(?!(@testing-library)/)'],
+      transformIgnorePatterns: ['/node_modules/(?!(@testing-library|react-datepicker|clsx|rxjs)/)'],
     },
   ],
 }

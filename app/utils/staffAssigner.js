@@ -58,7 +58,10 @@ export function assignStaff({ service, staffSchedules, appointments, date, time,
     const countA = bookingCounts.get(a.visibleId)
     const countB = bookingCounts.get(b.visibleId)
     if (countA !== countB) return countA - countB
-    return Math.random() - 0.5
+    // Break ties with crypto-safe random to satisfy security scanners
+    const arr = new Uint32Array(1)
+    crypto.getRandomValues(arr)
+    return arr[0] % 2 === 0 ? -1 : 1
   })
 
   // 3. Return exactly providersRequired staff members
