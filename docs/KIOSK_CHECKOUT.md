@@ -8,11 +8,17 @@ The kiosk is **cross-vendor** — it shows all unpaid appointments across all ve
 
 ## How It Works
 
-1. **Staff signs in** once at the start of the day (Cognito auth, no inactivity timeout)
-2. **Page shows** today's unpaid appointments across all vendors
+1. **Staff signs in** once at the start of the day (PIN-based auth, no inactivity timeout)
+2. **Page shows** today's unpaid appointments across all vendors, grouped by customer
 3. **Staff taps** an appointment → service summary, vendor, and total are displayed
 4. **Customer taps** "Pay" → Square payment form appears
 5. **On success** → appointment is marked as paid, payment routed to the correct vendor/staff
+
+### Bundle & Multi-Service Support
+
+- **Packages** — Appointments with a `bundleId` are grouped and displayed as a single "📦 Package" card. Tapping pays the full bundle with discount applied, split across vendors.
+- **Multiple services, same customer** — When a customer has multiple unpaid appointments (not a bundle), each is shown individually with a "💳 Pay all at once" option below. Staff can either pay services individually or combine them into a single transaction.
+- **Multi-vendor combined payments** — Both bundle and multi-service payments use Square's `additionalRecipients` to split funds across vendors in one charge.
 
 ## Authentication
 
@@ -82,29 +88,40 @@ Uses the same Square Web Payments SDK already integrated for online booking chec
 
 | Component | Description |
 |-----------|-------------|
-| `app/kiosk/layout.jsx` | Kiosk layout with Cognito auth, no inactivity timeout |
-| `app/kiosk/page.jsx` | Today's unpaid appointments across all vendors |
+| `app/kiosk/layout.jsx` | Kiosk layout with PIN auth, no inactivity timeout |
+| `app/kiosk/page.jsx` | Today's unpaid appointments, grouped by customer and bundle |
 | `app/kiosk/[appointmentId]/page.jsx` | Payment screen for a single appointment |
+| `app/kiosk/bundle/[bundleId]/page.jsx` | Payment screen for a package (bundle discount + multi-vendor split) |
+| `app/kiosk/multi/page.jsx` | Payment screen for multiple appointments combined (same customer) |
+| `app/kiosk/components/TipSelection.jsx` | Shared tip UI (15%/20%/25%/custom/none) |
+| `app/kiosk/components/useSquarePayment.js` | Shared hook for Square SDK init + location resolver |
+| `app/kiosk/components/KioskPaymentForm.jsx` | Shared card input, error, and pay button |
+| `app/kiosk/components/PaymentSuccess.jsx` | Shared payment success screen |
 | `app/api/kiosk/appointments/route.ts` | API: today's unpaid appointments across all vendors |
 | `app/api/appointments/route.ts` (PATCH) | Added PATCH handler to mark appointments as paid |
 
 ## Page Flow
 
 ```
-┌─────────────────────┐     ┌──────────────────────────┐     ┌─────────────────────┐     ┌─────────────────────┐
-│  Kiosk Home         │     │  Appointment Detail       │     │  Tip + Payment       │     │  Payment Complete    │
-│  /kiosk             │     │  /kiosk/[id]              │     │                      │     │                     │
-│                     │     │                           │     │  Add a Tip?          │     │  ✓ Payment received │
-│  Today's Unpaid:    │     │  Customer: Jane D.        │     │                      │     │                     │
-│                     │────▶│  Service: 60min Massage   │────▶│  [15%] [20%] [25%]   │────▶│  Total: $78.00      │
-│  Jane D.    $65     │     │  Vendor: Winsome Woods    │     │  [Custom] [No Tip]   │     │  (incl. $13 tip)    │
-│  Winsome Woods      │     │  With: Makaila            │     │                      │     │  Jane D.            │
-│                     │     │  Total: $65.00            │     │  Total: $78.00       │     │  Winsome Woods      │
-│  John S.    $65     │     │                           │     │  (Service $65 + $13) │     │                     │
-│  The Kera Studio    │     │  [Continue to Payment]    │     │                      │     │  [Back to list]     │
-└─────────────────────┘     └──────────────────────────┘     │  [Card Input]        │     └─────────────────────┘
-                                                              │  [Pay $78.00]        │
-                                                              └──────────────────────┘
+┌─────────────────────────┐
+│  Kiosk Home             │
+│  /kiosk                 │
+│                         │
+│  📦 Package: Jane D.   │──── tap ────▶ /kiosk/bundle/[bundleId]
+│     Massage + Facial    │
+│     $120                │
+│                         │
+│  Mary K. — Massage $65  │──── tap ────▶ /kiosk/[appointmentId]
+│  Winsome Woods          │
+│                         │
+│  John S. — Facial $65   │──── tap ────▶ /kiosk/[appointmentId]
+│  John S. — Haircut $45  │──── tap ────▶ /kiosk/[appointmentId]
+│  💳 Pay all 2 for John  │──── tap ────▶ /kiosk/multi?ids=apt-1,apt-2
+│     $110                │
+└─────────────────────────┘
+
+All payment pages share the same flow:
+  Summary → Tip Selection → Card Input → Pay → ✓ Success
 ```
 
 ## API
@@ -115,6 +132,7 @@ Returns today's unpaid appointments across all active vendors.
 
 **Optional params:**
 - `appointmentId` — filter to a single appointment (used by the payment page)
+- `bundleId` — filter to all appointments in a bundle (used by bundle payment page)
 
 **Response:**
 ```json
@@ -126,10 +144,11 @@ Returns today's unpaid appointments across all active vendors.
       "vendorName": "Winsome Woods",
       "serviceId": "svc-massage-60",
       "staffId": "staff-makaila",
+      "bundleId": null,
       "dateTime": "2025-01-15T10:00:00",
       "status": "pending",
       "customer": { "name": "Jane D." },
-      "service": { "name": "60min Massage", "duration": 60, "price": 65 },
+      "service": { "name": "60min Massage", "duration": 60, "price": 65, "houseFeeEnabled": true, "houseFeeAmount": 20 },
       "staffName": "Makaila"
     }
   ]
@@ -156,7 +175,7 @@ Updates appointment payment fields after successful kiosk payment.
 |----------|---------|--------|
 | ~~**Tipping?**~~ | ~~Tip screen before payment (%, custom amount)~~ | ✅ Implemented — see Tipping section below |
 | **Receipts** | Email, SMS, printed, or none | May need receipt email/text input at checkout |
-| **Partial payments** | Can a customer pay for only some services in a bundle? | Payment splitting complexity |
+| ~~**Partial payments**~~ | ~~Can a customer pay for only some services in a bundle?~~ | ✅ Resolved — customers can pay individual services or all at once |
 | **Walk-ins** | Can staff create an appointment + pay in one flow? | Needs inline appointment creation |
 
 ---
