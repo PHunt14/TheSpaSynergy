@@ -52,6 +52,16 @@ function KioskContent() {
     }
   })
 
+  // Group individual appointments by customer name
+  const customerGroups = {}
+  individualAppointments.forEach(apt => {
+    const name = apt.customer?.name || 'Walk-in'
+    if (!customerGroups[name]) {
+      customerGroups[name] = []
+    }
+    customerGroups[name].push(apt)
+  })
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
@@ -130,40 +140,105 @@ function KioskContent() {
             )
           })}
 
-          {/* Individual appointments */}
-          {individualAppointments.map(apt => (
-            <Link
-              key={apt.appointmentId}
-              href={`/kiosk/${apt.appointmentId}`}
-              style={{
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                padding: '1.5rem', background: 'white', borderRadius: '12px',
-                border: '1px solid var(--color-border)', textDecoration: 'none', color: 'inherit',
-                cursor: 'pointer'
-              }}
-            >
-              <div>
-                <div style={{ fontSize: '1.1rem', fontWeight: '600', marginBottom: '0.25rem' }}>
-                  {apt.customer?.name || 'Walk-in'}
-                </div>
-                <div style={{ color: 'var(--color-text-light)', fontSize: '0.9rem' }}>
-                  {apt.service?.name || 'Service'} · {apt.service?.duration} min
-                  {apt.staffName && ` · ${apt.staffName}`}
-                </div>
-                <div style={{ color: 'var(--color-primary)', fontSize: '0.8rem', marginTop: '0.25rem' }}>
-                  {apt.vendorName}
-                </div>
+          {/* Customer groups — single service goes directly, multiple services show individually + combined option */}
+          {Object.entries(customerGroups).map(([customerName, custApts]) => {
+            if (custApts.length === 1) {
+              const apt = custApts[0]
+              return (
+                <Link
+                  key={apt.appointmentId}
+                  href={`/kiosk/${apt.appointmentId}`}
+                  style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    padding: '1.5rem', background: 'white', borderRadius: '12px',
+                    border: '1px solid var(--color-border)', textDecoration: 'none', color: 'inherit',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: '600', marginBottom: '0.25rem' }}>
+                      {apt.customer?.name || 'Walk-in'}
+                    </div>
+                    <div style={{ color: 'var(--color-text-light)', fontSize: '0.9rem' }}>
+                      {apt.service?.name || 'Service'} · {apt.service?.duration} min
+                      {apt.staffName && ` · ${apt.staffName}`}
+                    </div>
+                    <div style={{ color: 'var(--color-primary)', fontSize: '0.8rem', marginTop: '0.25rem' }}>
+                      {apt.vendorName}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: '1.25rem', fontWeight: '700', color: 'var(--color-primary)' }}>
+                      ${apt.service?.price?.toFixed(2) || '0.00'}
+                    </div>
+                    <div style={{ color: 'var(--color-text-light)', fontSize: '0.85rem' }}>
+                      {formatTime(apt.dateTime)}
+                    </div>
+                  </div>
+                </Link>
+              )
+            }
+
+            // Multiple appointments for the same customer — show each individually plus a "pay all" option
+            const totalPrice = custApts.reduce((sum, apt) => sum + (apt.service?.price || 0), 0)
+            const aptIds = custApts.map(a => a.appointmentId).join(',')
+
+            return (
+              <div key={`customer-${customerName}`} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {/* Individual appointment links */}
+                {custApts.map(apt => (
+                  <Link
+                    key={apt.appointmentId}
+                    href={`/kiosk/${apt.appointmentId}`}
+                    style={{
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      padding: '1.5rem', background: 'white', borderRadius: '12px',
+                      border: '1px solid var(--color-border)', textDecoration: 'none', color: 'inherit',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: '1.1rem', fontWeight: '600', marginBottom: '0.25rem' }}>
+                        {apt.customer?.name || 'Walk-in'}
+                      </div>
+                      <div style={{ color: 'var(--color-text-light)', fontSize: '0.9rem' }}>
+                        {apt.service?.name || 'Service'} · {apt.service?.duration} min
+                        {apt.staffName && ` · ${apt.staffName}`}
+                      </div>
+                      <div style={{ color: 'var(--color-primary)', fontSize: '0.8rem', marginTop: '0.25rem' }}>
+                        {apt.vendorName}
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '1.25rem', fontWeight: '700', color: 'var(--color-primary)' }}>
+                        ${apt.service?.price?.toFixed(2) || '0.00'}
+                      </div>
+                      <div style={{ color: 'var(--color-text-light)', fontSize: '0.85rem' }}>
+                        {formatTime(apt.dateTime)}
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+                {/* Pay all at once option */}
+                <Link
+                  href={`/kiosk/multi?ids=${aptIds}`}
+                  style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    padding: '1rem 1.5rem', background: '#f0f8ff', borderRadius: '8px',
+                    border: '1px dashed var(--color-primary)', textDecoration: 'none', color: 'inherit',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <div style={{ fontSize: '0.9rem', color: 'var(--color-primary)', fontWeight: '600' }}>
+                    💳 Pay all {custApts.length} services for {customerName} at once
+                  </div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: '700', color: 'var(--color-primary)' }}>
+                    ${totalPrice.toFixed(2)}
+                  </div>
+                </Link>
               </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: '1.25rem', fontWeight: '700', color: 'var(--color-primary)' }}>
-                  ${apt.service?.price?.toFixed(2) || '0.00'}
-                </div>
-                <div style={{ color: 'var(--color-text-light)', fontSize: '0.85rem' }}>
-                  {formatTime(apt.dateTime)}
-                </div>
-              </div>
-            </Link>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>
