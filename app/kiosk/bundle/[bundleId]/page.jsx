@@ -6,6 +6,9 @@ import { Suspense } from 'react'
 import Link from 'next/link'
 import { calculateBundlePaymentSplit } from '../../../utils/bundlePaymentSplit.js'
 import TipSelection from '../../components/TipSelection'
+import useSquarePayment, { resolveSquareLocation } from '../../components/useSquarePayment'
+import KioskPaymentForm from '../../components/KioskPaymentForm'
+import PaymentSuccess from '../../components/PaymentSuccess'
 
 function BundlePaymentContent() {
   const { bundleId } = useParams()
@@ -14,12 +17,13 @@ function BundlePaymentContent() {
   const [bundle, setBundle] = useState(null)
   const [vendors, setVendors] = useState([])
   const [loading, setLoading] = useState(true)
-  const [card, setCard] = useState(null)
   const [paying, setPaying] = useState(false)
   const [paid, setPaid] = useState(false)
   const [error, setError] = useState(null)
   const [tipAmount, setTipAmount] = useState(0)
   const [squareLocationId, setSquareLocationId] = useState(null)
+
+  const { card } = useSquarePayment(squareLocationId, paid)
 
   useEffect(() => {
     Promise.all([
@@ -35,71 +39,14 @@ function BundlePaymentContent() {
         const foundBundle = bundleData.bundles?.find(b => b.bundleId === bundleId)
         setBundle(foundBundle)
 
-        // Resolve Square location from the first appointment's vendor
         if (apts.length > 0) {
-          const firstVendorId = apts[0].vendorId
-          fetch(`/api/vendors?vendorId=${firstVendorId}`)
-            .then(r => r.json())
-            .then(vData => {
-              if (vData.vendor?.squareLocationId) {
-                setSquareLocationId(vData.vendor.squareLocationId)
-              } else {
-                fetch(`/api/staff-schedules?vendorId=${firstVendorId}`)
-                  .then(r => r.json())
-                  .then(sData => {
-                    const connected = (sData.schedules || []).find(s =>
-                      s.squareLocationId && s.squareOAuthStatus === 'connected'
-                    )
-                    if (connected) setSquareLocationId(connected.squareLocationId)
-                  })
-                  .catch(() => {})
-              }
-            })
-            .catch(() => {})
+          resolveSquareLocation(apts[0].vendorId, setSquareLocationId)
         }
 
         setLoading(false)
       })
       .catch(() => { setError('Failed to load bundle'); setLoading(false) })
   }, [bundleId])
-
-  // Initialize Square when location loads
-  useEffect(() => {
-    if (!squareLocationId || paid) return
-    let isMounted = true
-
-    const loadSquare = async () => {
-      const src = process.env.NEXT_PUBLIC_SQUARE_ENVIRONMENT === 'production'
-        ? 'https://web.squarecdn.com/v1/square.js'
-        : 'https://sandbox.web.squarecdn.com/v1/square.js'
-
-      if (!window.Square) {
-        const script = document.createElement('script')
-        script.src = src
-        script.async = true
-        script.onload = () => { if (isMounted) initSquare() }
-        document.body.appendChild(script)
-      } else {
-        if (isMounted) initSquare()
-      }
-    }
-
-    const initSquare = async () => {
-      try {
-        const appId = process.env.NEXT_PUBLIC_SQUARE_APPLICATION_ID
-        if (!appId || !squareLocationId) return
-        const payments = await window.Square.payments(appId, squareLocationId)
-        const cardInstance = await payments.card()
-        await cardInstance.attach('#card-container')
-        setCard(cardInstance)
-      } catch (err) {
-        console.error('Square init error:', err)
-      }
-    }
-
-    loadSquare()
-    return () => { isMounted = false }
-  }, [squareLocationId, paid])
 
   // Calculate bundle price and payment split
   const subtotal = appointments.reduce((sum, apt) => sum + (apt.service?.price || 0), 0)
@@ -179,30 +126,12 @@ function BundlePaymentContent() {
 
   if (paid) {
     return (
-      <div style={{ textAlign: 'center', padding: '3rem 2rem' }}>
-        <div style={{
-          background: '#d4edda', border: '2px solid #c3e6cb', borderRadius: '12px',
-          padding: '2rem', marginBottom: '2rem'
-        }}>
-          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>✓</div>
-          <h1 style={{ color: '#155724', marginBottom: '0.5rem' }}>Payment Received</h1>
-          <p style={{ color: '#155724', fontSize: '1.25rem', fontWeight: '600' }}>
-            ${totalDue.toFixed(2)}
-            {tipAmount > 0 && (
-              <span style={{ fontSize: '0.9rem', fontWeight: '400' }}> (includes ${tipAmount.toFixed(2)} tip)</span>
-            )}
-          </p>
-          <p style={{ color: '#155724' }}>
-            {appointments[0]?.customer?.name} · {bundle?.name || 'Package'}
-          </p>
-          <p style={{ color: '#155724', fontSize: '0.9rem' }}>
-            {appointments.length} services paid across {[...new Set(appointments.map(a => a.vendorName))].join(', ')}
-          </p>
-        </div>
-        <Link href="/kiosk" className="cta" style={{ display: 'inline-block' }}>
-          ← Back to checkout list
-        </Link>
-      </div>
+      <PaymentSuccess
+        totalDue={totalDue}
+        tipAmount={tipAmount}
+        customerName={`${appointments[0]?.customer?.name} · ${bundle?.name || 'Package'}`}
+        subtitle={`${appointments.length} services paid across ${[...new Set(appointments.map(a => a.vendorName))].join(', ')}`}
+      />
     )
   }
 
@@ -317,30 +246,7 @@ function BundlePaymentContent() {
           <p style={{ margin: '0.5rem 0 0', fontSize: '0.9rem' }}>Vendors in this package have not connected Square.</p>
         </div>
       ) : (
-        <>
-          <div style={{ marginBottom: '1.5rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Card Information</label>
-            <div id="card-container" style={{
-              minHeight: '100px', padding: '1rem', background: 'white', borderRadius: '8px',
-              border: '1px solid var(--color-border)'
-            }}></div>
-          </div>
-
-          {error && (
-            <div style={{ padding: '1rem', background: '#fee', border: '1px solid #f5c6cb', borderRadius: '8px', color: '#c33', marginBottom: '1rem', fontWeight: '500' }}>
-              {error}
-            </div>
-          )}
-
-          <button
-            onClick={handlePay}
-            disabled={paying || !card}
-            className="cta"
-            style={{ width: '100%', padding: '1.25rem', fontSize: '1.2rem', opacity: (paying || !card) ? 0.6 : 1 }}
-          >
-            {paying ? 'Processing...' : `Pay $${totalDue.toFixed(2)}`}
-          </button>
-        </>
+        <KioskPaymentForm totalDue={totalDue} paying={paying} card={card} error={error} onPay={handlePay} />
       )}
     </div>
   )
