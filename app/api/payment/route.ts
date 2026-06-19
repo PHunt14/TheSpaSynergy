@@ -636,7 +636,7 @@ async function processMultiProviderPayment(sourceId: string, totalAmount: number
           paymentId: paymentResponse.paymentId,
           paymentStatus: paymentResponse.status,
           paymentAmount,
-        });
+        } as any);
       })
     );
   }
