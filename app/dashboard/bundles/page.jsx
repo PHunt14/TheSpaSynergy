@@ -3,17 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { fetchAuthSession } from 'aws-amplify/auth'
 import PropTypes from 'prop-types'
-
-function useIsMobile(breakpoint = 768) {
-  const [isMobile, setIsMobile] = useState(false)
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < breakpoint)
-    check()
-    window.addEventListener('resize', check)
-    return () => window.removeEventListener('resize', check)
-  }, [breakpoint])
-  return isMobile
-}
+import useIsMobile from '../../hooks/useIsMobile'
 
 const ALL_DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
 
