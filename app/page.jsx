@@ -24,11 +24,14 @@ export default function Home() {
         </p>
         <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginTop: '1.5rem', flexWrap: 'wrap' }}>
           <a href="/services" className="cta">Book an Appointment</a>
-          <a href="/vendors" className="cta" style={{ background: 'var(--color-primary)' }}>Get to Know Us</a>
+          <a href="/bundles" className="cta" style={{ background: 'var(--color-primary)' }}>View Packages</a>
         </div>
         <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginTop: '1rem', flexWrap: 'wrap' }}>
           <a href="/sauna" className="cta" style={{ background: 'var(--color-warm)' }}>Book the Sauna</a>
           <a href="/spa-room" className="cta" style={{ background: '#7B6D8F' }}>Book the Spa Room</a>
+        </div>
+        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginTop: '1rem', flexWrap: 'wrap' }}>
+          <a href="/vendors" className="cta" style={{ background: 'transparent', border: '2px solid var(--color-primary)', color: 'var(--color-primary)' }}>Get to Know Us</a>
         </div>
       </section>
 
@@ -91,6 +94,22 @@ export default function Home() {
               <p style={{ color: 'var(--color-text-light)' }}>Prepare and relax for your special occasions with our group services and event packages.</p>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* Packages Section */}
+      <section style={{ padding: '4rem 2rem', maxWidth: '1200px', margin: '0 auto', textAlign: 'center' }}>
+        <CherryBlossomHeading text="Spa Packages" />
+        <p style={{ color: 'var(--color-text-light)', maxWidth: '700px', margin: '1rem auto 2rem' }}>
+          Save with our curated wellness experiences — bundled services at a special price. Perfect for groups, couples, or a personal retreat.
+        </p>
+        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+          <a href="/bundles" className="cta" style={{ background: 'var(--color-primary)' }}>
+            View Packages & Pricing
+          </a>
+          <a href="tel:240-329-6537" className="cta" style={{ background: 'transparent', border: '2px solid var(--color-primary)', color: 'var(--color-primary)' }}>
+            📞 Call to Book a Package
+          </a>
         </div>
       </section>
 

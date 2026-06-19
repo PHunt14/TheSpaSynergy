@@ -118,12 +118,15 @@ export default function ServicesPage() {
 
   const [allServicesRaw, setAllServicesRaw] = useState([])
 
+  const [bundles, setBundles] = useState([])
+
   useEffect(() => {
     Promise.all([
       fetch('/api/vendors').then(r => r.json()),
-      fetch('/api/services').then(r => r.json())
+      fetch('/api/services').then(r => r.json()),
+      fetch('/api/bundles').then(r => r.json())
     ])
-      .then(([vendorData, serviceData]) => {
+      .then(([vendorData, serviceData, bundleData]) => {
         const v = [...(vendorData.vendors || [])]
         for (let i = v.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
@@ -134,6 +137,7 @@ export default function ServicesPage() {
         setAllServicesRaw(active)
         // Only show parent services (not addons) in the main list
         setServices(active.filter(s => !(s.parentServiceIds?.length > 0)))
+        setBundles((bundleData.bundles || []).filter(b => b.isActive))
         setLoading(false)
       })
       .catch(() => setLoading(false))
@@ -201,6 +205,45 @@ export default function ServicesPage() {
       <p style={{ color: 'var(--color-text-light)', textAlign: 'center', marginBottom: '1.5rem', fontSize: '1.1rem' }}>
         Select up to {MAX_SERVICES} services, then continue to book.
       </p>
+
+      {bundles.length > 0 && (
+        <div style={{
+          background: 'linear-gradient(135deg, #f3e8ff, #fce4ec)',
+          borderRadius: '12px',
+          padding: '1.5rem 2rem',
+          marginBottom: '2.5rem',
+          border: '2px solid var(--color-primary)',
+          textAlign: 'center'
+        }}>
+          <h3 style={{ margin: '0 0 0.5rem', color: 'var(--color-primary-dark)' }}>
+            ✨ Spa Packages Available
+          </h3>
+          <p style={{ color: 'var(--color-text)', marginBottom: '1rem', fontSize: '1rem' }}>
+            Save with our curated wellness packages — bundled services at a discount.
+          </p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+            {bundles.slice(0, 3).map(bundle => (
+              <span key={bundle.bundleId} style={{
+                background: 'white',
+                padding: '0.4rem 1rem',
+                borderRadius: '999px',
+                fontSize: '0.9rem',
+                border: '1px solid var(--color-border)'
+              }}>
+                {bundle.name} — ${bundle.price}{bundle.contactOnly ? ' (call to book)' : ''}
+              </span>
+            ))}
+            {bundles.length > 3 && (
+              <span style={{ padding: '0.4rem 1rem', fontSize: '0.9rem', color: 'var(--color-text-light)' }}>
+                +{bundles.length - 3} more
+              </span>
+            )}
+          </div>
+          <a href="/bundles" className="cta" style={{ display: 'inline-block', margin: 0 }}>
+            View All Packages →
+          </a>
+        </div>
+      )}
 
       <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '0.5rem', marginBottom: '2.5rem' }}>
         {allCategories.map(cat => (
