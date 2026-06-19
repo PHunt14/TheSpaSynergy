@@ -1,11 +1,12 @@
 'use client'
 
 import Link from 'next/link'
+import formatTime from './formatTime'
 
 /**
  * Renders a single appointment as a tappable card in the kiosk list.
  */
-export default function AppointmentCard({ apt, formatTime }) {
+export default function AppointmentCard({ apt }) {
   return (
     <Link
       href={`/kiosk/${apt.appointmentId}`}

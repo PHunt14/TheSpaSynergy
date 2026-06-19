@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Suspense } from 'react'
 import Link from 'next/link'
 import AppointmentCard from './components/AppointmentCard'
+import formatTime from './components/formatTime'
 
 function KioskContent() {
   const [appointments, setAppointments] = useState([])
@@ -31,12 +32,6 @@ function KioskContent() {
     const interval = setInterval(loadAppointments, 60000)
     return () => clearInterval(interval)
   }, [])
-
-  const formatTime = (dateTime) => {
-    try {
-      return new Date(dateTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
-    } catch { return dateTime }
-  }
 
   // Separate bundle appointments from individual ones
   const bundleGroups = {}
@@ -139,7 +134,7 @@ function KioskContent() {
           {/* Customer groups */}
           {Object.entries(customerGroups).map(([customerName, custApts]) => {
             if (custApts.length === 1) {
-              return <AppointmentCard key={custApts[0].appointmentId} apt={custApts[0]} formatTime={formatTime} />
+              return <AppointmentCard key={custApts[0].appointmentId} apt={custApts[0]} />
             }
 
             const totalPrice = custApts.reduce((sum, apt) => sum + (apt.service?.price || 0), 0)
@@ -148,7 +143,7 @@ function KioskContent() {
             return (
               <div key={`customer-${customerName}`} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 {custApts.map(apt => (
-                  <AppointmentCard key={apt.appointmentId} apt={apt} formatTime={formatTime} />
+                  <AppointmentCard key={apt.appointmentId} apt={apt} />
                 ))}
                 <Link
                   href={`/kiosk/multi?ids=${aptIds}`}

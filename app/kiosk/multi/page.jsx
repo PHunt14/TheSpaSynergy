@@ -8,6 +8,8 @@ import useSquarePayment, { resolveSquareLocation } from '../components/useSquare
 import KioskPaymentForm from '../components/KioskPaymentForm'
 import PaymentSuccess from '../components/PaymentSuccess'
 import TotalDueDisplay from '../components/TotalDueDisplay'
+import ServiceLineItems from '../components/ServiceLineItems'
+import formatTime from '../components/formatTime'
 import { calculateBundlePaymentSplit } from '../../utils/bundlePaymentSplit.js'
 
 function MultiPaymentContent() {
@@ -164,12 +166,6 @@ function MultiPaymentContent() {
     )
   }
 
-  const formatTime = (dateTime) => {
-    try {
-      return new Date(dateTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
-    } catch { return dateTime }
-  }
-
   return (
     <div>
       <Link href="/kiosk" style={{ color: 'var(--color-primary)', display: 'inline-block', marginBottom: '1.5rem' }}>
@@ -189,22 +185,7 @@ function MultiPaymentContent() {
         </p>
 
         <div style={{ borderTop: '1px solid var(--color-border)', marginTop: '1rem', paddingTop: '1rem' }}>
-          {appointments.map(apt => (
-            <div key={apt.appointmentId} style={{
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              padding: '0.5rem 0', borderBottom: '1px solid rgba(0,0,0,0.05)'
-            }}>
-              <div>
-                <div style={{ fontWeight: '500' }}>{apt.service?.name}</div>
-                <div style={{ fontSize: '0.8rem', color: 'var(--color-text-light)' }}>
-                  {apt.vendorName}{apt.staffName && ` · ${apt.staffName}`} · {apt.service?.duration} min
-                </div>
-              </div>
-              <div style={{ fontWeight: '500', fontSize: '0.9rem' }}>
-                ${apt.service?.price?.toFixed(2)}
-              </div>
-            </div>
-          ))}
+          <ServiceLineItems appointments={appointments} />
 
           <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: '700', fontSize: '1.1rem', marginTop: '1rem', paddingTop: '0.75rem', borderTop: '2px solid var(--color-border)' }}>
             <span>Total</span>

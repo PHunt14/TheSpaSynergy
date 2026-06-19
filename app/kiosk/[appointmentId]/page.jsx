@@ -9,6 +9,7 @@ import useSquarePayment, { resolveSquareLocation } from '../components/useSquare
 import KioskPaymentForm from '../components/KioskPaymentForm'
 import PaymentSuccess from '../components/PaymentSuccess'
 import TotalDueDisplay from '../components/TotalDueDisplay'
+import formatTime from '../components/formatTime'
 
 function PaymentContent() {
   const { appointmentId } = useParams()
@@ -127,12 +128,6 @@ function PaymentContent() {
         customerName={`${appointment.customer?.name} · ${appointment.vendorName}`}
       />
     )
-  }
-
-  const formatTime = (dateTime) => {
-    try {
-      return new Date(dateTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
-    } catch { return dateTime }
   }
 
   return (
