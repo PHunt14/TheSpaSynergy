@@ -41,6 +41,8 @@ Object.defineProperty(window, 'innerWidth', { value: 1024, writable: true })
 
 const mockResponses = {
   '/api/vendors': { vendors: [{ vendorId: 'v1', name: 'Test Vendor', phone: '555-1234', description: 'A test vendor' }] },
+  '/api/providers': { providers: [{ vendorId: 'v1', name: 'Test Vendor', phone: '555-1234', description: 'A test vendor' }] },
+  '/api/eligible-staff': { staff: [{ visibleId: 'staff-1', staffName: 'Test Vendor' }], serviceName: 'Test Service' },
   '/api/services': { services: [{ serviceId: 's1', name: 'Test Service', duration: 60, price: 100, categories: ['Wellness'], isActive: true }] },
   '/api/availability': { availableSlots: [{ time: '14:00', display: '2:00 PM' }] },
   '/api/available-dates': { availableDates: ['2025-07-15'] },
