@@ -1,6 +1,7 @@
 import { Client, Environment } from 'square';
 import { randomUUID } from 'crypto';
 import { generateClient } from 'aws-amplify/data';
+import type { Schema } from '../../../amplify/data/resource';
 import config from '../../../amplify_outputs.json';
 import { Amplify } from 'aws-amplify';
 import { buildOrderLineItems } from '../../../lib/square/catalog.js';
@@ -119,7 +120,7 @@ async function resolveSquareCredentials(dataClient: any, vendorId: string, staff
  * Requirements: 6.1, 6.2, 6.4, 6.5
  */
 async function processSinglePayment(sourceId: string, amount: number, vendorId: string, staffId: string, serviceIds: string[], people: number, tipAmount: number = 0) {
-  const dataClient = generateClient();
+  const dataClient = generateClient<Schema>();
 
   // If we have a staffId and serviceIds, attempt staff-based routing via Payment Routing Service
   if (staffId && serviceIds?.length > 0) {
@@ -536,7 +537,7 @@ async function ensureFreshCredentials(
 
 
 async function processMultiProviderPayment(sourceId: string, totalAmount: number, paymentSplit: any, tipAmount: number = 0) {
-  const dataClient = generateClient();
+  const dataClient = generateClient<Schema>();
 
   // paymentSplit contains: { serviceId, assignedStaff, groupId }
   const { serviceId, assignedStaff, groupId } = paymentSplit;
@@ -651,7 +652,7 @@ async function processMultiProviderPayment(sourceId: string, totalAmount: number
 }
 
 async function processMultiVendorBundlePayment(sourceId: string, totalAmount: number, bundlePayments: any[], bundleId: string, tipAmount: number = 0) {
-  const dataClient = generateClient();
+  const dataClient = generateClient<Schema>();
 
   // Delegate charge + credential validation to the shared bundle payment helper
   const paymentResult = await processBundlePayment(sourceId, totalAmount, bundlePayments, tipAmount);
@@ -715,7 +716,7 @@ async function processMultiVendorBundlePayment(sourceId: string, totalAmount: nu
 }
 
 async function processBundlePayment(sourceId: string, totalAmount: number, bundlePayments: any[], tipAmount: number = 0) {
-  const dataClient = generateClient();
+  const dataClient = generateClient<Schema>();
   
   // Get house vendor
   const { data: vendors } = await dataClient.models.Vendor.list();

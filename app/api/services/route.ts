@@ -171,7 +171,7 @@ export async function POST(request: Request) {
             categoryId: crypto.randomUUID(),
             name: categoryName.trim(),
             createdAt: new Date().toISOString(),
-          });
+          } as any);
           // Add to list so subsequent checks see it
           existingCategoryNames.push(categoryName.trim());
         }
@@ -281,7 +281,7 @@ export async function PATCH(request: Request) {
             categoryId: crypto.randomUUID(),
             name: categoryName.trim(),
             createdAt: new Date().toISOString(),
-          });
+          } as any);
           existingCategoryNames.push(categoryName.trim());
         }
       }

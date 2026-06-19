@@ -105,7 +105,7 @@ async function seedServiceCategories(): Promise<void> {
       categoryId: crypto.randomUUID(),
       name: categoryName,
       createdAt: new Date().toISOString(),
-    });
+    } as any);
 
     if (errors) {
       console.error(`  Failed to create category "${categoryName}":`, errors);
