@@ -35,7 +35,7 @@ function arbValidLengthName() {
 function arbValidName() {
   return fc.stringOf(
     fc.oneof(
-      fc.char16bits().filter((c) => c.trim().length > 0),
+      fc.integer({ min: 0x21, max: 0x7e }).map((n) => String.fromCharCode(n)),
       fc.constantFrom('a', 'b', 'c', 'A', 'B', 'C', '1', '2', '3', '-', '_', ' ')
     ),
     { minLength: 2, maxLength: 50 }

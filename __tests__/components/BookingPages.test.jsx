@@ -18,6 +18,17 @@ jest.mock('react-datepicker', () => {
 })
 jest.mock('react-datepicker/dist/react-datepicker.css', () => ({}))
 
+jest.mock('../../app/utils/bundleDiscount', () => ({
+  calculateBundlePrice: ({ services }) => ({
+    subtotal: services.reduce((sum, s) => sum + (s.price || 0), 0),
+    discountPercent: 0,
+    discountAmount: 0,
+    total: services.reduce((sum, s) => sum + (s.price || 0), 0),
+  }),
+  distributeDiscountAcrossVendors: () => [],
+  validateBundleServices: () => ({ valid: true, error: null }),
+}))
+
 jest.mock('aws-amplify/analytics', () => ({ record: jest.fn() }))
 
 jest.mock('../../app/components/BookingDisabled', () => {
