@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 import type { Schema } from '../../../amplify/data/resource';
 import config from '../../../amplify_outputs.json' with { type: 'json' };
 import { getSequentialBundleSlots } from '../../utils/sequentialAvailability.js';
-import { checkBookingBlackout } from '../../utils/bookingBlackout';
+import { checkBookingBlackout, blackoutResponseFields } from '../../utils/bookingBlackout';
 
 const client = generateServerClientUsingCookies<Schema>({ config, cookies });
 
@@ -37,12 +37,7 @@ export async function GET(request: Request) {
     // --- Check global and vendor-level booking blackouts ---
     const blackout = await checkBookingBlackout(client, services);
     if (blackout.blocked) {
-      return Response.json({
-        availableSlots: [],
-        bookingDisabled: true,
-        ...(blackout.globalUntil ? { disabledUntil: blackout.globalUntil } : {}),
-        ...(blackout.disabledVendors ? { disabledVendors: blackout.disabledVendors, error: `Booking is temporarily disabled for: ${blackout.disabledVendors.join(', ')}` } : {}),
-      });
+      return Response.json({ availableSlots: [], ...blackoutResponseFields(blackout) });
     }
 
     // Collect all staff IDs across all services

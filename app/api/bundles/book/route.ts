@@ -5,7 +5,7 @@ import config from '../../../../amplify_outputs.json' with { type: 'json' };
 import { randomUUID } from 'node:crypto';
 import { assignBundleStaff } from '../../../utils/bundleStaffAssigner.js';
 import { calculateBundlePrice, validateBundleServices } from '../../../utils/bundleDiscount.js';
-import { checkBookingBlackout } from '../../../utils/bookingBlackout';
+import { checkBookingBlackout, blackoutResponseFields } from '../../../utils/bookingBlackout';
 
 const client = generateServerClientUsingCookies<Schema>({
   config,
@@ -65,14 +65,7 @@ export async function POST(request: Request) {
     // --- Check global and vendor-level booking blackouts ---
     const blackout = await checkBookingBlackout(client, services);
     if (blackout.blocked) {
-      return Response.json({
-        error: blackout.globalUntil
-          ? 'Online booking is temporarily disabled'
-          : `Booking is temporarily disabled for: ${blackout.disabledVendors!.join(', ')}`,
-        bookingDisabled: true,
-        ...(blackout.globalUntil ? { disabledUntil: blackout.globalUntil } : {}),
-        ...(blackout.disabledVendors ? { disabledVendors: blackout.disabledVendors } : {}),
-      }, { status: 403 });
+      return Response.json(blackoutResponseFields(blackout), { status: 403 });
     }
 
     // --- Determine service order ---

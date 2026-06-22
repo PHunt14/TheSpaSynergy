@@ -4,7 +4,7 @@ import type { Schema } from '../../../../amplify/data/resource';
 import config from '../../../../amplify_outputs.json' with { type: 'json' };
 import { getSequentialBundleSlots, calculateTotalBundleDuration } from '../../../utils/sequentialAvailability.js';
 import { validateBundleServices } from '../../../utils/bundleDiscount.js';
-import { checkBookingBlackout } from '../../../utils/bookingBlackout';
+import { checkBookingBlackout, blackoutResponseFields } from '../../../utils/bookingBlackout';
 
 const client = generateServerClientUsingCookies<Schema>({
   config,
@@ -95,14 +95,7 @@ export async function GET(request: Request) {
     // --- Check global and vendor-level booking blackouts ---
     const blackout = await checkBookingBlackout(client, services);
     if (blackout.blocked) {
-      return Response.json({
-        slots: [],
-        suggestedOrder: serviceIds,
-        totalDuration: 0,
-        bookingDisabled: true,
-        ...(blackout.globalUntil ? { disabledUntil: blackout.globalUntil } : {}),
-        ...(blackout.disabledVendors ? { disabledVendors: blackout.disabledVendors, error: `Booking is temporarily disabled for: ${blackout.disabledVendors.join(', ')}` } : {}),
-      });
+      return Response.json({ slots: [], suggestedOrder: serviceIds, totalDuration: 0, ...blackoutResponseFields(blackout) });
     }
 
     // Determine buffer minutes from the first service's vendor (or default 15)

@@ -12,6 +12,23 @@ export interface BlackoutResult {
 }
 
 /**
+ * Common response fields when a blackout is active.
+ * Spread this into your route-specific response object.
+ */
+export function blackoutResponseFields(result: BlackoutResult): Record<string, any> {
+  const fields: Record<string, any> = { bookingDisabled: true };
+  if (result.globalUntil) {
+    fields.disabledUntil = result.globalUntil;
+    fields.error = 'Online booking is temporarily disabled';
+  }
+  if (result.disabledVendors) {
+    fields.disabledVendors = result.disabledVendors;
+    fields.error = `Booking is temporarily disabled for: ${result.disabledVendors.join(', ')}`;
+  }
+  return fields;
+}
+
+/**
  * Checks global and vendor-level booking blackouts for a set of services.
  *
  * @param client - Amplify data client with models.SiteSettings and models.Vendor
