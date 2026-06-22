@@ -126,11 +126,12 @@ describe('Kiosk multi-appointment payment', () => {
   })
 
   test('single-vendor: processes one charge for combined total', async () => {
+    seedVendor({ vendorId: 'vendor-house', isHouse: true, squareAccessToken: 'tok-h', squareLocationId: 'LOC-H' })
     seedVendor({ vendorId: 'vendor-a', squareAccessToken: 'tok-a', squareLocationId: 'LOC-A' })
     seedService({ serviceId: 'svc-1', vendorId: 'vendor-a', price: 65 })
     seedService({ serviceId: 'svc-2', vendorId: 'vendor-a', price: 85 })
 
-    mockStaffGet.mockResolvedValue({ data: { visibleId: 'staff-1', squareAccessToken: 'tok-a', squareLocationId: 'LOC-A', squareOAuthStatus: 'connected' } })
+    mockStaffGet.mockResolvedValue({ data: { visibleId: 'staff-1', vendorId: 'vendor-a', squareAccessToken: 'tok-a', squareLocationId: 'LOC-A', squareOAuthStatus: 'connected' } })
     mockCreatePayment.mockResolvedValueOnce({
       result: { payment: { id: 'pay-multi-1', status: 'COMPLETED' } },
     })
@@ -158,10 +159,11 @@ describe('Kiosk multi-appointment payment', () => {
   })
 
   test('single-vendor with tip: tip sent as tipMoney', async () => {
+    seedVendor({ vendorId: 'vendor-house', isHouse: true, squareAccessToken: 'tok-h', squareLocationId: 'LOC-H' })
     seedVendor({ vendorId: 'vendor-a', squareAccessToken: 'tok-a', squareLocationId: 'LOC-A' })
     seedService({ serviceId: 'svc-1', vendorId: 'vendor-a', price: 65 })
 
-    mockStaffGet.mockResolvedValue({ data: { visibleId: 'staff-1', squareAccessToken: 'tok-a', squareLocationId: 'LOC-A', squareOAuthStatus: 'connected' } })
+    mockStaffGet.mockResolvedValue({ data: { visibleId: 'staff-1', vendorId: 'vendor-a', squareAccessToken: 'tok-a', squareLocationId: 'LOC-A', squareOAuthStatus: 'connected' } })
     mockCreatePayment.mockResolvedValueOnce({
       result: { payment: { id: 'pay-tip-1', status: 'COMPLETED' } },
     })
