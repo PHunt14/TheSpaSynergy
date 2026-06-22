@@ -115,17 +115,19 @@ Staff members can block off personal time on the calendar. Blocked time:
 1. Go to **Dashboard → Calendar**
 2. Click **+ New** then switch to **🚫 Block Time** mode
 3. Choose block type:
-   - **Single Block**: Set a start date/time and duration in minutes (15 min increments)
-   - **Multi-Day Block**: Set a start date and an end date — blocks the full working day for each day in the range
+   - **Single Block**: Set a start date/time and choose either:
+     - **End Time** — pick an end date/time (like a calendar event), duration auto-calculates
+     - **Duration** — enter hours and minutes separately
+   - **Multi-Day Block**: Set a start date and an end date — blocks the full working day (6 AM–10 PM) for each day in the range
 4. Optionally assign to a specific staff member
 5. Add notes (e.g., "Vacation", "Training")
 6. Click **Block Time**
 
 ### Multi-Day Blocking
 
-Multi-day blocks create one full-day entry (720 minutes / 12 hours starting at 8 AM) for each day in the selected range. This effectively blocks the entire working day for the assigned staff member.
+Multi-day blocks create one full-day entry (960 minutes / 16 hours starting at 6 AM) for each day in the selected range. This effectively blocks the entire working day for the assigned staff member, covering 6:00 AM through 10:00 PM.
 
-**Example**: Blocking July 15–18 for "staff-jane" creates 4 separate blocked-time appointments, one per day. Each blocks 8:00 AM through 8:00 PM on that day.
+**Example**: Blocking July 15–18 for "staff-jane" creates 4 separate blocked-time appointments, one per day. Each blocks 6:00 AM through 10:00 PM on that day.
 
 ### How Blocked Time Appears
 
@@ -258,14 +260,14 @@ When `staffIds` is provided with 2+ entries, the API creates one appointment per
 ```
 
 **Blocked time (multi-day):**
-For multi-day blocks, the client sends one request per day in the range. Each request blocks a full day (720 minutes starting at 8 AM):
+For multi-day blocks, the client sends one request per day in the range. Each request blocks a full day (960 minutes starting at 6 AM):
 ```json
 {
   "vendorId": "vendor-kera-studio",
   "staffId": "staff-kera-stacey",
-  "dateTime": "2025-07-15T08:00:00",
+  "dateTime": "2025-07-15T06:00",
   "isBlockedTime": true,
-  "duration": 720,
+  "duration": 960,
   "notes": "Vacation - blocked 3 day(s)"
 }
 ```
@@ -356,6 +358,9 @@ assert(manualRes.status === 200)
 |------|--------|
 | `amplify/data/resource.ts` | Added `bookingDisabledUntil` to Vendor, added `SiteSettings` model |
 | `app/api/availability/route.ts` | Check global + vendor blackout before generating slots |
+| `app/api/availability/sequential/route.ts` | Check global + vendor blackout for bundle sequential availability |
+| `app/api/bundle-availability/route.ts` | Check global + vendor blackout for bundle availability |
+| `app/api/bundles/book/route.ts` | Reject bundle bookings during blackout (403) |
 | `app/api/appointments/route.ts` | Reject bookings during blackout |
 | `app/api/booking-blackout/route.ts` | New — GET/POST blackout settings |
 | `app/api/appointments/manual/route.ts` | Manual appointments + blocked time (`isBlockedTime` flag) |

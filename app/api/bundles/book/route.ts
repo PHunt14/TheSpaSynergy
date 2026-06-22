@@ -5,6 +5,7 @@ import config from '../../../../amplify_outputs.json' with { type: 'json' };
 import { randomUUID } from 'node:crypto';
 import { assignBundleStaff } from '../../../utils/bundleStaffAssigner.js';
 import { calculateBundlePrice, validateBundleServices } from '../../../utils/bundleDiscount.js';
+import { checkBookingBlackout, blackoutResponseFields } from '../../../utils/bookingBlackout';
 
 const client = generateServerClientUsingCookies<Schema>({
   config,
@@ -59,6 +60,12 @@ export async function POST(request: Request) {
     const validation = validateBundleServices(services);
     if (!validation.valid) {
       return Response.json({ error: validation.error }, { status: 400 });
+    }
+
+    // --- Check global and vendor-level booking blackouts ---
+    const blackout = await checkBookingBlackout(client, services);
+    if (blackout.blocked) {
+      return Response.json(blackoutResponseFields(blackout), { status: 403 });
     }
 
     // --- Determine service order ---
