@@ -55,10 +55,15 @@ export default function ProviderDetailPage() {
   const [selectedProfile, setSelectedProfile] = useState(null)
 
   const groupedServices = services.reduce((acc, service) => {
-    const category = service.category || 'Other'
-    if (!acc[category]) acc[category] = { count: 0, services: [] }
-    acc[category].count++
-    acc[category].services.push(service)
+    const cats = (service.categories && Array.isArray(service.categories) && service.categories.length > 0)
+      ? service.categories
+      : (service.category ? [service.category] : ['Other'])
+    for (const category of cats) {
+      const cat = category || 'Other'
+      if (!acc[cat]) acc[cat] = { count: 0, services: [] }
+      acc[cat].count++
+      acc[cat].services.push(service)
+    }
     return acc
   }, {})
 
@@ -183,7 +188,7 @@ export default function ProviderDetailPage() {
                   <p style={{ color: 'var(--color-text-light)', fontSize: '0.9rem', marginBottom: '1rem' }}>
                     {data.count} {data.count === 1 ? 'service' : 'services'} available
                   </p>
-                  <Link href="/booking" className="cta" style={{ display: 'inline-block', fontSize: '0.9rem', padding: '0.6rem 1.2rem' }}>
+                  <Link href="/services" className="cta" style={{ display: 'inline-block', fontSize: '0.9rem', padding: '0.6rem 1.2rem' }}>
                     Book Now
                   </Link>
                 </div>

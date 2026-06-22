@@ -7,10 +7,10 @@ export default function ContactPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch('/api/vendors')
+    fetch('/api/providers')
       .then(res => res.json())
       .then(data => {
-        setVendors(data.vendors || [])
+        setVendors(data.providers || [])
         setLoading(false)
       })
       .catch(() => setLoading(false))

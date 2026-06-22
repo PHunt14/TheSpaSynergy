@@ -58,28 +58,28 @@ export default function ProvidersPage() {
           return (
             <div
               key={provider.vendorId}
+              role="button"
+              tabIndex={0}
+              onClick={() => router.push(`/providers/${provider.vendorId}`)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); router.push(`/providers/${provider.vendorId}`); } }}
               style={{
                 borderRadius: '12px',
                 overflow: 'hidden',
                 background: 'var(--color-accent)',
                 border: '1px solid var(--color-border)',
+                cursor: 'pointer',
+                transition: 'transform 0.2s',
               }}
+              onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
+              onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
             >
               {/* Provider header with image */}
-              <div
-                role="button"
-                tabIndex={0}
-                onClick={() => router.push(`/providers/${provider.vendorId}`)}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); router.push(`/providers/${provider.vendorId}`); } }}
-                style={{ cursor: 'pointer' }}
-              >
-                <div style={{
-                  height: '200px',
-                  backgroundImage: imageUrl ? `url(${imageUrl})` : 'linear-gradient(135deg, var(--color-primary), var(--color-secondary))',
-                  backgroundSize: 'cover',
-                  backgroundPosition: provider.vendorId === 'vendor-selene-glow-studio' ? 'center 30%' : 'center',
-                }} />
-              </div>
+              <div style={{
+                height: '200px',
+                backgroundImage: imageUrl ? `url(${imageUrl})` : 'linear-gradient(135deg, var(--color-primary), var(--color-secondary))',
+                backgroundSize: 'cover',
+                backgroundPosition: provider.vendorId === 'vendor-selene-glow-studio' ? 'center 30%' : 'center',
+              }} />
 
               <div style={{ padding: '1.5rem' }}>
                 <h2 style={{ marginBottom: '0.5rem' }}>{provider.name}</h2>

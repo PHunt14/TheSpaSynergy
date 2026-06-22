@@ -14,7 +14,7 @@ export default function Navbar() {
         if (!res.ok) throw new Error('Failed to fetch')
         return res.json()
       })
-      .then(data => setProviders(data.vendors || []))
+      .then(data => setProviders(data.providers || []))
       .catch(err => {
         console.error('Error loading providers for navbar:', err)
         setProviders([])
@@ -52,7 +52,7 @@ export default function Navbar() {
             )}
           </div>
           <Link href="/bundles">Packages</Link>
-          <Link href="/booking">Book Now</Link>
+          <Link href="/services">Book Now</Link>
           <Link href="/contact">Contact</Link>
         </div>
       </div>

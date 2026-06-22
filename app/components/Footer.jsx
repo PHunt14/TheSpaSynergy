@@ -12,7 +12,7 @@ export default function Footer() {
         <div className="footer-links">
           <Link href="/providers">Providers</Link>
           <Link href="/bundles">Packages</Link>
-          <Link href="/booking">Book Now</Link>
+          <Link href="/services">Book Now</Link>
           <Link href="/contact">Contact</Link>
           <Link href="/dashboard">Provider Dashboard</Link>
         </div>

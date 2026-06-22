@@ -92,7 +92,15 @@ export async function GET(request: Request) {
       return Response.json({ error: 'Failed to fetch services' }, { status: 500 });
     }
 
-    return Response.json({ services });
+    return Response.json({
+      services: (services || []).map((s: any) => ({
+        ...s,
+        // Normalize: ensure categories is always an array for frontend consumption
+        categories: (s.categories && Array.isArray(s.categories) && s.categories.length > 0)
+          ? s.categories
+          : (s.category ? [s.category] : []),
+      })),
+    });
   } catch (error) {
     console.error('Error fetching services:', error);
     return Response.json({ error: 'Failed to fetch services' }, { status: 500 });

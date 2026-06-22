@@ -13,7 +13,13 @@ export default function ServicesPage() {
   const handleContinue = () => {
     if (!isBookingEnabled) { setShowDisabled(true); return }
     if (catalog.selectedServices.length === 1) {
-      router.push(`/booking/provider?service=${catalog.selectedServices[0].serviceId}`)
+      const svc = catalog.selectedServices[0]
+      // Sauna is provider-independent — skip to time picker
+      if (svc.resourceType === 'sauna') {
+        router.push(`/booking/time?service=${svc.serviceId}`)
+      } else {
+        router.push(`/booking/provider?service=${svc.serviceId}`)
+      }
     } else {
       router.push(`/booking/bundle-time?services=${catalog.selectedServices.map(s => s.serviceId).join(',')}`)
     }

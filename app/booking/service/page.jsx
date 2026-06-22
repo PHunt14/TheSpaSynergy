@@ -23,8 +23,8 @@ function ServicePageContent() {
   const router = useRouter()
 
   useEffect(() => {
-    // Redirect to the unified booking page regardless of vendor param
-    router.replace('/booking')
+    // Redirect to the unified services page regardless of vendor param
+    router.replace('/services')
   }, [router])
 
   return (
