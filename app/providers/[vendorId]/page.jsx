@@ -188,7 +188,7 @@ export default function ProviderDetailPage() {
                   <p style={{ color: 'var(--color-text-light)', fontSize: '0.9rem', marginBottom: '1rem' }}>
                     {data.count} {data.count === 1 ? 'service' : 'services'} available
                   </p>
-                  <Link href="/services" className="cta" style={{ display: 'inline-block', fontSize: '0.9rem', padding: '0.6rem 1.2rem' }}>
+                  <Link href={`/services?category=${encodeURIComponent(category)}`} className="cta" style={{ display: 'inline-block', fontSize: '0.9rem', padding: '0.6rem 1.2rem' }}>
                     Book Now
                   </Link>
                 </div>

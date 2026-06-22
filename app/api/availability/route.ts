@@ -188,9 +188,19 @@ export async function GET(request: Request) {
       return Response.json({ availableSlots: slots });
     }
 
-    // Sauna resource type path — use vendor working hours
-    if (isSauna && vendorId) {
-      const vendorRes = await client.models.Vendor.get({ vendorId });
+    // Sauna resource type path — use vendor sauna hours
+    if (isSauna) {
+      // Resolve vendor: from param, or from the resource-sauna staff entry, or from service
+      let saunaVendorId = vendorId;
+      if (!saunaVendorId) {
+        const { data: saunaStaff } = await client.models.StaffSchedule.get({ visibleId: 'resource-sauna' } as any);
+        saunaVendorId = saunaStaff?.vendorId;
+      }
+      if (!saunaVendorId) {
+        return Response.json({ availableSlots: [] });
+      }
+
+      const vendorRes = await client.models.Vendor.get({ vendorId: saunaVendorId });
       if (!vendorRes.data) {
         return Response.json({ availableSlots: [] });
       }
@@ -212,7 +222,7 @@ export async function GET(request: Request) {
       let nextToken: string | undefined;
       do {
         const result = await client.models.Appointment.listAppointmentByVendorIdAndDateTime({
-          vendorId,
+          vendorId: saunaVendorId,
           dateTime: { beginsWith: date },
           ...(nextToken ? { nextToken } : {})
         } as any);

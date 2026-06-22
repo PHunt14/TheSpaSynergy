@@ -335,7 +335,8 @@ function ConfirmPageContent() {
     const dateTimeISO = buildDateTimeISO()
     const isResource = allServiceDetails.every(s => s.resourceType === 'sauna' || s.resourceType === 'room')
     const status = isResource ? 'confirmed' : 'pending-confirmation'
-    const effectiveStaffId = assignedStaffIdOverride || staffId
+    const isSauna = allServiceDetails.every(s => s.resourceType === 'sauna')
+    const effectiveStaffId = isSauna ? 'resource-sauna' : (assignedStaffIdOverride || staffId)
 
     // Multi-provider booking: single API call creates all appointments
     if (multiProvider) {
@@ -383,13 +384,15 @@ function ConfirmPageContent() {
       allServiceDetails.map(svc => {
         const svcQty = getQty(svc)
         const svcDateTime = buildDateTimeForService(svc.serviceId)
+        // For sauna, use the house vendor (kera-studio) as the vendorId
+        const svcVendorId = svc.resourceType === 'sauna' ? 'vendor-kera-studio' : (svc.vendorId || vendor)
         return fetch('/api/appointments', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            vendorId: svc.vendorId,
+            vendorId: svcVendorId,
             serviceId: svc.serviceId,
-            staffId: effectiveStaffId || undefined,
+            staffId: svc.resourceType === 'sauna' ? 'resource-sauna' : (effectiveStaffId || undefined),
             bundleId: bundleId || undefined,
             dateTime: svcDateTime,
             customer: formData,

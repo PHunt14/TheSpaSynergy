@@ -1,14 +1,16 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import BookingDisabled, { isBookingEnabled } from '../components/BookingDisabled'
 import { useServiceCatalog, ServiceCatalogGrid } from '../components/ServiceCatalog'
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
 
-export default function ServicesPage() {
+function ServicesContent() {
   const router = useRouter()
+  const params = useSearchParams()
+  const initialCategory = params.get('category') || 'All'
   const [showDisabled, setShowDisabled] = useState(false)
-  const catalog = useServiceCatalog({ maxServices: 4 })
+  const catalog = useServiceCatalog({ maxServices: 4, initialCategory })
 
   const handleContinue = () => {
     if (!isBookingEnabled) { setShowDisabled(true); return }
@@ -44,5 +46,13 @@ export default function ServicesPage() {
         continueLabel="Proceed to Booking →"
       />
     </div>
+  )
+}
+
+export default function ServicesPage() {
+  return (
+    <Suspense fallback={<div style={{ padding: '2rem' }}>Loading...</div>}>
+      <ServicesContent />
+    </Suspense>
   )
 }

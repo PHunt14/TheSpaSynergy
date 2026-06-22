@@ -150,11 +150,11 @@ export function getCategories(services) {
 /**
  * Hook for service catalog state management (loading, filtering, selection).
  */
-export function useServiceCatalog({ maxServices = 4 } = {}) {
+export function useServiceCatalog({ maxServices = 4, initialCategory = 'All' } = {}) {
   const [services, setServices] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedServices, setSelectedServices] = useState([])
-  const [categoryFilter, setCategoryFilter] = useState('All')
+  const [categoryFilter, setCategoryFilter] = useState(initialCategory)
 
   useEffect(() => {
     fetch('/api/services')

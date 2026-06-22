@@ -130,6 +130,25 @@ const categories = [
 // ═══════════════════════════════════════════════════════════════
 
 const staff = [
+  // ─── Resource calendars (not real staff) ───
+  {
+    visibleId: 'resource-sauna',
+    staffEmail: 'sauna@thespasynergy.com',
+    staffName: 'Sauna',
+    vendorId: 'vendor-kera-studio',
+    schedule: {
+      monday: { start: '06:30', end: '18:00' },
+      tuesday: { start: '06:30', end: '18:00' },
+      wednesday: { start: '06:30', end: '18:00' },
+      thursday: { start: '06:30', end: '18:00' },
+      friday: { start: '06:30', end: '18:00' },
+      saturday: { start: '10:00', end: '14:00' },
+      sunday: { start: null, end: null }
+    },
+    isActive: true,
+    squareOAuthStatus: 'disconnected',
+  },
+  // ─── Real staff ───
   {
     visibleId: 'staff-kera-stacey',
     staffEmail: 'thekerastudio@gmail.com',
@@ -280,9 +299,9 @@ const services = [
   { serviceId: 'svc-glow-polish', name: 'Glow & Polish Ritual', description: 'Signature glow and polish experience', categories: ['Signature Rituals', 'Nail Care'], duration: 75, price: 95, houseFeeEnabled: true, houseFeeAmount: 28, requiresConsultation: true, allowedStaff: ['staff-selene-jylian'], isActive: true },
   { serviceId: 'svc-glass-skin-ritual', name: 'Glass Skin Ritual Package', description: 'Korean glass skin facial and Japanese head spa', categories: ['Signature Rituals', 'Spa Room'], duration: 135, price: 195, houseFeeEnabled: true, houseFeeAmount: 55, requiresConsultation: true, allowedStaff: ['staff-selene-jylian'], isActive: true },
 
-  // ─── Sauna (no staff required) ───
-  { serviceId: 'svc-sauna-25', name: 'Sauna - 25 min', description: 'Infrared sauna session for detox and relaxation', categories: ['Sauna'], resourceType: 'sauna', duration: 25, price: 10, houseFeeEnabled: false, allowedStaff: null, isActive: true },
-  { serviceId: 'svc-sauna-45', name: 'Sauna - 45 min', description: 'Extended infrared sauna session', categories: ['Sauna'], resourceType: 'sauna', duration: 45, price: 18, houseFeeEnabled: false, allowedStaff: null, isActive: true },
+  // ─── Sauna (resource calendar, no real staff) ───
+  { serviceId: 'svc-sauna-25', name: 'Sauna - 25 min', description: 'Infrared sauna session for detox and relaxation', categories: ['Sauna'], resourceType: 'sauna', duration: 25, price: 10, houseFeeEnabled: false, allowedStaff: ['resource-sauna'], isActive: true },
+  { serviceId: 'svc-sauna-45', name: 'Sauna - 45 min', description: 'Extended infrared sauna session', categories: ['Sauna'], resourceType: 'sauna', duration: 45, price: 18, houseFeeEnabled: false, allowedStaff: ['resource-sauna'], isActive: true },
 
   // ─── Wedding (Stacey) ───
   { serviceId: 'svc-wedding-trial', name: 'Wedding Trial', description: 'Complimentary bridal hair and makeup trial', categories: ['Wedding', 'Hair Studio'], duration: 60, price: 0, requiresConsultation: true, allowedStaff: ['staff-kera-stacey'], isActive: true },
