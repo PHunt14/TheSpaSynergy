@@ -1,18 +1,8 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Fragment } from 'react'
 import { fetchAuthSession } from 'aws-amplify/auth'
-
-function useIsMobile(breakpoint = 768) {
-  const [isMobile, setIsMobile] = useState(false)
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < breakpoint)
-    check()
-    window.addEventListener('resize', check)
-    return () => window.removeEventListener('resize', check)
-  }, [breakpoint])
-  return isMobile
-}
+import useIsMobile from '../../hooks/useIsMobile'
 
 export default function Services() {
   const [services, setServices] = useState([])
@@ -1066,9 +1056,11 @@ export default function Services() {
               const addons = getAddons(service.serviceId)
               return (
                 <div key={service.serviceId} style={{ borderRadius: '8px', overflow: 'hidden', border: addons.length > 0 ? '1px solid var(--color-border)' : 'none' }}>
-                  <ServiceRow service={service} isAddon={false} />
+                  {ServiceRow({ service, isAddon: false })}
                   {addons.map(addon => (
-                    <ServiceRow key={addon.serviceId} service={addon} isAddon={true} />
+                    <Fragment key={addon.serviceId}>
+                      {ServiceRow({ service: addon, isAddon: true })}
+                    </Fragment>
                   ))}
                 </div>
               )

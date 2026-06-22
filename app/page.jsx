@@ -4,11 +4,11 @@ import CherryBlossomHeading from './components/CherryBlossomHeading';
 
 export const metadata = {
   title: 'The Spa Synergy | Day Spa in Cascade & Fort Ritchie, MD',
-  description: 'Book head spa treatments, scalp facials, massage, hair styling, infrared sauna, and private spa room services at The Spa Synergy in Cascade (Fort Ritchie), MD. Serving Hagerstown, Thurmont, Emmitsburg, Frederick, Waynesboro, Chambersburg & surrounding areas.',
-  keywords: 'head spa, head spa Maryland, scalp facial, spa room, infrared sauna, massage, hair styling, day spa Cascade MD, Fort Ritchie spa, wellness, relaxation, Hagerstown spa',
+  description: 'Book head spa treatments, scalp facials, massage, hair styling, infrared sauna, spa packages, and private spa room services at The Spa Synergy in Cascade (Fort Ritchie), MD. Curated wellness packages for couples, groups, and bridal parties. Serving Hagerstown, Thurmont, Emmitsburg, Frederick, Waynesboro, Chambersburg & surrounding areas.',
+  keywords: 'head spa, head spa Maryland, scalp facial, spa room, infrared sauna, massage, hair styling, spa packages, wellness packages, couples spa, bridal party spa, group spa packages, day spa Cascade MD, Fort Ritchie spa, wellness, relaxation, Hagerstown spa, spa deals, spa bundles',
   openGraph: {
-    title: 'The Spa Synergy | Head Spa, Sauna & Wellness in Cascade, MD',
-    description: 'Head spa treatments, scalp facials, infrared sauna, private spa room, massage, and beauty services in Cascade (Fort Ritchie), MD. Serving Washington County and the tri-state area.',
+    title: 'The Spa Synergy | Head Spa, Sauna, Packages & Wellness in Cascade, MD',
+    description: 'Head spa treatments, scalp facials, infrared sauna, private spa room, curated spa packages, massage, and beauty services in Cascade (Fort Ritchie), MD. Serving Washington County and the tri-state area.',
     type: 'website',
     locale: 'en_US',
   },
@@ -122,6 +122,22 @@ export default function Home() {
               Explore Spa Room Services →
             </a>
           </div>
+        </div>
+      </section>
+
+      {/* Packages Section */}
+      <section style={{ padding: '4rem 2rem', maxWidth: '1200px', margin: '0 auto', textAlign: 'center' }}>
+        <CherryBlossomHeading text="Spa Packages" />
+        <p style={{ color: 'var(--color-text-light)', maxWidth: '700px', margin: '1rem auto 2rem' }}>
+          Save with our curated wellness experiences — bundled services at a special price. Perfect for groups, couples, or a personal retreat.
+        </p>
+        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+          <a href="/bundles" className="cta" style={{ background: 'var(--color-primary)' }}>
+            View Packages & Pricing
+          </a>
+          <a href="tel:240-329-6537" className="cta" style={{ background: 'transparent', border: '2px solid var(--color-primary)', color: 'var(--color-primary)' }}>
+            📞 Call to Book a Package
+          </a>
         </div>
       </section>
 
