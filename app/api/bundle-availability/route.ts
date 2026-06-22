@@ -115,6 +115,7 @@ export async function GET(request: Request) {
     const availableSlots = slots.map((slot: any) => ({
       time: slot.startTime,
       display: formatTime(slot.startTime),
+      schedule: slot.schedule, // individual service start/end times
     }));
 
     return Response.json({ availableSlots, suggestedOrder });

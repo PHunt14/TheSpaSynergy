@@ -44,7 +44,7 @@ export default function ResourceBookingPage({
 
   const handleBook = () => {
     if (!selected) return
-    router.push(`/booking/time?vendor=${selected.vendorId}&service=${selected.serviceId}`)
+    router.push(`/booking/provider?service=${selected.serviceId}`)
   }
 
   if (loading) return <div style={{ padding: '2rem' }}>Loading...</div>

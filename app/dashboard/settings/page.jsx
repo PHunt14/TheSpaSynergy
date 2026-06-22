@@ -4,15 +4,13 @@ import { useState, useEffect } from 'react'
 import { generateClient } from 'aws-amplify/data'
 import { fetchAuthSession } from 'aws-amplify/auth'
 import MySettings from './MySettings'
-import VendorSettings from './VendorSettings'
-import BuildingSettings from './BuildingSettings'
+import AdminSettings from './AdminSettings'
 
 const client = generateClient()
 
 const TABS = {
   MY: 'my',
-  VENDOR: 'vendor',
-  BUILDING: 'building',
+  ADMIN: 'admin',
 }
 
 export default function Settings() {
@@ -111,28 +109,19 @@ export default function Settings() {
       <div style={{ borderBottom: '1px solid var(--color-border)', marginBottom: '2rem', maxWidth: '600px' }}>
         <button style={tabStyle(TABS.MY)} onClick={() => setActiveTab(TABS.MY)}>My Settings</button>
         {isPrivileged && (
-          <>
-            <button style={tabStyle(TABS.VENDOR)} onClick={() => setActiveTab(TABS.VENDOR)}>Vendor Settings</button>
-            <button style={tabStyle(TABS.BUILDING)} onClick={() => setActiveTab(TABS.BUILDING)}>Building Settings</button>
-          </>
+          <button style={tabStyle(TABS.ADMIN)} onClick={() => setActiveTab(TABS.ADMIN)}>Admin</button>
         )}
       </div>
 
       {activeTab === TABS.MY && (
         <MySettings currentUser={currentUser} showMessage={showMessage} />
       )}
-      {activeTab === TABS.VENDOR && isPrivileged && (
-        <VendorSettings
+      {activeTab === TABS.ADMIN && isPrivileged && (
+        <AdminSettings
           currentUser={currentUser}
           vendors={vendors}
           selectedVendorId={selectedVendorId}
           setSelectedVendorId={setSelectedVendorId}
-          showMessage={showMessage}
-        />
-      )}
-      {activeTab === TABS.BUILDING && isPrivileged && (
-        <BuildingSettings
-          currentUser={currentUser}
           showMessage={showMessage}
         />
       )}

@@ -69,6 +69,8 @@ function ConfirmPageContent() {
     : {}
   const isBundle = !!servicesParam
   const serviceIds = servicesParam ? servicesParam.split(',') : service ? [service] : []
+  const scheduleParam = params.get('schedule')
+  const bundleSchedule = scheduleParam ? JSON.parse(decodeURIComponent(scheduleParam)) : null
 
   const [formData, setFormData] = useState({ name: '', email: '', phone: '', smsOptIn: false, notes: '' })
   const [loading, setLoading] = useState(false)
@@ -227,6 +229,15 @@ function ConfirmPageContent() {
     return `${dateOnly}T${hour24.toString().padStart(2, '0')}:${minutes}:00`
   }
 
+  // Build a dateTimeISO for a specific service using its scheduled start time (HH:MM format)
+  const buildDateTimeForService = (serviceId) => {
+    if (!bundleSchedule) return buildDateTimeISO()
+    const entry = bundleSchedule.find(e => e.serviceId === serviceId)
+    if (!entry || !entry.startTime) return buildDateTimeISO()
+    const dateOnly = date.split('T')[0]
+    return `${dateOnly}T${entry.startTime}:00`
+  }
+
   const processPaymentWithToken = async (token, assignedStaffId) => {
     const paymentResponse = await fetch('/api/payment', {
       method: 'POST',
@@ -371,6 +382,7 @@ function ConfirmPageContent() {
     const results = await Promise.all(
       allServiceDetails.map(svc => {
         const svcQty = getQty(svc)
+        const svcDateTime = buildDateTimeForService(svc.serviceId)
         return fetch('/api/appointments', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -379,7 +391,7 @@ function ConfirmPageContent() {
             serviceId: svc.serviceId,
             staffId: effectiveStaffId || undefined,
             bundleId: bundleId || undefined,
-            dateTime: dateTimeISO,
+            dateTime: svcDateTime,
             customer: formData,
             status,
             paymentId,

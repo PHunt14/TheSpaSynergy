@@ -19,6 +19,7 @@ function BundleTimeContent() {
 
   const [selectedDate, setSelectedDate] = useState(null)
   const [selectedTime, setSelectedTime] = useState(null)
+  const [selectedSchedule, setSelectedSchedule] = useState(null)
   const [availableSlots, setAvailableSlots] = useState([])
   const [loading, setLoading] = useState(false)
   const [services, setServices] = useState([])
@@ -182,8 +183,8 @@ function BundleTimeContent() {
               key={slot.time}
               role="button"
               tabIndex={0}
-              onClick={() => setSelectedTime(slot.display)}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedTime(slot.display); } }}
+              onClick={() => { setSelectedTime(slot.display); setSelectedSchedule(slot.schedule || null) }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedTime(slot.display); setSelectedSchedule(slot.schedule || null) } }}
               style={{
                 padding: '1rem',
                 borderRadius: '8px',
@@ -203,7 +204,7 @@ function BundleTimeContent() {
 
       {selectedTime && (
         <Link
-          href={`/booking/confirm?${bundleId ? `bundleId=${bundleId}&` : ''}services=${serviceIds.join(',')}&date=${selectedDate.toISOString()}&time=${selectedTime}${people ? `&people=${people}` : ''}${quantitiesParam ? `&quantities=${quantitiesParam}` : ''}`}
+          href={`/booking/confirm?${bundleId ? `bundleId=${bundleId}&` : ''}services=${serviceIds.join(',')}&date=${selectedDate.toISOString()}&time=${selectedTime}${people ? `&people=${people}` : ''}${quantitiesParam ? `&quantities=${quantitiesParam}` : ''}${selectedSchedule ? `&schedule=${encodeURIComponent(JSON.stringify(selectedSchedule))}` : ''}`}
           className="cta"
         >
           Continue

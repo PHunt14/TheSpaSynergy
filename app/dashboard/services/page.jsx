@@ -84,20 +84,10 @@ export default function Services() {
 
   const loadCategories = async () => {
     try {
-      const data = await fetch('/api/services?includeInactive=true').then(r => r.json())
-      const allServices = data.services || []
-      // Extract unique categories from all services
-      const cats = new Set()
-      allServices.forEach(s => {
-        if (s.categories && Array.isArray(s.categories)) {
-          s.categories.forEach(c => cats.add(c))
-        }
-        // Also handle legacy single category field
-        if (s.category && typeof s.category === 'string') {
-          cats.add(s.category)
-        }
-      })
-      setExistingCategories([...cats].sort((a, b) => a.localeCompare(b)))
+      const res = await fetch('/api/categories')
+      const data = await res.json()
+      const cats = (data.categories || []).map(c => c.name)
+      setExistingCategories(cats.sort((a, b) => a.localeCompare(b)))
     } catch (err) {
       console.error('Error loading categories:', err)
     }
@@ -393,8 +383,8 @@ export default function Services() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  // Multi-category dropdown component
-  const CategorySelector = () => (
+  // Multi-category dropdown JSX (inline to avoid remount on re-render)
+  const categorySelectorJsx = (
     <div style={{ marginBottom: '1rem' }}>
       <label style={{ display: 'block', marginBottom: '0.5rem' }}>
         Categories * <span style={{ fontSize: '0.85rem', color: 'var(--color-text-light)' }}>(1-5 categories)</span>
@@ -449,12 +439,13 @@ export default function Services() {
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault()
-              if (categoryInput.trim()) {
-                addCategory(categoryInput)
+              // Select first matching category from dropdown
+              if (categoryInput.trim() && filteredCategories.length > 0) {
+                addCategory(filteredCategories[0])
               }
             }
           }}
-          placeholder={newService.categories.length >= 5 ? 'Maximum categories reached' : 'Type to search or add new category...'}
+          placeholder={newService.categories.length >= 5 ? 'Maximum categories reached' : 'Type to search categories...'}
           disabled={newService.categories.length >= 5}
           style={{
             width: '100%',
@@ -467,7 +458,7 @@ export default function Services() {
         />
 
         {/* Dropdown */}
-        {showCategoryDropdown && categoryInput && (
+        {showCategoryDropdown && (
           <div style={{
             position: 'absolute',
             top: '100%',
@@ -481,12 +472,12 @@ export default function Services() {
             zIndex: 10,
             boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
           }}>
-            {filteredCategories.map(cat => (
+            {filteredCategories.length > 0 ? filteredCategories.map(cat => (
               <div
                 key={cat}
                 role="option"
                 tabIndex={0}
-                onClick={() => addCategory(cat)}
+                onMouseDown={(e) => { e.preventDefault(); addCategory(cat) }}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); addCategory(cat) } }}
                 style={{
                   padding: '0.5rem 0.75rem',
@@ -499,31 +490,9 @@ export default function Services() {
               >
                 {cat}
               </div>
-            ))}
-            {/* Option to add new category if it doesn't exist */}
-            {categoryInput.trim().length >= 2 && !existingCategories.some(c => c.toLowerCase() === categoryInput.trim().toLowerCase()) && (
-              <div
-                role="option"
-                tabIndex={0}
-                onClick={() => addCategory(categoryInput)}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); addCategory(categoryInput) } }}
-                style={{
-                  padding: '0.5rem 0.75rem',
-                  cursor: 'pointer',
-                  fontSize: '0.9rem',
-                  color: '#1976d2',
-                  fontWeight: '500',
-                  borderTop: filteredCategories.length > 0 ? '1px solid var(--color-border)' : 'none'
-                }}
-                onMouseEnter={(e) => e.target.style.background = '#e3f2fd'}
-                onMouseLeave={(e) => e.target.style.background = 'white'}
-              >
-                + Add new category: &quot;{categoryInput.trim()}&quot;
-              </div>
-            )}
-            {filteredCategories.length === 0 && categoryInput.trim().length < 2 && (
+            )) : (
               <div style={{ padding: '0.5rem 0.75rem', color: 'var(--color-text-light)', fontSize: '0.85rem' }}>
-                Type at least 2 characters to add a new category
+                No matching categories. Add new ones in Settings → Admin → Categories.
               </div>
             )}
           </div>
@@ -534,7 +503,7 @@ export default function Services() {
         <p style={{ fontSize: '0.85rem', color: '#f44336', marginTop: '0.25rem' }}>{categoryError}</p>
       )}
       <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.25rem' }}>
-        Select from existing categories or type a new one and press Enter to add.
+        Select from existing categories. New categories can be added in Settings → Admin → Categories.
       </p>
     </div>
   )
@@ -615,8 +584,9 @@ export default function Services() {
     )
   }
 
-  // Full service form (for admin)
-  const ServiceForm = ({ isEdit }) => (
+  // Full service form (for admin) — rendered as a function call, not a component,
+  // to avoid remounting the DOM tree (and losing input focus) on every state change.
+  const renderServiceForm = (isEdit) => (
     <form ref={formRef} onSubmit={handleAddService} style={{
       background: isEdit ? '#fff8f0' : 'var(--color-accent)',
       padding: '1.5rem',
@@ -637,7 +607,7 @@ export default function Services() {
         />
       </div>
 
-      <CategorySelector />
+      {categorySelectorJsx}
 
       <div style={{ marginBottom: '1rem' }}>
         <label style={{ display: 'block', marginBottom: '0.5rem' }}>Description</label>
@@ -802,6 +772,7 @@ export default function Services() {
           style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }}
         >
           <option value="staff">Staff</option>
+          <option value="room">Spa Room</option>
           <option value="sauna">Sauna</option>
         </select>
       </div>
@@ -1000,7 +971,7 @@ export default function Services() {
         </div>
         {editingService?.serviceId === service.serviceId && (
           <div style={{ marginTop: '0.5rem' }}>
-            {currentUserRole === 'admin' ? <ServiceForm isEdit={true} /> : <StaffPriceEditForm />}
+            {currentUserRole === 'admin' ? renderServiceForm(true) : <StaffPriceEditForm />}
           </div>
         )}
         {!isAddon && managingAddonsFor?.serviceId === service.serviceId && (
@@ -1037,7 +1008,7 @@ export default function Services() {
 
       {/* Add form (admin only) */}
       {showAddForm && !editingService && canCreate && (
-        <ServiceForm isEdit={false} />
+        renderServiceForm(false)
       )}
 
       {loading && <p>Loading services...</p>}
