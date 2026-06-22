@@ -91,6 +91,38 @@ export async function GET(request: Request) {
       return Response.json({ error: validation.error }, { status: 400 });
     }
 
+    // --- Check global booking blackout ---
+    const { data: globalSetting } = await client.models.SiteSettings.get({ settingKey: 'globalBookingDisabledUntil' });
+    const globalUntil = globalSetting?.settingValue;
+    if (globalUntil && new Date(globalUntil) > new Date()) {
+      return Response.json({ slots: [], suggestedOrder: serviceIds, totalDuration: 0, bookingDisabled: true, disabledUntil: globalUntil });
+    }
+
+    // --- Check vendor-level booking blackouts ---
+    const uniqueVendorIdsForBlackout = [...new Set(services.map((s: any) => s.vendorId))] as string[];
+    const vendorBlackoutPromises = uniqueVendorIdsForBlackout.map(vid => client.models.Vendor.get({ vendorId: vid }));
+    const vendorBlackoutResults = await Promise.all(vendorBlackoutPromises);
+
+    const disabledVendors: string[] = [];
+    for (const vr of vendorBlackoutResults) {
+      if (vr.data) {
+        const vendorUntil = vr.data.bookingDisabledUntil as string | null;
+        if (vendorUntil && new Date(vendorUntil) > new Date()) {
+          disabledVendors.push(vr.data.name || vr.data.vendorId);
+        }
+      }
+    }
+    if (disabledVendors.length > 0) {
+      return Response.json({
+        slots: [],
+        suggestedOrder: serviceIds,
+        totalDuration: 0,
+        bookingDisabled: true,
+        disabledVendors,
+        error: `Booking is temporarily disabled for: ${disabledVendors.join(', ')}`
+      });
+    }
+
     // Determine buffer minutes from the first service's vendor (or default 15)
     const firstVendorId = services[0].vendorId;
     const { data: firstVendor } = await client.models.Vendor.get({ vendorId: firstVendorId });

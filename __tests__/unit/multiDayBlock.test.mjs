@@ -2,7 +2,7 @@
  * Multi-Day Block Time Tests
  *
  * Tests the logic for creating multi-day blocked time entries.
- * Multi-day blocks create one full-day block (720 min) per day in the range.
+ * Multi-day blocks create one full-day block (960 min) per day in the range.
  */
 
 import { describe, test, expect } from '@jest/globals'
@@ -10,14 +10,14 @@ import { hasAnySlot } from '../../app/utils/availability.js'
 
 describe('Multi-day block time', () => {
   describe('full-day blocks prevent availability', () => {
-    test('a 720-minute block starting at 8am blocks the entire working day', () => {
-      // A full-day block: 8:00 AM, 720 minutes (12 hours) → blocks 8:00-20:00
+    test('a 960-minute block starting at 6am blocks the entire working day', () => {
+      // A full-day block: 6:00 AM, 960 minutes (16 hours) → blocks 6:00-22:00
       const appointments = [
         {
-          dateTime: '2025-07-15T08:00:00Z',
+          dateTime: '2025-07-15T06:00',
           staffId: 'staff-1',
           status: 'blocked',
-          customer: JSON.stringify({ name: 'Blocked Time', isBlockedTime: true, duration: 720 })
+          customer: JSON.stringify({ name: 'Blocked Time', isBlockedTime: true, duration: 960 })
         }
       ]
 
@@ -34,10 +34,10 @@ describe('Multi-day block time', () => {
     test('a block on one day does not affect another day', () => {
       const appointments = [
         {
-          dateTime: '2025-07-15T08:00:00Z',
+          dateTime: '2025-07-15T06:00',
           staffId: 'staff-1',
           status: 'blocked',
-          customer: JSON.stringify({ name: 'Blocked Time', isBlockedTime: true, duration: 720 })
+          customer: JSON.stringify({ name: 'Blocked Time', isBlockedTime: true, duration: 960 })
         }
       ]
 
@@ -54,10 +54,10 @@ describe('Multi-day block time', () => {
     test('block only affects the assigned staff member', () => {
       const appointments = [
         {
-          dateTime: '2025-07-15T08:00:00Z',
+          dateTime: '2025-07-15T06:00',
           staffId: 'staff-1',
           status: 'blocked',
-          customer: JSON.stringify({ name: 'Blocked Time', isBlockedTime: true, duration: 720 })
+          customer: JSON.stringify({ name: 'Blocked Time', isBlockedTime: true, duration: 960 })
         }
       ]
 

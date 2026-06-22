@@ -61,6 +61,35 @@ export async function POST(request: Request) {
       return Response.json({ error: validation.error }, { status: 400 });
     }
 
+    // --- Check global booking blackout ---
+    const { data: globalSetting } = await client.models.SiteSettings.get({ settingKey: 'globalBookingDisabledUntil' });
+    const globalUntil = globalSetting?.settingValue;
+    if (globalUntil && new Date(globalUntil) > new Date()) {
+      return Response.json({ error: 'Online booking is temporarily disabled', bookingDisabled: true, disabledUntil: globalUntil }, { status: 403 });
+    }
+
+    // --- Check vendor-level booking blackouts ---
+    const uniqueVendorIdsForBlackout = [...new Set(services.map((s: any) => s.vendorId))] as string[];
+    const vendorBlackoutPromises = uniqueVendorIdsForBlackout.map((vid: string) => client.models.Vendor.get({ vendorId: vid }));
+    const vendorBlackoutResults = await Promise.all(vendorBlackoutPromises);
+
+    const disabledVendors: string[] = [];
+    for (const vr of vendorBlackoutResults) {
+      if (vr.data) {
+        const vendorUntil = vr.data.bookingDisabledUntil as string | null;
+        if (vendorUntil && new Date(vendorUntil) > new Date()) {
+          disabledVendors.push(vr.data.name || vr.data.vendorId);
+        }
+      }
+    }
+    if (disabledVendors.length > 0) {
+      return Response.json({
+        error: `Booking is temporarily disabled for: ${disabledVendors.join(', ')}`,
+        bookingDisabled: true,
+        disabledVendors
+      }, { status: 403 });
+    }
+
     // --- Determine service order ---
     const orderedServiceIds = serviceOrder && serviceOrder.length > 0 ? serviceOrder : serviceIds;
     const orderedServices = orderedServiceIds.map((id: string) =>

@@ -682,6 +682,8 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
   const [staffId, setStaffId] = useState(defaultStaffId || '')
   const [staffId2, setStaffId2] = useState('')
   const [duration, setDuration] = useState(60)
+  const [blockEndTime, setBlockEndTime] = useState('')
+  const [durationMode, setDurationMode] = useState('endtime') // 'endtime' or 'duration'
   const [submitting, setSubmitting] = useState(false)
 
   const selectedService = services.find(s => s.serviceId === serviceId)
@@ -720,17 +722,19 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
 
         let failed = false
         for (const day of days) {
-          // Block the full working day (use 8am start, 720 min = 12 hours as a full-day block)
-          const dayDateTime = new Date(day)
-          dayDateTime.setHours(8, 0, 0, 0)
+          // Block the full working day (use 6am start, 960 min = 16 hours as a full-day block)
+          const year = day.getFullYear()
+          const month = String(day.getMonth() + 1).padStart(2, '0')
+          const dd = String(day.getDate()).padStart(2, '0')
+          const dayDateTimeStr = `${year}-${month}-${dd}T06:00`
           const body = {
             vendorId,
             staffId: staffId || undefined,
-            dateTime: dayDateTime.toISOString().slice(0, 16),
+            dateTime: dayDateTimeStr,
             customerName: 'Blocked Time',
             notes: form.notes || `Blocked ${days.length} day(s)`,
             isBlockedTime: true,
-            duration: 720
+            duration: 960
           }
           const res = await fetch('/api/appointments/manual', {
             method: 'POST',
@@ -867,11 +871,69 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
             </div>
 
             {blockType === 'single' ? (
-              /* Single block — duration in minutes */
+              /* Single block — end time or duration */
               <div style={{ marginBottom: '1rem' }}>
-                <label htmlFor="new-apt-duration" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Duration (minutes)</label>
-                <input id="new-apt-duration" type="number" min="15" step="15" value={duration} onChange={(e) => setDuration(Number(e.target.value))}
-                  style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', boxSizing: 'border-box' }} />
+                {/* Toggle between end time and duration entry */}
+                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                  <button type="button" onClick={() => setDurationMode('endtime')} style={{ flex: 1, padding: '0.35rem', borderRadius: '5px', border: '1px solid var(--color-border)', background: durationMode === 'endtime' ? '#607D8B' : 'white', color: durationMode === 'endtime' ? 'white' : 'var(--color-text)', cursor: 'pointer', fontSize: '0.8rem' }}>
+                    End Time
+                  </button>
+                  <button type="button" onClick={() => setDurationMode('duration')} style={{ flex: 1, padding: '0.35rem', borderRadius: '5px', border: '1px solid var(--color-border)', background: durationMode === 'duration' ? '#607D8B' : 'white', color: durationMode === 'duration' ? 'white' : 'var(--color-text)', cursor: 'pointer', fontSize: '0.8rem' }}>
+                    Duration
+                  </button>
+                </div>
+
+                {durationMode === 'endtime' ? (
+                  <div>
+                    <label htmlFor="new-apt-endtime" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>End Time</label>
+                    <input id="new-apt-endtime" type="datetime-local" value={blockEndTime} onChange={(e) => {
+                      setBlockEndTime(e.target.value)
+                      // Calculate duration from start to end
+                      if (form.dateTime && e.target.value) {
+                        const startMs = new Date(form.dateTime).getTime()
+                        const endMs = new Date(e.target.value).getTime()
+                        const diffMin = Math.round((endMs - startMs) / 60000)
+                        if (diffMin > 0) setDuration(diffMin)
+                      }
+                    }}
+                    min={form.dateTime || ''}
+                    style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', boxSizing: 'border-box' }} />
+                    {duration > 0 && form.dateTime && blockEndTime && (
+                      <p style={{ fontSize: '0.8rem', color: 'var(--color-text-light)', marginTop: '0.25rem' }}>
+                        {duration >= 60 ? `${Math.floor(duration / 60)}h ${duration % 60 > 0 ? `${duration % 60}m` : ''}` : `${duration}m`}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div>
+                    <label htmlFor="new-apt-duration" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Duration</label>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <div style={{ flex: 1 }}>
+                        <input id="new-apt-duration-hours" type="number" min="0" max="23" value={Math.floor(duration / 60)} onChange={(e) => {
+                          const hours = Math.max(0, Number(e.target.value))
+                          const mins = duration % 60
+                          setDuration(hours * 60 + mins)
+                        }}
+                        style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', boxSizing: 'border-box' }} />
+                        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-light)' }}>hours</span>
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <input id="new-apt-duration-mins" type="number" min="0" max="59" step="15" value={duration % 60} onChange={(e) => {
+                          const hours = Math.floor(duration / 60)
+                          const mins = Math.max(0, Math.min(59, Number(e.target.value)))
+                          setDuration(hours * 60 + mins)
+                        }}
+                        style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', boxSizing: 'border-box' }} />
+                        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-light)' }}>minutes</span>
+                      </div>
+                    </div>
+                    {duration > 0 && (
+                      <p style={{ fontSize: '0.8rem', color: 'var(--color-text-light)', marginTop: '0.25rem' }}>
+                        Total: {duration >= 60 ? `${Math.floor(duration / 60)}h ${duration % 60 > 0 ? `${duration % 60}m` : ''}` : `${duration}m`}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             ) : (
               /* Multi-day block — end date */
