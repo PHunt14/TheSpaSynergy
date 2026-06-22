@@ -42,6 +42,25 @@ export async function GET() {
       nextToken = (result as any).nextToken;
     } while (nextToken);
 
+    // If ServiceCategory table is empty, fall back to extracting from services
+    if (categories.length === 0) {
+      const { data: services } = await client.models.Service.list() as any;
+      const catSet = new Set<string>();
+      for (const svc of (services || [])) {
+        if (svc.categories && Array.isArray(svc.categories)) {
+          svc.categories.forEach((c: string) => { if (c) catSet.add(c) });
+        }
+        if (svc.category && typeof svc.category === 'string') {
+          catSet.add(svc.category);
+        }
+      }
+      const derived = [...catSet].sort().map(name => ({
+        categoryId: `cat-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}`,
+        name,
+      }));
+      return Response.json({ categories: derived });
+    }
+
     categories.sort((a, b) => a.name.localeCompare(b.name));
 
     return Response.json({ categories });

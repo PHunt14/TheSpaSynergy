@@ -98,9 +98,15 @@ export function groupServicesByCategory(services) {
   const groups = {}
 
   for (const service of services) {
-    const cats = service.categories && Array.isArray(service.categories) && service.categories.length > 0
-      ? service.categories
-      : ['Other']
+    // Support both new 'categories' array and legacy 'category' string
+    let cats
+    if (service.categories && Array.isArray(service.categories) && service.categories.length > 0) {
+      cats = service.categories
+    } else if (service.category && typeof service.category === 'string') {
+      cats = [service.category]
+    } else {
+      cats = ['Other']
+    }
 
     for (const cat of cats) {
       const categoryName = cat || 'Other'
@@ -123,6 +129,8 @@ export function getCategories(services) {
       for (const cat of service.categories) {
         categorySet.add(cat || 'Other')
       }
+    } else if (service.category && typeof service.category === 'string') {
+      categorySet.add(service.category)
     } else {
       categorySet.add('Other')
     }
@@ -177,9 +185,14 @@ export function useServiceCatalog({ maxServices = 4 } = {}) {
   const filteredServices = categoryFilter === 'All'
     ? services
     : services.filter(s => {
-        const cats = s.categories && Array.isArray(s.categories) && s.categories.length > 0
-          ? s.categories
-          : ['Other']
+        let cats
+        if (s.categories && Array.isArray(s.categories) && s.categories.length > 0) {
+          cats = s.categories
+        } else if (s.category && typeof s.category === 'string') {
+          cats = [s.category]
+        } else {
+          cats = ['Other']
+        }
         return cats.includes(categoryFilter)
       })
 

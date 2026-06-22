@@ -22,7 +22,7 @@ describe('Footer', () => {
   })
 
   test('renders navigation links', () => {
-    expect(screen.getByRole('link', { name: 'Practitioners' })).toHaveAttribute('href', '/providers')
+    expect(screen.getByRole('link', { name: 'Providers' })).toHaveAttribute('href', '/providers')
     expect(screen.getByRole('link', { name: 'Packages' })).toHaveAttribute('href', '/bundles')
     expect(screen.getByRole('link', { name: 'Book Now' })).toHaveAttribute('href', '/booking')
     expect(screen.getByRole('link', { name: 'Contact' })).toHaveAttribute('href', '/contact')

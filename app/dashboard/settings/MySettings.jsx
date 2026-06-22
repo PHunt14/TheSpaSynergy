@@ -22,6 +22,8 @@ export default function MySettings({ currentUser, showMessage }) {
   const [saving, setSaving] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState(null)
+  const [bookingDisabledUntil, setBookingDisabledUntil] = useState('')
+  const [savingBlackout, setSavingBlackout] = useState(false)
 
   useEffect(() => {
     if (currentUser.email && currentUser.vendorId) {
@@ -41,6 +43,7 @@ export default function MySettings({ currentUser, showMessage }) {
         setStaffSquareStatus(mine.squareOAuthStatus || 'disconnected')
         setSmsAlertsEnabled(mine.smsAlertsEnabled || false)
         setSmsAlertPhone(mine.smsAlertPhone || '')
+        setBookingDisabledUntil(mine.bookingDisabledUntil || '')
       }
     } catch (error) {
       console.error('Error loading staff schedule:', error)
@@ -130,11 +133,101 @@ export default function MySettings({ currentUser, showMessage }) {
     }
   }
 
+  const handleSaveBlackout = async () => {
+    if (!myStaffSchedule) return
+    setSavingBlackout(true)
+    try {
+      const res = await fetch('/api/staff-schedules', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          visibleId: myStaffSchedule.visibleId,
+          bookingDisabledUntil: bookingDisabledUntil || null,
+        })
+      })
+      if (!res.ok) { showMessage('Error saving booking availability'); return }
+      showMessage(bookingDisabledUntil ? 'Online booking paused until ' + new Date(bookingDisabledUntil).toLocaleDateString() : 'Online booking re-enabled!')
+    } catch (error) {
+      showMessage('Error: ' + error.message)
+    } finally {
+      setSavingBlackout(false)
+    }
+  }
+
+  const handleClearBlackout = async () => {
+    setBookingDisabledUntil('')
+    if (!myStaffSchedule) return
+    setSavingBlackout(true)
+    try {
+      await fetch('/api/staff-schedules', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          visibleId: myStaffSchedule.visibleId,
+          bookingDisabledUntil: null,
+        })
+      })
+      showMessage('Online booking re-enabled!')
+    } catch (error) {
+      showMessage('Error: ' + error.message)
+    } finally {
+      setSavingBlackout(false)
+    }
+  }
+
   return (
     <div>
       <p style={{ color: 'var(--color-text-light)', marginBottom: '2rem' }}>
         Your personal notification and payment preferences.
       </p>
+
+      {/* Booking Availability */}
+      {myStaffSchedule && (
+        <div style={sectionStyle}>
+          <h2 style={{ marginTop: 0, marginBottom: '1.5rem' }}>Booking Availability<Tooltip text="Pause online booking for your services. Clients won't be able to book you online until the date you set. Existing appointments are not affected." /></h2>
+
+          {bookingDisabledUntil && new Date(bookingDisabledUntil) > new Date() ? (
+            <div style={{ padding: '1rem', background: '#fff3cd', border: '1px solid #ffc107', borderRadius: '8px', marginBottom: '1.5rem' }}>
+              <div style={{ fontWeight: '500', color: '#856404', marginBottom: '0.5rem' }}>⏸ Online booking is paused</div>
+              <p style={{ fontSize: '0.9rem', color: '#856404', margin: 0 }}>
+                New clients cannot book your services online until <strong>{new Date(bookingDisabledUntil).toLocaleDateString()}</strong>.
+              </p>
+            </div>
+          ) : (
+            <div style={{ padding: '1rem', background: '#d4edda', border: '1px solid #c3e6cb', borderRadius: '8px', marginBottom: '1.5rem' }}>
+              <div style={{ fontWeight: '500', color: '#155724' }}>✓ Online booking is active</div>
+            </div>
+          )}
+
+          <div style={{ marginBottom: '1.5rem' }}>
+            <label style={labelStyle}>Pause booking until</label>
+            <input
+              type="date"
+              value={bookingDisabledUntil ? bookingDisabledUntil.split('T')[0] : ''}
+              onChange={(e) => setBookingDisabledUntil(e.target.value ? e.target.value + 'T23:59:59' : '')}
+              min={new Date().toISOString().split('T')[0]}
+              style={inputStyle}
+            />
+            <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.5rem' }}>
+              Select a date to pause online booking until. Existing appointments won&apos;t be affected.
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', gap: '1rem' }}>
+            <button onClick={handleSaveBlackout} disabled={savingBlackout || !bookingDisabledUntil} className="cta" style={{ opacity: savingBlackout || !bookingDisabledUntil ? 0.6 : 1 }}>
+              {savingBlackout ? 'Saving...' : 'Pause Booking'}
+            </button>
+            {bookingDisabledUntil && (
+              <button onClick={handleClearBlackout} disabled={savingBlackout} style={{
+                padding: '0.75rem 1.5rem', background: 'white', border: '1px solid var(--color-border)',
+                borderRadius: '8px', cursor: 'pointer', fontSize: '1rem', fontWeight: '500'
+              }}>
+                Re-enable Booking
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* SMS Notifications */}
       {myStaffSchedule && (

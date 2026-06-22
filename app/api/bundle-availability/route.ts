@@ -71,6 +71,13 @@ export async function GET(request: Request) {
       staffSchedules = staffResults.filter(r => !r.errors && r.data).map(r => r.data) as any[];
     }
 
+    // Exclude staff with active booking blackout
+    const now = new Date();
+    staffSchedules = staffSchedules.filter((s: any) => {
+      if (s.bookingDisabledUntil && new Date(s.bookingDisabledUntil) > now) return false;
+      return true;
+    });
+
     // Build staffSchedulesByService map
     const staffSchedulesByService: Record<string, any[]> = {};
     for (const service of services) {

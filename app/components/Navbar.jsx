@@ -34,7 +34,7 @@ export default function Navbar() {
             onMouseEnter={() => setShowProviderDropdown(true)}
             onMouseLeave={() => setShowProviderDropdown(false)}
           >
-            <Link href="/providers">Practitioners</Link>
+            <Link href="/providers">Providers</Link>
             {showProviderDropdown && (
               <div className="dropdown-menu">
                 {providers.length > 0 ? (
@@ -45,7 +45,7 @@ export default function Navbar() {
                   ))
                 ) : (
                   <div style={{ padding: '0.75rem 1rem', color: 'var(--color-text-light)' }}>
-                    Loading practitioners...
+                    Loading providers...
                   </div>
                 )}
               </div>

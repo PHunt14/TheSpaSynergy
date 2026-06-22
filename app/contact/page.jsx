@@ -33,7 +33,7 @@ export default function ContactPage() {
         <p>Loading vendor information...</p>
       ) : (
         <div style={{ marginBottom: '2rem' }}>
-          <h3>Our Vendors</h3>
+          <h3>Our Providers</h3>
           {vendors.map(vendor => (
             <div key={vendor.vendorId} style={{ marginBottom: '1.5rem', padding: '1rem', background: 'var(--color-accent)', borderRadius: '8px' }}>
               <h4 style={{ marginBottom: '0.5rem' }}>{vendor.name}</h4>

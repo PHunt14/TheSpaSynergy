@@ -65,7 +65,13 @@ export async function GET(request: Request) {
         smsAlertsEnabled: s.smsAlertsEnabled,
         emailAlertsEnabled: s.emailAlertsEnabled,
       }))
-    );
+    ).filter((staff: any) => {
+      // Exclude staff with an active booking blackout
+      const raw = allStaff.find((s: any) => s.visibleId === staff.visibleId);
+      const disabledUntil = raw?.bookingDisabledUntil;
+      if (disabledUntil && new Date(disabledUntil) > new Date()) return false;
+      return true;
+    });
 
     // If no staff are eligible, return empty slots with message (Req 5.7)
     if (eligibleStaff.length === 0) {

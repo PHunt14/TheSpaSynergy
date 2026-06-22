@@ -156,6 +156,7 @@ const schema = a.schema({
       smsAlertPhone: a.string(),
       emailAlertsEnabled: a.boolean().default(false),
       isActive: a.boolean().default(true),
+      bookingDisabledUntil: a.string(),
       squareAccessToken: a.string(),
       squareRefreshToken: a.string(),
       squareLocationId: a.string(),
