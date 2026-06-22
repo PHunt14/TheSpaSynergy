@@ -140,7 +140,8 @@ export function computeOverlapLayout(appointments, startHour) {
     .map(apt => {
       const start = parseAppointmentDate(apt.rawDateTime)
       if (!start) return null
-      const duration = apt.service?.duration || 30
+      const customer = apt.customer || {}
+      const duration = (customer.isBlockedTime && customer.duration) ? customer.duration : (apt.service?.duration || 30)
       const end = new Date(start.getTime() + duration * 60 * 1000)
       return { appointment: apt, start, end }
     })

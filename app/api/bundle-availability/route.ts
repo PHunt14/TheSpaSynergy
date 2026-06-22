@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import type { Schema } from '../../../amplify/data/resource';
 import config from '../../../amplify_outputs.json' with { type: 'json' };
 import { getSequentialBundleSlots } from '../../utils/sequentialAvailability.js';
+import { checkBookingBlackout } from '../../utils/bookingBlackout';
 
 const client = generateServerClientUsingCookies<Schema>({ config, cookies });
 
@@ -33,33 +34,14 @@ export async function GET(request: Request) {
       return Response.json({ availableSlots: [] });
     }
 
-    // --- Check global booking blackout ---
-    const { data: globalSetting } = await client.models.SiteSettings.get({ settingKey: 'globalBookingDisabledUntil' });
-    const globalUntil = globalSetting?.settingValue;
-    if (globalUntil && new Date(globalUntil) > new Date()) {
-      return Response.json({ availableSlots: [], bookingDisabled: true, disabledUntil: globalUntil });
-    }
-
-    // --- Check vendor-level booking blackouts ---
-    const uniqueVendorIds = [...new Set(services.map((s: any) => s.vendorId))] as string[];
-    const vendorPromises = uniqueVendorIds.map(vid => client.models.Vendor.get({ vendorId: vid }));
-    const vendorResults = await Promise.all(vendorPromises);
-
-    const disabledVendors: string[] = [];
-    for (const vr of vendorResults) {
-      if (vr.data) {
-        const vendorUntil = vr.data.bookingDisabledUntil as string | null;
-        if (vendorUntil && new Date(vendorUntil) > new Date()) {
-          disabledVendors.push(vr.data.name || vr.data.vendorId);
-        }
-      }
-    }
-    if (disabledVendors.length > 0) {
+    // --- Check global and vendor-level booking blackouts ---
+    const blackout = await checkBookingBlackout(client, services);
+    if (blackout.blocked) {
       return Response.json({
         availableSlots: [],
         bookingDisabled: true,
-        disabledVendors,
-        error: `Booking is temporarily disabled for: ${disabledVendors.join(', ')}`
+        ...(blackout.globalUntil ? { disabledUntil: blackout.globalUntil } : {}),
+        ...(blackout.disabledVendors ? { disabledVendors: blackout.disabledVendors, error: `Booking is temporarily disabled for: ${blackout.disabledVendors.join(', ')}` } : {}),
       });
     }
 
