@@ -14,6 +14,7 @@ import {
   getDateRangeForView,
   computeOverlapLayout,
 } from '../../utils/calendar'
+import MultiStaffView from './MultiStaffView'
 
 // ── Constants ─────────────────────────────────────────────────
 
@@ -1095,12 +1096,39 @@ export default function Calendar() {
   const [vendors, setVendors] = useState([])
   const [allStaff, setAllStaff] = useState([])
   const [selectedStaffId, setSelectedStaffId] = useState(null)
-  const [view, setView] = useState('week')
+  const [view, setViewState] = useState(() => {
+    try {
+      const stored = sessionStorage.getItem('calendarView')
+      if (stored && ['everyone', 'day', 'week', 'month'].includes(stored)) {
+        return stored
+      }
+    } catch {
+      // sessionStorage unavailable (private browsing) — fall back to default
+    }
+    return 'week'
+  })
+
+  // Wrap setView to persist to sessionStorage
+  const setView = (newView) => {
+    setViewState(newView)
+    try {
+      sessionStorage.setItem('calendarView', newView)
+    } catch {
+      // sessionStorage unavailable (private browsing) — ignore
+    }
+  }
+
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedAppointment, setSelectedAppointment] = useState(null)
   const [startHour, setStartHour] = useState(DEFAULT_START_HOUR)
   const [endHour, setEndHour] = useState(DEFAULT_END_HOUR)
   const [newAppointmentDateTime, setNewAppointmentDateTime] = useState(null)
+
+  // Multi-staff view state
+  const [multiStaffAppointments, setMultiStaffAppointments] = useState([])
+  const [multiStaffLoading, setMultiStaffLoading] = useState(false)
+  const [multiStaffError, setMultiStaffError] = useState(null)
+  const [defaultStaffId, setDefaultStaffId] = useState(null)
 
   // Action handlers
   const handleConfirm = async (appointment) => {
@@ -1113,6 +1141,7 @@ export default function Calendar() {
       })
       if (res.ok) {
         loadAppointments()
+        if (view === 'everyone') loadMultiStaffAppointments()
       } else {
         alert('Failed to confirm appointment')
       }
@@ -1131,6 +1160,7 @@ export default function Calendar() {
       })
       if (res.ok) {
         loadAppointments()
+        if (view === 'everyone') loadMultiStaffAppointments()
       } else {
         alert('Failed to cancel appointment')
       }
@@ -1142,6 +1172,7 @@ export default function Calendar() {
   const handleReschedule = () => {
     // Edit is now handled inline in the modal
     loadAppointments()
+    if (view === 'everyone') loadMultiStaffAppointments()
   }
 
   const [rebookData, setRebookData] = useState(null)
@@ -1246,10 +1277,51 @@ export default function Calendar() {
       })
   }
 
+  // Multi-staff data fetching — fetch all appointments for the vendor within the selected day
+  const loadMultiStaffAppointments = (retryCount = 0) => {
+    if (!userVendorId) return
+    setMultiStaffLoading(true)
+    setMultiStaffError(null)
+
+    const { start, end } = getDateRangeForView('everyone', currentDate)
+    const params = new URLSearchParams({
+      vendorId: userVendorId,
+      startDate: start.toISOString(),
+      endDate: end.toISOString(),
+    })
+
+    fetch(`/api/dashboard?${params}`)
+      .then(res => {
+        if (!res.ok) throw new Error(`Server returned ${res.status}`)
+        return res.json()
+      })
+      .then(data => {
+        setMultiStaffAppointments(data.appointments || [])
+        setMultiStaffLoading(false)
+        setMultiStaffError(null)
+      })
+      .catch(err => {
+        console.error('Error loading multi-staff appointments:', err)
+        if (retryCount < 2) {
+          setTimeout(() => loadMultiStaffAppointments(retryCount + 1), 1000 * (retryCount + 1))
+        } else {
+          setMultiStaffLoading(false)
+          setMultiStaffError('Failed to load appointments. Please try again.')
+        }
+      })
+  }
+
+  // Fetch multi-staff appointments when in 'everyone' view or when date changes
+  useEffect(() => {
+    if (view === 'everyone' && userVendorId) {
+      loadMultiStaffAppointments()
+    }
+  }, [view, currentDate, userVendorId])
+
   // Navigation
   const navigateDate = (direction) => {
     const newDate = new Date(currentDate)
-    if (view === 'day') newDate.setDate(newDate.getDate() + direction)
+    if (view === 'day' || view === 'everyone') newDate.setDate(newDate.getDate() + direction)
     else if (view === 'week') newDate.setDate(newDate.getDate() + (direction * 7))
     else newDate.setMonth(newDate.getMonth() + direction)
     setCurrentDate(newDate)
@@ -1259,7 +1331,7 @@ export default function Calendar() {
 
   // Header label
   const headerLabel = useMemo(() => {
-    if (view === 'day') {
+    if (view === 'day' || view === 'everyone') {
       return currentDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
     }
     if (view === 'week') {
@@ -1325,6 +1397,7 @@ export default function Calendar() {
           </button>
         </div>
         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          {view !== 'everyone' && (
           <select
             value={selectedStaffId || ''}
             onChange={(e) => setSelectedStaffId(e.target.value)}
@@ -1342,8 +1415,9 @@ export default function Calendar() {
               )
             })}
           </select>
+          )}
           <div style={{ display: 'flex', background: 'var(--color-accent)', borderRadius: '8px', padding: '3px' }}>
-            {['day', 'week', 'month'].map(v => (
+            {['everyone', 'day', 'week', 'month'].map(v => (
               <button
                 key={v}
                 onClick={() => setView(v)}
@@ -1359,7 +1433,7 @@ export default function Calendar() {
                   textTransform: 'capitalize',
                 }}
               >
-                {v}
+                {v === 'everyone' ? 'Everyone' : v}
               </button>
             ))}
           </div>
@@ -1374,7 +1448,7 @@ export default function Calendar() {
           <button onClick={() => navigateDate(1)} style={{ padding: '0.4rem 0.8rem', borderRadius: '6px', border: '1px solid var(--color-border)', background: 'white', cursor: 'pointer', fontSize: '0.9rem' }}>→</button>
         </div>
         <h2 style={{ margin: 0, fontSize: '1.1rem' }}>{headerLabel}</h2>
-        {/* Hour range adjuster (day/week only) */}
+        {/* Hour range adjuster (day/week/everyone only) */}
         {view !== 'month' && (
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', fontSize: '0.8rem' }}>
             <select value={startHour} onChange={(e) => setStartHour(Number(e.target.value))} style={{ padding: '0.3rem', borderRadius: '4px', border: '1px solid var(--color-border)', fontSize: '0.8rem' }}>
@@ -1392,7 +1466,41 @@ export default function Calendar() {
         )}
       </div>
 
-      {loading && <p style={{ textAlign: 'center', color: 'var(--color-text-light)' }}>Loading appointments...</p>}
+      {loading && view !== 'everyone' && <p style={{ textAlign: 'center', color: 'var(--color-text-light)' }}>Loading appointments...</p>}
+
+      {/* Multi-staff view loading and error states */}
+      {view === 'everyone' && multiStaffLoading && (
+        <p style={{ textAlign: 'center', color: 'var(--color-text-light)' }}>Loading appointments...</p>
+      )}
+      {view === 'everyone' && multiStaffError && !multiStaffLoading && (
+        <div style={{ textAlign: 'center', padding: '1.5rem' }}>
+          <p style={{ color: '#dc3545', marginBottom: '0.75rem' }}>{multiStaffError}</p>
+          <button
+            onClick={() => loadMultiStaffAppointments()}
+            style={{ padding: '0.5rem 1.5rem', borderRadius: '8px', border: 'none', background: 'var(--color-primary)', color: 'white', cursor: 'pointer', fontWeight: '500' }}
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {/* Multi-Staff (Everyone) View */}
+      {view === 'everyone' && !multiStaffLoading && !multiStaffError && (
+        <MultiStaffView
+          date={currentDate}
+          allStaff={allStaff}
+          appointments={multiStaffAppointments}
+          startHour={startHour}
+          endHour={endHour}
+          onAppointmentClick={setSelectedAppointment}
+          onSlotClick={(dateTime, staffId) => {
+            setNewAppointmentDateTime(dateTime)
+            setDefaultStaffId(staffId)
+          }}
+          vendors={vendors}
+          TimeBlockColumn={TimeBlockColumn}
+        />
+      )}
 
       {/* Day View — Time Block */}
       {!loading && view === 'day' && (
@@ -1501,11 +1609,11 @@ export default function Calendar() {
         <NewAppointmentModal
           dateTime={rebookData?.dateTime || newAppointmentDateTime}
           vendorId={rebookData?.vendorId || selectedStaffVendorId}
-          defaultStaffId={rebookData?.staffId || selectedStaffId}
+          defaultStaffId={rebookData?.staffId || defaultStaffId || selectedStaffId}
           defaultServiceId={rebookData?.serviceId || ''}
           defaultCustomer={rebookData ? { name: rebookData.customerName, phone: rebookData.customerPhone, email: rebookData.customerEmail } : null}
-          onClose={() => { setNewAppointmentDateTime(null); setRebookData(null) }}
-          onCreated={loadAppointments}
+          onClose={() => { setNewAppointmentDateTime(null); setRebookData(null); setDefaultStaffId(null) }}
+          onCreated={() => { loadAppointments(); if (view === 'everyone') loadMultiStaffAppointments() }}
           currentUserStaffId={userStaffId}
         />
       )}

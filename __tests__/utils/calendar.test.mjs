@@ -427,3 +427,377 @@ describe('computeOverlapLayout', () => {
     expect(result[0].appointment.appointmentId).toBe('a1')
   })
 })
+
+
+// ─── orderStaffColumns ────────────────────────────────────────
+
+import { orderStaffColumns } from '../../app/utils/calendar.js'
+
+describe('orderStaffColumns', () => {
+  const makeStaff = (visibleId, staffName, vendorId) => ({ visibleId, staffName, vendorId })
+
+  const vendors = [
+    { vendorId: 'vendor-1', name: 'Vendor One' },
+    { vendorId: 'vendor-2', name: 'Vendor Two' },
+  ]
+
+  test('returns empty array for empty staff list', () => {
+    expect(orderStaffColumns([], vendors)).toEqual([])
+  })
+
+  test('places resources after non-resource staff', () => {
+    const staff = [
+      makeStaff('resource-sauna', 'Sauna', 'vendor-1'),
+      makeStaff('staff-1', 'Alice', 'vendor-1'),
+    ]
+    const result = orderStaffColumns(staff, vendors)
+    expect(result[0].visibleId).toBe('staff-1')
+    expect(result[1].visibleId).toBe('resource-sauna')
+  })
+
+  test('groups staff by vendor order', () => {
+    const staff = [
+      makeStaff('staff-a', 'Alice', 'vendor-2'),
+      makeStaff('staff-b', 'Bob', 'vendor-1'),
+    ]
+    const result = orderStaffColumns(staff, vendors)
+    expect(result[0].visibleId).toBe('staff-b') // vendor-1 comes first
+    expect(result[1].visibleId).toBe('staff-a') // vendor-2 comes second
+  })
+
+  test('sorts alphabetically within same vendor', () => {
+    const staff = [
+      makeStaff('staff-c', 'Charlie', 'vendor-1'),
+      makeStaff('staff-a', 'Alice', 'vendor-1'),
+      makeStaff('staff-b', 'Bob', 'vendor-1'),
+    ]
+    const result = orderStaffColumns(staff, vendors)
+    expect(result.map(s => s.staffName)).toEqual(['Alice', 'Bob', 'Charlie'])
+  })
+
+  test('preserves all entries (no duplicates, no omissions)', () => {
+    const staff = [
+      makeStaff('resource-sauna', 'Sauna', 'vendor-1'),
+      makeStaff('staff-a', 'Alice', 'vendor-2'),
+      makeStaff('staff-b', 'Bob', 'vendor-1'),
+      makeStaff('resource-room', 'Room', 'vendor-2'),
+    ]
+    const result = orderStaffColumns(staff, vendors)
+    expect(result).toHaveLength(4)
+    expect(new Set(result.map(s => s.visibleId)).size).toBe(4)
+  })
+
+  test('handles staff with null staffName', () => {
+    const staff = [
+      makeStaff('staff-a', null, 'vendor-1'),
+      makeStaff('staff-b', 'Bob', 'vendor-1'),
+    ]
+    const result = orderStaffColumns(staff, vendors)
+    // null comes before 'Bob' in localeCompare (empty string vs 'Bob')
+    expect(result).toHaveLength(2)
+    expect(result[1].staffName).toBe('Bob')
+  })
+
+  test('handles staff with vendorId not in vendors list', () => {
+    const staff = [
+      makeStaff('staff-a', 'Alice', 'vendor-unknown'),
+      makeStaff('staff-b', 'Bob', 'vendor-1'),
+    ]
+    const result = orderStaffColumns(staff, vendors)
+    // vendor-unknown gets indexOf -1, vendor-1 gets 0
+    // -1 < 0, so unknown vendor sorts first
+    expect(result[0].staffName).toBe('Alice')
+    expect(result[1].staffName).toBe('Bob')
+  })
+
+  test('multiple resources are placed at the end', () => {
+    const staff = [
+      makeStaff('resource-sauna', 'Sauna', 'vendor-1'),
+      makeStaff('staff-a', 'Alice', 'vendor-1'),
+      makeStaff('resource-room', 'Room', 'vendor-1'),
+      makeStaff('staff-b', 'Bob', 'vendor-2'),
+    ]
+    const result = orderStaffColumns(staff, vendors)
+    expect(result[0].visibleId).toBe('staff-a')
+    expect(result[1].visibleId).toBe('staff-b')
+    // Resources at the end
+    expect(result[2].visibleId.startsWith('resource-')).toBe(true)
+    expect(result[3].visibleId.startsWith('resource-')).toBe(true)
+  })
+})
+
+
+// ─── groupAppointmentsByStaff ─────────────────────────────────
+
+import { groupAppointmentsByStaff } from '../../app/utils/calendar.js'
+
+describe('groupAppointmentsByStaff', () => {
+  const makeStaff = (visibleId) => ({ visibleId })
+  const makeAppointment = (id, staffId, status = 'confirmed') => ({
+    appointmentId: id,
+    staffId,
+    status,
+  })
+
+  test('empty appointments list returns empty buckets for all staff', () => {
+    const staff = [makeStaff('staff-1'), makeStaff('staff-2')]
+    const result = groupAppointmentsByStaff([], staff)
+    expect(result.get('staff-1')).toEqual([])
+    expect(result.get('staff-2')).toEqual([])
+    expect(result.size).toBe(2)
+  })
+
+  test('all cancelled appointments results in all empty buckets', () => {
+    const staff = [makeStaff('staff-1'), makeStaff('staff-2')]
+    const appointments = [
+      makeAppointment('a1', 'staff-1', 'cancelled'),
+      makeAppointment('a2', 'staff-2', 'cancelled'),
+      makeAppointment('a3', 'staff-1', 'cancelled'),
+    ]
+    const result = groupAppointmentsByStaff(appointments, staff)
+    expect(result.get('staff-1')).toEqual([])
+    expect(result.get('staff-2')).toEqual([])
+  })
+
+  test('appointments with unrecognized staffIds are not placed in any bucket', () => {
+    const staff = [makeStaff('staff-1')]
+    const appointments = [
+      makeAppointment('a1', 'staff-unknown', 'confirmed'),
+      makeAppointment('a2', 'staff-nonexistent', 'confirmed'),
+    ]
+    const result = groupAppointmentsByStaff(appointments, staff)
+    expect(result.get('staff-1')).toEqual([])
+    // Unrecognized staffIds should not create new buckets
+    expect(result.has('staff-unknown')).toBe(false)
+    expect(result.has('staff-nonexistent')).toBe(false)
+  })
+
+  test('normal case: appointments distributed correctly by staffId', () => {
+    const staff = [makeStaff('staff-1'), makeStaff('staff-2'), makeStaff('staff-3')]
+    const appointments = [
+      makeAppointment('a1', 'staff-1', 'confirmed'),
+      makeAppointment('a2', 'staff-2', 'confirmed'),
+      makeAppointment('a3', 'staff-1', 'paid'),
+      makeAppointment('a4', 'staff-3', 'pending'),
+    ]
+    const result = groupAppointmentsByStaff(appointments, staff)
+    expect(result.get('staff-1')).toHaveLength(2)
+    expect(result.get('staff-1').map(a => a.appointmentId)).toEqual(['a1', 'a3'])
+    expect(result.get('staff-2')).toHaveLength(1)
+    expect(result.get('staff-2')[0].appointmentId).toBe('a2')
+    expect(result.get('staff-3')).toHaveLength(1)
+    expect(result.get('staff-3')[0].appointmentId).toBe('a4')
+  })
+
+  test('mixed cancelled and valid: only valid in buckets', () => {
+    const staff = [makeStaff('staff-1'), makeStaff('staff-2')]
+    const appointments = [
+      makeAppointment('a1', 'staff-1', 'confirmed'),
+      makeAppointment('a2', 'staff-1', 'cancelled'),
+      makeAppointment('a3', 'staff-2', 'paid'),
+      makeAppointment('a4', 'staff-2', 'cancelled'),
+      makeAppointment('a5', 'staff-1', 'pending'),
+    ]
+    const result = groupAppointmentsByStaff(appointments, staff)
+    expect(result.get('staff-1')).toHaveLength(2)
+    expect(result.get('staff-1').map(a => a.appointmentId)).toEqual(['a1', 'a5'])
+    expect(result.get('staff-2')).toHaveLength(1)
+    expect(result.get('staff-2')[0].appointmentId).toBe('a3')
+  })
+
+  test('appointments with null staffId are not placed in any bucket', () => {
+    const staff = [makeStaff('staff-1')]
+    const appointments = [
+      makeAppointment('a1', null, 'confirmed'),
+      makeAppointment('a2', undefined, 'confirmed'),
+    ]
+    const result = groupAppointmentsByStaff(appointments, staff)
+    expect(result.get('staff-1')).toEqual([])
+  })
+
+  test('empty staff list returns empty map', () => {
+    const appointments = [
+      makeAppointment('a1', 'staff-1', 'confirmed'),
+    ]
+    const result = groupAppointmentsByStaff(appointments, [])
+    expect(result.size).toBe(0)
+  })
+})
+
+
+// ─── orderStaffColumns (additional edge cases) ────────────────
+
+describe('orderStaffColumns - additional edge cases', () => {
+  const makeStaff = (visibleId, staffName, vendorId) => ({ visibleId, staffName, vendorId })
+
+  test('empty vendor list: staff still sorted (all get indexOf -1)', () => {
+    const staff = [
+      makeStaff('staff-c', 'Charlie', 'vendor-1'),
+      makeStaff('staff-a', 'Alice', 'vendor-2'),
+      makeStaff('staff-b', 'Bob', 'vendor-1'),
+    ]
+    const result = orderStaffColumns(staff, [])
+    // All vendors have index -1, so they tie on vendor order → alphabetical sort
+    expect(result.map(s => s.staffName)).toEqual(['Alice', 'Bob', 'Charlie'])
+  })
+
+  test('single vendor, multiple staff: alphabetical sort', () => {
+    const vendors = [{ vendorId: 'vendor-1', name: 'Only Vendor' }]
+    const staff = [
+      makeStaff('staff-z', 'Zara', 'vendor-1'),
+      makeStaff('staff-m', 'Mika', 'vendor-1'),
+      makeStaff('staff-a', 'Anna', 'vendor-1'),
+    ]
+    const result = orderStaffColumns(staff, vendors)
+    expect(result.map(s => s.staffName)).toEqual(['Anna', 'Mika', 'Zara'])
+  })
+
+  test('resources grouped separately at end regardless of vendor', () => {
+    const vendors = [
+      { vendorId: 'vendor-1', name: 'V1' },
+      { vendorId: 'vendor-2', name: 'V2' },
+    ]
+    const staff = [
+      makeStaff('resource-pool', 'Pool', 'vendor-2'),
+      makeStaff('staff-a', 'Alice', 'vendor-2'),
+      makeStaff('resource-sauna', 'Sauna', 'vendor-1'),
+      makeStaff('staff-b', 'Bob', 'vendor-1'),
+    ]
+    const result = orderStaffColumns(staff, vendors)
+    // Staff first: Bob (vendor-1) then Alice (vendor-2)
+    expect(result[0].staffName).toBe('Bob')
+    expect(result[1].staffName).toBe('Alice')
+    // Resources at end
+    expect(result[2].visibleId).toBe('resource-pool')
+    expect(result[3].visibleId).toBe('resource-sauna')
+  })
+
+  test('only resources, no staff: all returned', () => {
+    const vendors = [{ vendorId: 'vendor-1', name: 'V1' }]
+    const staff = [
+      makeStaff('resource-sauna', 'Sauna', 'vendor-1'),
+      makeStaff('resource-room', 'Room', 'vendor-1'),
+    ]
+    const result = orderStaffColumns(staff, vendors)
+    expect(result).toHaveLength(2)
+    expect(result.every(s => s.visibleId.startsWith('resource-'))).toBe(true)
+  })
+})
+
+
+// ─── getWorkingHoursForStaff ──────────────────────────────────
+
+import { getWorkingHoursForStaff } from '../../app/utils/calendar.js'
+
+describe('getWorkingHoursForStaff', () => {
+  const fullSchedule = {
+    sunday: null,
+    monday: { start: '09:00', end: '17:00' },
+    tuesday: { start: '09:00', end: '17:00' },
+    wednesday: null,
+    thursday: { start: '10:00', end: '18:00' },
+    friday: { start: '09:00', end: '17:00' },
+    saturday: { start: '10:00', end: '14:00' },
+  }
+
+  test('normal schedule with valid hours returns correct minutes', () => {
+    // Monday = day 1
+    const monday = new Date(2025, 4, 5) // May 5, 2025 is a Monday
+    const result = getWorkingHoursForStaff(fullSchedule, monday)
+    expect(result).toEqual({ start: 540, end: 1020 }) // 9*60=540, 17*60=1020
+  })
+
+  test('thursday returns different hours', () => {
+    // Thursday = day 4
+    const thursday = new Date(2025, 4, 8) // May 8, 2025 is a Thursday
+    const result = getWorkingHoursForStaff(fullSchedule, thursday)
+    expect(result).toEqual({ start: 600, end: 1080 }) // 10*60=600, 18*60=1080
+  })
+
+  test('saturday returns half-day hours', () => {
+    // Saturday = day 6
+    const saturday = new Date(2025, 4, 10) // May 10, 2025 is a Saturday
+    const result = getWorkingHoursForStaff(fullSchedule, saturday)
+    expect(result).toEqual({ start: 600, end: 840 }) // 10*60=600, 14*60=840
+  })
+
+  test('null day entry returns { start: null, end: null }', () => {
+    // Sunday = day 0, which is null in the schedule
+    const sunday = new Date(2025, 4, 4) // May 4, 2025 is a Sunday
+    const result = getWorkingHoursForStaff(fullSchedule, sunday)
+    expect(result).toEqual({ start: null, end: null })
+  })
+
+  test('null wednesday entry returns { start: null, end: null }', () => {
+    // Wednesday = day 3, which is null
+    const wednesday = new Date(2025, 4, 7) // May 7, 2025 is a Wednesday
+    const result = getWorkingHoursForStaff(fullSchedule, wednesday)
+    expect(result).toEqual({ start: null, end: null })
+  })
+
+  test('missing day key returns { start: null, end: null }', () => {
+    // Schedule that only has monday defined
+    const partialSchedule = {
+      monday: { start: '09:00', end: '17:00' },
+    }
+    const tuesday = new Date(2025, 4, 6) // May 6, 2025 is a Tuesday
+    const result = getWorkingHoursForStaff(partialSchedule, tuesday)
+    expect(result).toEqual({ start: null, end: null })
+  })
+
+  test('null schedule returns { start: null, end: null }', () => {
+    const monday = new Date(2025, 4, 5)
+    const result = getWorkingHoursForStaff(null, monday)
+    expect(result).toEqual({ start: null, end: null })
+  })
+
+  test('undefined schedule returns { start: null, end: null }', () => {
+    const monday = new Date(2025, 4, 5)
+    const result = getWorkingHoursForStaff(undefined, monday)
+    expect(result).toEqual({ start: null, end: null })
+  })
+
+  test('null date returns { start: null, end: null }', () => {
+    const result = getWorkingHoursForStaff(fullSchedule, null)
+    expect(result).toEqual({ start: null, end: null })
+  })
+
+  test('day-of-week mapping: Sunday=0', () => {
+    const schedule = { sunday: { start: '08:00', end: '12:00' } }
+    const sunday = new Date(2025, 4, 4) // Sunday
+    expect(sunday.getDay()).toBe(0)
+    const result = getWorkingHoursForStaff(schedule, sunday)
+    expect(result).toEqual({ start: 480, end: 720 }) // 8*60=480, 12*60=720
+  })
+
+  test('day-of-week mapping: Monday=1', () => {
+    const schedule = { monday: { start: '07:30', end: '15:45' } }
+    const monday = new Date(2025, 4, 5) // Monday
+    expect(monday.getDay()).toBe(1)
+    const result = getWorkingHoursForStaff(schedule, monday)
+    expect(result).toEqual({ start: 450, end: 945 }) // 7*60+30=450, 15*60+45=945
+  })
+
+  test('day-of-week mapping: Friday=5', () => {
+    const schedule = { friday: { start: '06:00', end: '22:00' } }
+    const friday = new Date(2025, 4, 9) // Friday
+    expect(friday.getDay()).toBe(5)
+    const result = getWorkingHoursForStaff(schedule, friday)
+    expect(result).toEqual({ start: 360, end: 1320 }) // 6*60=360, 22*60=1320
+  })
+
+  test('day-of-week mapping: Saturday=6', () => {
+    const schedule = { saturday: { start: '11:00', end: '16:30' } }
+    const saturday = new Date(2025, 4, 10) // Saturday
+    expect(saturday.getDay()).toBe(6)
+    const result = getWorkingHoursForStaff(schedule, saturday)
+    expect(result).toEqual({ start: 660, end: 990 }) // 11*60=660, 16*60+30=990
+  })
+
+  test('midnight start time (00:00) returns 0 minutes', () => {
+    const schedule = { monday: { start: '00:00', end: '23:59' } }
+    const monday = new Date(2025, 4, 5)
+    const result = getWorkingHoursForStaff(schedule, monday)
+    expect(result).toEqual({ start: 0, end: 1439 }) // 0, 23*60+59=1439
+  })
+})

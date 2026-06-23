@@ -100,7 +100,7 @@ export function getBlockPosition(appointmentDate, duration, startHour) {
  * Get the ISO date range for a given view and current date.
  */
 export function getDateRangeForView(view, currentDate) {
-  if (view === 'day') {
+  if (view === 'day' || view === 'everyone') {
     const start = new Date(currentDate)
     start.setHours(0, 0, 0, 0)
     const end = new Date(currentDate)
@@ -187,4 +187,85 @@ export function computeOverlapLayout(appointments, startHour) {
   })
 
   return result
+}
+
+
+/**
+ * Group appointments by staffId, returning a Map<staffId, Appointment[]>.
+ * Cancelled appointments are excluded from all buckets.
+ * Appointments with no staffId or whose staffId doesn't match any active staff
+ * are not placed in any bucket (not displayed in multi-staff view).
+ *
+ * @param {Array} appointments - All appointments for the day
+ * @param {Array} staffList - Active staff members with visibleId
+ * @returns {Map<string, Array>} Map of staffId to their appointments
+ */
+export function groupAppointmentsByStaff(appointments, staffList) {
+  const staffIds = new Set(staffList.map(s => s.visibleId))
+  const grouped = new Map()
+  for (const staff of staffList) {
+    grouped.set(staff.visibleId, [])
+  }
+  for (const apt of appointments) {
+    if (apt.status === 'cancelled') continue
+    if (staffIds.has(apt.staffId)) {
+      grouped.get(apt.staffId).push(apt)
+    }
+  }
+  return grouped
+}
+
+
+/**
+ * Orders staff for multi-staff view: staff grouped by vendor (vendor order),
+ * then resource columns at the end.
+ *
+ * @param {Array} allStaff - All active staff members (StaffSchedule[])
+ * @param {Array} vendors - Vendor list in display order
+ * @returns {Array} Ordered staff: non-resource members sorted by vendor then name, followed by resources
+ */
+export function orderStaffColumns(allStaff, vendors) {
+  const isResource = (s) => s.visibleId.startsWith('resource-')
+  const staffMembers = allStaff.filter(s => !isResource(s))
+  const resources = allStaff.filter(isResource)
+
+  const vendorOrder = vendors.map(v => v.vendorId)
+  staffMembers.sort((a, b) => {
+    const aIdx = vendorOrder.indexOf(a.vendorId)
+    const bIdx = vendorOrder.indexOf(b.vendorId)
+    if (aIdx !== bIdx) return aIdx - bIdx
+    return (a.staffName || '').localeCompare(b.staffName || '')
+  })
+
+  return [...staffMembers, ...resources]
+}
+
+
+/**
+ * Get working hours for a staff member on a given date.
+ * Looks up the day-of-week in the staff's schedule JSON and returns
+ * start/end times converted to minutes from midnight.
+ *
+ * @param {Object} schedule - Staff schedule JSON mapping day names to { start, end } or null
+ * @param {Date} date - The date to check
+ * @returns {{ start: number|null, end: number|null }} Minutes from midnight, or nulls for day off
+ */
+export function getWorkingHoursForStaff(schedule, date) {
+  if (!schedule || !date) return { start: null, end: null }
+
+  const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+  const dayName = days[date.getDay()]
+  const entry = schedule[dayName]
+
+  if (!entry || !entry.start || !entry.end) return { start: null, end: null }
+
+  const parseTime = (timeStr) => {
+    const [hours, minutes] = timeStr.split(':').map(Number)
+    return hours * 60 + minutes
+  }
+
+  return {
+    start: parseTime(entry.start),
+    end: parseTime(entry.end)
+  }
 }

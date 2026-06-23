@@ -169,3 +169,31 @@
     padding: 1rem;
   }
 }
+
+/* MULTI-STAFF VIEW */
+.multi-staff-view {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.multi-staff-time-labels {
+  position: sticky;
+  left: 0;
+  z-index: 10;
+}
+
+.multi-staff-columns .staff-column {
+  min-width: 120px;
+}
+
+@media (max-width: 767px) {
+  .multi-staff-view {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .multi-staff-columns .staff-column {
+    min-width: 120px;
+    flex: 0 0 120px;
+  }
+}

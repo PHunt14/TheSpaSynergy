@@ -5,12 +5,12 @@ test.describe('Public pages smoke tests', () => {
     await page.goto('/')
     await expect(page).toHaveTitle(/Spa Synergy/i)
     await expect(page.locator('.nav-logo')).toBeVisible()
-    await expect(page.locator('a[href="/booking"]').first()).toBeVisible()
+    await expect(page.locator('a[href="/services"]').first()).toBeVisible()
   })
 
-  test('booking page loads and shows service selection', async ({ page }) => {
-    await page.goto('/booking')
-    await expect(page.locator('h1')).toContainText('Book a Service')
+  test('services page loads and shows service selection', async ({ page }) => {
+    await page.goto('/services')
+    await expect(page.locator('h1')).toContainText('Our Services')
   })
 
   test('providers page loads', async ({ page }) => {
@@ -25,7 +25,7 @@ test.describe('Public pages smoke tests', () => {
 
   test('navbar contains expected links', async ({ page }) => {
     await page.goto('/')
-    await expect(page.locator('a[href="/booking"]').first()).toBeVisible()
+    await expect(page.locator('a[href="/services"]').first()).toBeVisible()
     await expect(page.locator('a[href="/providers"]').first()).toBeVisible()
     await expect(page.locator('a[href="/contact"]').first()).toBeVisible()
   })

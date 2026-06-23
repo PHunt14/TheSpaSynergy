@@ -6,14 +6,16 @@ const config = {
       displayName: 'unit',
       testEnvironment: 'node',
       transform: {
-        '\\.ts$': ['ts-jest', {
+        '\\.[jt]sx?$': ['ts-jest', {
           tsconfig: 'tsconfig.json',
           useESM: true,
+          jsx: 'react-jsx',
         }],
       },
-      extensionsToTreatAsEsm: ['.ts'],
+      extensionsToTreatAsEsm: ['.ts', '.jsx'],
       testMatch: ['**/__tests__/**/*.test.mjs'],
       testPathIgnorePatterns: ['/node_modules/', '/services/'],
+      transformIgnorePatterns: ['/node_modules/'],
     },
     // React component tests (jsdom environment)
     {

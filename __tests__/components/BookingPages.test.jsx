@@ -78,27 +78,9 @@ import SuccessPage from '../../app/booking/success/page.jsx'
 // ─── Tests ───
 
 describe('Booking Page (/booking)', () => {
-  test('renders without crashing', async () => {
+  test('renders redirect message', async () => {
     render(<BookingPage />)
-    await waitFor(() => expect(screen.getByText('Book a Service')).toBeInTheDocument())
-  })
-
-  test('renders unified service catalog after fetch', async () => {
-    render(<BookingPage />)
-    await waitFor(() => expect(screen.getByText('Test Service')).toBeInTheDocument())
-  })
-
-  test('displays category filter with All selected by default', async () => {
-    render(<BookingPage />)
-    await waitFor(() => {
-      const allButton = screen.getByRole('button', { name: 'All' })
-      expect(allButton).toBeInTheDocument()
-    })
-  })
-
-  test('groups services by category', async () => {
-    render(<BookingPage />)
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Wellness' })).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Redirecting to services...')).toBeInTheDocument())
   })
 })
 
