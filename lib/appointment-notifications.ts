@@ -129,6 +129,40 @@ function buildStaffVendorEmailBody(params: NotificationParams, customer: any): s
     </div>`;
 }
 
+/**
+ * Notify only the assigned staff member when a new booking is created.
+ * Customer/vendor notifications are deferred until confirmation.
+ */
+export async function sendStaffBookingNotification(appointment: any) {
+  const details = await resolveAppointmentDetails(appointment);
+  const customer = parseCustomer(appointment);
+  const formattedDateTime = formatDateTime(appointment.dateTime);
+
+  const staffRecord = await resolveStaffForAppointment(appointment.vendorId, appointment.staffId, appointment.dateTime);
+  if (!staffRecord) return;
+
+  const notifications: Promise<void>[] = [];
+
+  if (staffRecord.smsAlertsEnabled && staffRecord.smsAlertPhone) {
+    const staffMsg = `New Booking Alert!\n\nService: ${details.serviceName}\nCustomer: ${customer?.name}\nPhone: ${customer?.phone}\nDate/Time: ${formattedDateTime}\n\nThe Spa Synergy\nReply STOP to opt out`;
+    notifications.push(sendSms(staffRecord.smsAlertPhone, staffMsg).catch(err => console.error('Staff booking SMS failed:', err)) as Promise<void>);
+  }
+
+  if (staffRecord.emailAlertsEnabled && staffRecord.staffEmail) {
+    const { sendVendorBookingEmail } = await import('@/lib/email');
+    notifications.push(sendVendorBookingEmail({
+      to: staffRecord.staffEmail,
+      customerName: customer?.name,
+      customerPhone: customer?.phone || '',
+      customerEmail: customer?.email || '',
+      serviceName: details.serviceName,
+      dateTime: appointment.dateTime,
+    }).catch(err => console.error('Staff booking email failed:', err)));
+  }
+
+  await Promise.all(notifications);
+}
+
 export async function sendBookingNotifications(appointment: any) {
   const details = await resolveAppointmentDetails(appointment);
   const customer = parseCustomer(appointment);
@@ -221,13 +255,6 @@ function pushNotifications(
     notifications.push(
       sendEmail(customer?.email || 'customer@placeholder.com', fullSubject, emailWrapper(buildCustomerEmailBody(params)))
         .catch(err => console.error(`Customer ${event} email failed:`, err))
-    );
-  }
-
-  if (details.vendorEmail || process.env.EMAIL_TEST_ADDRESS) {
-    notifications.push(
-      sendEmail(details.vendorEmail || 'vendor@placeholder.com', fullSubject, emailWrapper(buildStaffVendorEmailBody(params, customer)))
-        .catch(err => console.error(`Vendor ${event} email failed:`, err))
     );
   }
 }

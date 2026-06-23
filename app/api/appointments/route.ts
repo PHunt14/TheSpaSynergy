@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 import type { Schema } from '../../../amplify/data/resource';
 import config from '../../../amplify_outputs.json' with { type: 'json' };
 import { randomUUID } from 'crypto';
-import { sendBookingNotifications } from '@/lib/appointment-notifications';
+import { resolveAppointmentDetails, sendAppointmentNotifications, sendStaffBookingNotification } from '@/lib/appointment-notifications';
 import { assignStaff } from '@/app/utils/staffAssigner.js';
 
 const client = generateServerClientUsingCookies<Schema>({
@@ -77,6 +77,23 @@ export async function PATCH(request: Request) {
     if (errors) {
       console.error('Error updating appointment:', errors);
       return Response.json({ error: 'Failed to update appointment' }, { status: 500 });
+    }
+
+    // Send notification if a confirmed appointment was changed (dateTime, serviceId, or staffId)
+    const isSignificantChange = dateTime !== undefined || serviceId !== undefined || staffId !== undefined;
+    if (isSignificantChange) {
+      try {
+        const { data: updatedAppt } = await client.models.Appointment.get({ appointmentId });
+        if (updatedAppt && updatedAppt.status === 'confirmed') {
+          const details = await resolveAppointmentDetails(updatedAppt);
+          await sendAppointmentNotifications({
+            event: 'rescheduled',
+            appointment: updatedAppt,
+            details,
+            newDateTime: updatedAppt.dateTime || undefined,
+          });
+        }
+      } catch (e) { console.error('Post-edit notification failed:', e); }
     }
 
     return Response.json({ success: true });
@@ -333,7 +350,8 @@ export async function POST(request: Request) {
       }
     } catch (e) { console.error('Client auto-populate failed:', e); }
 
-    await sendBookingNotifications({ appointmentId, vendorId: resolvedVendorId, serviceId, staffId: assignedStaffId, dateTime, customer });
+    // Notify staff only on booking — customer/vendor notified at confirmation
+    await sendStaffBookingNotification({ appointmentId, vendorId: resolvedVendorId, serviceId, staffId: assignedStaffId, dateTime, customer }).catch(e => console.error('Staff notification failed:', e));
 
     return Response.json({ success: true, appointmentId, staffId: assignedStaffId, vendorId: resolvedVendorId });
   } catch (error) {
@@ -541,12 +559,11 @@ async function handleMultiProviderBooking(body: any, amplifyClient: any) {
     }
   } catch (e) { console.error('Client auto-populate failed:', e); }
 
-  // Send booking notifications for each appointment
+  // Notify staff only on booking — customer/vendor notified at confirmation
   for (const staff of assignedStaffMembers) {
     const aptId = appointmentIds[assignedStaffMembers.indexOf(staff)];
-    try {
-      await sendBookingNotifications({ appointmentId: aptId, vendorId: staff.vendorId, serviceId, staffId: staff.staffId, dateTime, customer });
-    } catch (e) { console.error('Notification failed for appointment:', aptId, e); }
+    sendStaffBookingNotification({ appointmentId: aptId, vendorId: staff.vendorId, serviceId, staffId: staff.staffId, dateTime, customer })
+      .catch(e => console.error('Staff notification failed for appointment:', aptId, e));
   }
 
   return Response.json({ success: true, appointmentIds, groupId });
@@ -735,11 +752,9 @@ async function handleQuantityBooking(body: any, amplifyClient: any) {
     }
   } catch (e) { console.error('Client auto-populate failed:', e); }
 
-  // Send notifications
-  const notifyStaffId = mode === 'parallel'
-    ? (appointmentIds.length > 0 ? staffId : undefined)
-    : staffId;
-  await sendBookingNotifications({ appointmentId: appointmentIds[0], vendorId, serviceId, staffId: notifyStaffId, dateTime, customer });
+  // Notify staff only on booking — customer/vendor notified at confirmation
+  sendStaffBookingNotification({ appointmentId: appointmentIds[0], vendorId, serviceId, staffId, dateTime, customer })
+    .catch(e => console.error('Staff notification failed:', e));
 
   return Response.json({ success: true, appointmentIds, groupId, quantity, mode: quantityMode });
 }

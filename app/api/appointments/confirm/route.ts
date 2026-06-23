@@ -25,23 +25,6 @@ export async function POST(request: Request) {
 
     const details = await resolveAppointmentDetails(appointment);
 
-    // Vendor SMS (via dedicated endpoint)
-    try {
-      const { data: vendor } = await client.models.Vendor.get({ vendorId: appointment.vendorId });
-      if (vendor?.smsAlertsEnabled && vendor?.smsAlertPhone) {
-        const { sendSms } = await import('@/lib/sms');
-        const customer = typeof appointment.customer === 'string' ? JSON.parse(appointment.customer) : appointment.customer;
-        const dtWithOffset = appointment.dateTime && !(appointment.dateTime.includes('Z') || appointment.dateTime.includes('+') || appointment.dateTime.includes('-', 10))
-          ? appointment.dateTime + '-04:00'
-          : appointment.dateTime;
-        const formattedDateTime = dtWithOffset
-          ? new Date(dtWithOffset).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/New_York' })
-          : 'Not specified';
-        await sendSms(vendor.smsAlertPhone, `Appointment with ${customer?.name} has been confirmed.\n\nService: ${details.serviceName}\nDate/Time: ${formattedDateTime}\n\nThe Spa Synergy`)
-          .catch(err => console.error('Vendor confirmation SMS failed:', err));
-      }
-    } catch (e) { /* non-blocking */ }
-
     await sendAppointmentNotifications({ event: 'confirmed', appointment, details });
 
     return Response.json({ success: true });
