@@ -11,6 +11,23 @@ jest.mock('aws-amplify/auth', () => ({
 jest.mock('aws-amplify', () => ({ Amplify: { configure: jest.fn() } }))
 jest.mock('../../app/amplify-config', () => ({}))
 
+// Mock StaffColumn (ESM module that Jest cannot require directly)
+jest.mock('../../app/dashboard/calendar/StaffColumn', () => {
+  return { __esModule: true, default: ({ staff, appointments, onAppointmentClick, onSlotClick, TimeBlockColumn, startHour }) => (
+    <div data-testid={`staff-column-${staff.visibleId}`}>
+      <div className="staff-column-header">{staff.staffName}</div>
+      {TimeBlockColumn && (
+        <TimeBlockColumn
+          appointments={appointments}
+          onAppointmentClick={onAppointmentClick}
+          onSlotClick={(dateTime) => onSlotClick(dateTime, staff.visibleId)}
+          startHour={startHour}
+        />
+      )}
+    </div>
+  )}
+})
+
 // Mock the calendar utility — provide real implementations for grouping/ordering
 jest.mock('../../app/utils/calendar', () => ({
   groupAppointmentsByStaff: (appointments, staffList) => {
