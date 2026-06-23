@@ -1249,13 +1249,13 @@ export default function Calendar() {
   }
 
   useEffect(() => {
-    if (selectedStaffId) {
+    if (selectedStaffId && selectedStaffId !== 'everyone') {
       loadAppointments()
     }
   }, [selectedStaffId, currentDate, view])
 
   const loadAppointments = (retryCount = 0) => {
-    if (!selectedStaffId) return
+    if (!selectedStaffId || selectedStaffId === 'everyone') return
     setLoading(true)
 
     const { start, end } = getDateRangeForView(view, currentDate)
