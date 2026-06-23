@@ -24,6 +24,11 @@ jest.mock('aws-amplify', () => ({
 // Mock the amplify-config module
 jest.mock('../../app/amplify-config', () => ({}))
 
+// Mock MultiStaffView (ES module import chain causes issues in jsdom environment)
+jest.mock('../../app/dashboard/calendar/MultiStaffView', () => {
+  return { __esModule: true, default: () => <div data-testid="multi-staff-view">MultiStaffView</div> }
+})
+
 // Mock the calendar utility (ES module)
 jest.mock('../../app/utils/calendar', () => ({
   DEFAULT_START_HOUR: 8,
