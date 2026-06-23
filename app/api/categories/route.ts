@@ -54,7 +54,7 @@ export async function GET() {
           catSet.add(svc.category);
         }
       }
-      const derived = [...catSet].sort().map(name => ({
+      const derived = [...catSet].sort((a, b) => a.localeCompare(b)).map(name => ({
         categoryId: `cat-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}`,
         name,
       }));

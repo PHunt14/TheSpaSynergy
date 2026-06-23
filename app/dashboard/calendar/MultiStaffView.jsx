@@ -33,24 +33,15 @@ export default function MultiStaffView({
   vendors,
   TimeBlockColumn,
 }) {
-  // Handle empty state
-  if (!allStaff || allStaff.length === 0) {
-    return (
-      <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--color-text-light)' }}>
-        No active staff found.
-      </div>
-    )
-  }
-
   // Group appointments by staff
   const groupedAppointments = useMemo(
-    () => groupAppointmentsByStaff(appointments || [], allStaff),
+    () => groupAppointmentsByStaff(appointments || [], allStaff || []),
     [appointments, allStaff]
   )
 
   // Order staff columns: staff grouped by vendor, then resources
   const orderedStaff = useMemo(
-    () => orderStaffColumns(allStaff, vendors || []),
+    () => orderStaffColumns(allStaff || [], vendors || []),
     [allStaff, vendors]
   )
 
@@ -59,6 +50,15 @@ export default function MultiStaffView({
     () => generateTimeSlots(startHour, endHour),
     [startHour, endHour]
   )
+
+  // Handle empty state (after hooks to satisfy Rules of Hooks)
+  if (!allStaff || allStaff.length === 0) {
+    return (
+      <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--color-text-light)' }}>
+        No active staff found.
+      </div>
+    )
+  }
 
   return (
     <div
