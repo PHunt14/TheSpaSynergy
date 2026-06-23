@@ -77,9 +77,10 @@ NODE_TLS_REJECT_UNAUTHORIZED=0 node scripts/migrate-staff-assignments-prod.mjs
 This script (idempotent, safe to run multiple times):
 1. Reads all services and staff from production
 2. For services WITHOUT `allowedStaff`, infers staff from legacy `vendorId` (all active staff under that vendor)
-3. Sauna-type services get assigned to `resource-sauna`
-4. Services that already have `allowedStaff` populated are SKIPPED (never overwrites)
-5. Services with no `vendorId` and no `allowedStaff` are flagged for manual review
+3. Creates the `resource-sauna` StaffSchedule record if it doesn't already exist (using the vendor that owns sauna-type services)
+4. Sauna-type services get assigned to `resource-sauna`
+5. Services that already have `allowedStaff` populated are SKIPPED (never overwrites)
+6. Services with no `vendorId` and no `allowedStaff` are flagged for manual review
 
 **Expected output:**
 ```

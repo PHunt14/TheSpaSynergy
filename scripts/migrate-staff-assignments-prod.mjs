@@ -24,7 +24,7 @@ import { Amplify } from 'aws-amplify';
 import { generateClient } from 'aws-amplify/data';
 
 // Point at production — update this path if needed
-import config from '../amplify_outputs_main.json' with { type: 'json' };
+import config from '../amplify_outputs.json' with { type: 'json' };
 
 Amplify.configure(config);
 const client = generateClient();
@@ -80,7 +80,47 @@ async function migrate() {
   }
   console.log('');
 
-  // 3. Process each service
+  // 3. Ensure resource-sauna StaffSchedule record exists
+  const saunaExists = allStaff.some(s => s.visibleId === 'resource-sauna');
+  if (!saunaExists) {
+    // Determine the vendor for the sauna resource — use the first vendor that has sauna-type services,
+    // or fall back to the first vendor in the staffByVendor map
+    const saunaService = allServices.find(s => s.resourceType === 'sauna' && s.vendorId);
+    const saunaVendorId = saunaService?.vendorId || [...staffByVendor.keys()][0];
+
+    if (saunaVendorId) {
+      const saunaSchedule = JSON.stringify({
+        monday: { start: '06:30', end: '18:00' },
+        tuesday: { start: '06:30', end: '18:00' },
+        wednesday: { start: '06:30', end: '18:00' },
+        thursday: { start: '06:30', end: '18:00' },
+        friday: { start: '06:30', end: '18:00' },
+        saturday: { start: '10:00', end: '14:00' },
+        sunday: { start: null, end: null },
+      });
+
+      if (DRY_RUN) {
+        console.log(`  🔍 resource-sauna: would CREATE StaffSchedule record (vendor: ${saunaVendorId})`);
+      } else {
+        await client.models.StaffSchedule.create({
+          visibleId: 'resource-sauna',
+          staffName: 'Sauna',
+          staffEmail: 'sauna@thespasynergy.com',
+          vendorId: saunaVendorId,
+          schedule: saunaSchedule,
+          isActive: true,
+        });
+        console.log(`  ✓ resource-sauna: CREATED StaffSchedule record (vendor: ${saunaVendorId})`);
+      }
+    } else {
+      console.log(`  ⚠ resource-sauna: cannot create — no vendor found for sauna services`);
+    }
+  } else {
+    console.log(`  ✓ resource-sauna: StaffSchedule record already exists`);
+  }
+  console.log('');
+
+  // 4. Process each service
   console.log('── Processing services ──');
   let updated = 0;
   let skipped = 0;
@@ -147,7 +187,7 @@ async function migrate() {
     updated++;
   }
 
-  // 4. Summary
+  // 5. Summary
   console.log(`\n${'═'.repeat(60)}`);
   if (DRY_RUN) {
     console.log(`🔍 DRY RUN COMPLETE (no changes written)`);

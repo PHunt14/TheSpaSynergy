@@ -18,7 +18,7 @@ import { Amplify } from 'aws-amplify';
 import { generateClient } from 'aws-amplify/data';
 
 // Point at production — update this path if needed
-import config from '../amplify_outputs_main.json' with { type: 'json' };
+import config from '../amplify_outputs.json' with { type: 'json' };
 
 Amplify.configure(config);
 const client = generateClient();
