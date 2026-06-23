@@ -13,8 +13,10 @@ import {
   getBlockPosition,
   getDateRangeForView,
   computeOverlapLayout,
+  formatWeekHeaderLabel,
 } from '../../utils/calendar'
 import MultiStaffView from './MultiStaffView'
+import MultiStaffWeekView from './MultiStaffWeekView'
 
 // ── Constants ─────────────────────────────────────────────────
 
@@ -1095,11 +1097,11 @@ export default function Calendar() {
   const [userStaffId, setUserStaffId] = useState(null)
   const [vendors, setVendors] = useState([])
   const [allStaff, setAllStaff] = useState([])
-  const [selectedStaffId, setSelectedStaffId] = useState(null)
+  const [selectedStaffId, setSelectedStaffId] = useState('everyone')
   const [view, setViewState] = useState(() => {
     try {
       const stored = sessionStorage.getItem('calendarView')
-      if (stored && ['everyone', 'day', 'week', 'month'].includes(stored)) {
+      if (stored && ['day', 'week', 'month'].includes(stored)) {
         return stored
       }
     } catch {
@@ -1141,7 +1143,7 @@ export default function Calendar() {
       })
       if (res.ok) {
         loadAppointments()
-        if (view === 'everyone') loadMultiStaffAppointments()
+        if (selectedStaffId === 'everyone') loadMultiStaffAppointments()
       } else {
         alert('Failed to confirm appointment')
       }
@@ -1160,7 +1162,7 @@ export default function Calendar() {
       })
       if (res.ok) {
         loadAppointments()
-        if (view === 'everyone') loadMultiStaffAppointments()
+        if (selectedStaffId === 'everyone') loadMultiStaffAppointments()
       } else {
         alert('Failed to cancel appointment')
       }
@@ -1172,7 +1174,7 @@ export default function Calendar() {
   const handleReschedule = () => {
     // Edit is now handled inline in the modal
     loadAppointments()
-    if (view === 'everyone') loadMultiStaffAppointments()
+    if (selectedStaffId === 'everyone') loadMultiStaffAppointments()
   }
 
   const [rebookData, setRebookData] = useState(null)
@@ -1194,6 +1196,12 @@ export default function Calendar() {
       staffId: appointment.staffId || '',
       vendorId: appointment.vendorId || selectedStaffVendorId,
     })
+  }
+
+  // Handle day click from MultiStaffWeekView — switch to day view for the clicked date
+  const handleDayClick = (date) => {
+    setCurrentDate(date)
+    setView('day')
   }
 
   useEffect(() => {
@@ -1277,13 +1285,15 @@ export default function Calendar() {
       })
   }
 
-  // Multi-staff data fetching — fetch all appointments for the vendor within the selected day
+  // Multi-staff data fetching — fetch all appointments for the vendor within the selected day/week
   const loadMultiStaffAppointments = (retryCount = 0) => {
     if (!userVendorId) return
     setMultiStaffLoading(true)
     setMultiStaffError(null)
 
-    const { start, end } = getDateRangeForView('everyone', currentDate)
+    // Use 'week' range when Everyone is selected and view is 'week', otherwise single day
+    const effectiveView = (selectedStaffId === 'everyone' && view === 'week') ? 'week' : 'everyone'
+    const { start, end } = getDateRangeForView(effectiveView, currentDate)
     const params = new URLSearchParams({
       vendorId: userVendorId,
       startDate: start.toISOString(),
@@ -1311,17 +1321,17 @@ export default function Calendar() {
       })
   }
 
-  // Fetch multi-staff appointments when in 'everyone' view or when date changes
+  // Fetch multi-staff appointments when 'everyone' is selected or when date changes
   useEffect(() => {
-    if (view === 'everyone' && userVendorId) {
+    if (selectedStaffId === 'everyone' && userVendorId) {
       loadMultiStaffAppointments()
     }
-  }, [view, currentDate, userVendorId])
+  }, [selectedStaffId, view, currentDate, userVendorId])
 
   // Navigation
   const navigateDate = (direction) => {
     const newDate = new Date(currentDate)
-    if (view === 'day' || view === 'everyone') newDate.setDate(newDate.getDate() + direction)
+    if (view === 'day') newDate.setDate(newDate.getDate() + direction)
     else if (view === 'week') newDate.setDate(newDate.getDate() + (direction * 7))
     else newDate.setMonth(newDate.getMonth() + direction)
     setCurrentDate(newDate)
@@ -1331,11 +1341,14 @@ export default function Calendar() {
 
   // Header label
   const headerLabel = useMemo(() => {
-    if (view === 'day' || view === 'everyone') {
+    if (view === 'day') {
       return currentDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
     }
     if (view === 'week') {
       const dates = getWeekDates(currentDate)
+      if (selectedStaffId === 'everyone') {
+        return formatWeekHeaderLabel(dates)
+      }
       const start = dates[0]
       const end = dates[6]
       if (start.getMonth() === end.getMonth()) {
@@ -1344,7 +1357,7 @@ export default function Calendar() {
       return `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
     }
     return currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-  }, [view, currentDate])
+  }, [view, currentDate, selectedStaffId])
 
   // Time slots for the grid
   const timeSlots = useMemo(() => generateTimeSlots(startHour, endHour), [startHour, endHour])
@@ -1397,12 +1410,12 @@ export default function Calendar() {
           </button>
         </div>
         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
-          {view !== 'everyone' && (
           <select
-            value={selectedStaffId || ''}
+            value={selectedStaffId || 'everyone'}
             onChange={(e) => setSelectedStaffId(e.target.value)}
             style={{ padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '0.9rem' }}
           >
+            <option value="everyone">Everyone</option>
             {vendors.map(vendor => {
               const vendorStaff = staffByVendor[vendor.vendorId] || []
               if (vendorStaff.length === 0) return null
@@ -1415,9 +1428,8 @@ export default function Calendar() {
               )
             })}
           </select>
-          )}
           <div style={{ display: 'flex', background: 'var(--color-accent)', borderRadius: '8px', padding: '3px' }}>
-            {['everyone', 'day', 'week', 'month'].map(v => (
+            {['day', 'week', 'month'].map(v => (
               <button
                 key={v}
                 onClick={() => setView(v)}
@@ -1433,7 +1445,7 @@ export default function Calendar() {
                   textTransform: 'capitalize',
                 }}
               >
-                {v === 'everyone' ? 'Everyone' : v}
+                {v}
               </button>
             ))}
           </div>
@@ -1466,13 +1478,13 @@ export default function Calendar() {
         )}
       </div>
 
-      {loading && view !== 'everyone' && <p style={{ textAlign: 'center', color: 'var(--color-text-light)' }}>Loading appointments...</p>}
+      {loading && selectedStaffId !== 'everyone' && <p style={{ textAlign: 'center', color: 'var(--color-text-light)' }}>Loading appointments...</p>}
 
       {/* Multi-staff view loading and error states */}
-      {view === 'everyone' && multiStaffLoading && (
+      {selectedStaffId === 'everyone' && multiStaffLoading && (
         <p style={{ textAlign: 'center', color: 'var(--color-text-light)' }}>Loading appointments...</p>
       )}
-      {view === 'everyone' && multiStaffError && !multiStaffLoading && (
+      {selectedStaffId === 'everyone' && multiStaffError && !multiStaffLoading && (
         <div style={{ textAlign: 'center', padding: '1.5rem' }}>
           <p style={{ color: '#dc3545', marginBottom: '0.75rem' }}>{multiStaffError}</p>
           <button
@@ -1485,7 +1497,7 @@ export default function Calendar() {
       )}
 
       {/* Multi-Staff (Everyone) View */}
-      {view === 'everyone' && !multiStaffLoading && !multiStaffError && (
+      {selectedStaffId === 'everyone' && view === 'day' && !multiStaffLoading && !multiStaffError && (
         <MultiStaffView
           date={currentDate}
           allStaff={allStaff}
@@ -1502,8 +1514,37 @@ export default function Calendar() {
         />
       )}
 
+      {/* Multi-Staff (Everyone) Week View */}
+      {selectedStaffId === 'everyone' && view === 'week' && !multiStaffLoading && !multiStaffError && (
+        <MultiStaffWeekView
+          selectedDate={currentDate}
+          allStaff={allStaff}
+          appointments={multiStaffAppointments}
+          startHour={startHour}
+          endHour={endHour}
+          onAppointmentClick={setSelectedAppointment}
+          onSlotClick={(dateTime) => {
+            setNewAppointmentDateTime(dateTime)
+          }}
+          onDayClick={handleDayClick}
+          vendors={vendors}
+        />
+      )}
+
+      {/* Multi-Staff (Everyone) Month — unavailable */}
+      {selectedStaffId === 'everyone' && view === 'month' && !multiStaffLoading && !multiStaffError && (
+        <div style={{ textAlign: 'center', padding: '3rem 1.5rem', color: 'var(--color-text-light)' }}>
+          <p style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>
+            Monthly view is not available for all-staff display.
+          </p>
+          <p style={{ fontSize: '0.9rem' }}>
+            Please select an individual staff member or switch to Day or Week view.
+          </p>
+        </div>
+      )}
+
       {/* Day View — Time Block */}
-      {!loading && view === 'day' && (
+      {!loading && view === 'day' && selectedStaffId !== 'everyone' && (
         <div style={{ display: 'flex', border: '1px solid var(--color-border)', borderRadius: '8px', overflow: 'hidden' }}>
           {/* Time labels */}
           <div style={{ width: '60px', flexShrink: 0, background: 'var(--color-accent)' }}>
@@ -1532,7 +1573,7 @@ export default function Calendar() {
       )}
 
       {/* Week View — Time Block */}
-      {!loading && view === 'week' && (
+      {!loading && view === 'week' && selectedStaffId !== 'everyone' && (
         <div style={{ display: 'flex', border: '1px solid var(--color-border)', borderRadius: '8px', overflow: 'auto' }}>
           {/* Time labels */}
           <div style={{ width: '50px', flexShrink: 0, background: 'var(--color-accent)' }}>
@@ -1581,7 +1622,7 @@ export default function Calendar() {
       )}
 
       {/* Month View — Card List */}
-      {!loading && view === 'month' && (
+      {!loading && view === 'month' && selectedStaffId !== 'everyone' && (
         <MonthView
           currentDate={currentDate}
           appointments={appointments}
@@ -1613,7 +1654,7 @@ export default function Calendar() {
           defaultServiceId={rebookData?.serviceId || ''}
           defaultCustomer={rebookData ? { name: rebookData.customerName, phone: rebookData.customerPhone, email: rebookData.customerEmail } : null}
           onClose={() => { setNewAppointmentDateTime(null); setRebookData(null); setDefaultStaffId(null) }}
-          onCreated={() => { loadAppointments(); if (view === 'everyone') loadMultiStaffAppointments() }}
+          onCreated={() => { loadAppointments(); if (selectedStaffId === 'everyone') loadMultiStaffAppointments() }}
           currentUserStaffId={userStaffId}
         />
       )}

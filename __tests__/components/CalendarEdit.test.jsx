@@ -29,6 +29,11 @@ jest.mock('../../app/dashboard/calendar/MultiStaffView', () => {
   return { __esModule: true, default: () => <div data-testid="multi-staff-view">MultiStaffView</div> }
 })
 
+// Mock MultiStaffWeekView
+jest.mock('../../app/dashboard/calendar/MultiStaffWeekView', () => {
+  return { __esModule: true, default: () => <div data-testid="multi-staff-week-view">MultiStaffWeekView</div> }
+})
+
 // Mock the calendar utility (ES module)
 jest.mock('../../app/utils/calendar', () => ({
   DEFAULT_START_HOUR: 8,
@@ -70,6 +75,7 @@ jest.mock('../../app/utils/calendar', () => ({
     return { start, end }
   },
   computeOverlapLayout: (appointments) => appointments.map((apt, i) => ({ appointment: apt, column: 0, totalColumns: 1 })),
+  formatWeekHeaderLabel: (dates) => 'Jan 12 – Jan 18, 2025',
 }))
 
 // Track fetch calls for assertions

@@ -21,6 +21,7 @@ import {
   generateTimeSlots,
   getBlockPosition,
   getDateRangeForView,
+  formatWeekHeaderLabel,
   SLOT_MINUTES,
   DEFAULT_START_HOUR,
   DEFAULT_END_HOUR,
@@ -685,6 +686,87 @@ describe('orderStaffColumns - additional edge cases', () => {
 })
 
 
+// ─── assignStaffColors ────────────────────────────────────────
+
+import { assignStaffColors, STAFF_COLORS } from '../../app/utils/calendar.js'
+
+describe('assignStaffColors', () => {
+  const makeStaff = (visibleId) => ({ visibleId, staffName: `Staff ${visibleId}` })
+
+  test('returns empty Map for empty array', () => {
+    const result = assignStaffColors([])
+    expect(result).toBeInstanceOf(Map)
+    expect(result.size).toBe(0)
+  })
+
+  test('returns empty Map for null input', () => {
+    const result = assignStaffColors(null)
+    expect(result).toBeInstanceOf(Map)
+    expect(result.size).toBe(0)
+  })
+
+  test('returns empty Map for undefined input', () => {
+    const result = assignStaffColors(undefined)
+    expect(result).toBeInstanceOf(Map)
+    expect(result.size).toBe(0)
+  })
+
+  test('assigns one color per staff member', () => {
+    const staff = [makeStaff('s1'), makeStaff('s2'), makeStaff('s3')]
+    const result = assignStaffColors(staff)
+    expect(result.size).toBe(3)
+    expect(result.has('s1')).toBe(true)
+    expect(result.has('s2')).toBe(true)
+    expect(result.has('s3')).toBe(true)
+  })
+
+  test('assigns colors based on position in order', () => {
+    const staff = [makeStaff('s1'), makeStaff('s2'), makeStaff('s3')]
+    const result = assignStaffColors(staff)
+    expect(result.get('s1')).toBe(STAFF_COLORS[0])
+    expect(result.get('s2')).toBe(STAFF_COLORS[1])
+    expect(result.get('s3')).toBe(STAFF_COLORS[2])
+  })
+
+  test('cycles colors for teams larger than 10', () => {
+    const staff = Array.from({ length: 12 }, (_, i) => makeStaff(`s${i}`))
+    const result = assignStaffColors(staff)
+    expect(result.size).toBe(12)
+    // 11th staff member (index 10) cycles back to first color
+    expect(result.get('s10')).toBe(STAFF_COLORS[0])
+    // 12th staff member (index 11) uses second color
+    expect(result.get('s11')).toBe(STAFF_COLORS[1])
+  })
+
+  test('STAFF_COLORS palette has exactly 10 colors', () => {
+    expect(STAFF_COLORS).toHaveLength(10)
+  })
+
+  test('deterministic: same input produces same output', () => {
+    const staff = [makeStaff('s1'), makeStaff('s2'), makeStaff('s3')]
+    const result1 = assignStaffColors(staff)
+    const result2 = assignStaffColors(staff)
+    for (const [key, value] of result1) {
+      expect(result2.get(key)).toBe(value)
+    }
+  })
+
+  test('all 10 staff get distinct colors', () => {
+    const staff = Array.from({ length: 10 }, (_, i) => makeStaff(`s${i}`))
+    const result = assignStaffColors(staff)
+    const colors = [...result.values()]
+    const uniqueColors = new Set(colors)
+    expect(uniqueColors.size).toBe(10)
+  })
+
+  test('single staff member gets first color', () => {
+    const staff = [makeStaff('solo')]
+    const result = assignStaffColors(staff)
+    expect(result.get('solo')).toBe(STAFF_COLORS[0])
+  })
+})
+
+
 // ─── getWorkingHoursForStaff ──────────────────────────────────
 
 import { getWorkingHoursForStaff } from '../../app/utils/calendar.js'
@@ -799,5 +881,360 @@ describe('getWorkingHoursForStaff', () => {
     const monday = new Date(2025, 4, 5)
     const result = getWorkingHoursForStaff(schedule, monday)
     expect(result).toEqual({ start: 0, end: 1439 }) // 0, 23*60+59=1439
+  })
+})
+
+
+// ─── groupAppointmentsByDateAndStaff ──────────────────────────
+
+import { groupAppointmentsByDateAndStaff } from '../../app/utils/calendar.js'
+
+describe('groupAppointmentsByDateAndStaff', () => {
+  const makeStaff = (visibleId) => ({ visibleId })
+
+  // Week of May 4–10, 2025 (Sun–Sat)
+  const weekDates = getWeekDates(new Date(2025, 4, 7))
+
+  const makeAppointment = (id, staffId, dateTime, status = 'confirmed') => ({
+    appointmentId: id,
+    staffId,
+    rawDateTime: dateTime,
+    status,
+  })
+
+  test('returns a map with 7 date keys matching weekDates', () => {
+    const staff = [makeStaff('staff-1')]
+    const result = groupAppointmentsByDateAndStaff([], weekDates, staff)
+    expect(result.size).toBe(7)
+    for (const d of weekDates) {
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      expect(result.has(key)).toBe(true)
+    }
+  })
+
+  test('each date key contains a map with all staffIds', () => {
+    const staff = [makeStaff('staff-1'), makeStaff('staff-2')]
+    const result = groupAppointmentsByDateAndStaff([], weekDates, staff)
+    for (const [, staffMap] of result) {
+      expect(staffMap.size).toBe(2)
+      expect(staffMap.has('staff-1')).toBe(true)
+      expect(staffMap.has('staff-2')).toBe(true)
+    }
+  })
+
+  test('appointments are placed in correct date and staff buckets', () => {
+    const staff = [makeStaff('staff-1'), makeStaff('staff-2')]
+    const appointments = [
+      makeAppointment('a1', 'staff-1', '2025-05-05T10:00:00.000Z'), // Monday May 5
+      makeAppointment('a2', 'staff-2', '2025-05-07T14:00:00.000Z'), // Wednesday May 7
+      makeAppointment('a3', 'staff-1', '2025-05-07T09:00:00.000Z'), // Wednesday May 7
+    ]
+    const result = groupAppointmentsByDateAndStaff(appointments, weekDates, staff)
+    expect(result.get('2025-05-05').get('staff-1')).toHaveLength(1)
+    expect(result.get('2025-05-05').get('staff-1')[0].appointmentId).toBe('a1')
+    expect(result.get('2025-05-07').get('staff-2')).toHaveLength(1)
+    expect(result.get('2025-05-07').get('staff-2')[0].appointmentId).toBe('a2')
+    expect(result.get('2025-05-07').get('staff-1')).toHaveLength(1)
+    expect(result.get('2025-05-07').get('staff-1')[0].appointmentId).toBe('a3')
+  })
+
+  test('cancelled appointments are excluded', () => {
+    const staff = [makeStaff('staff-1')]
+    const appointments = [
+      makeAppointment('a1', 'staff-1', '2025-05-05T10:00:00.000Z', 'cancelled'),
+      makeAppointment('a2', 'staff-1', '2025-05-05T11:00:00.000Z', 'confirmed'),
+    ]
+    const result = groupAppointmentsByDateAndStaff(appointments, weekDates, staff)
+    expect(result.get('2025-05-05').get('staff-1')).toHaveLength(1)
+    expect(result.get('2025-05-05').get('staff-1')[0].appointmentId).toBe('a2')
+  })
+
+  test('appointments with unknown staffId are excluded', () => {
+    const staff = [makeStaff('staff-1')]
+    const appointments = [
+      makeAppointment('a1', 'staff-unknown', '2025-05-05T10:00:00.000Z'),
+    ]
+    const result = groupAppointmentsByDateAndStaff(appointments, weekDates, staff)
+    expect(result.get('2025-05-05').get('staff-1')).toHaveLength(0)
+    expect(result.get('2025-05-05').has('staff-unknown')).toBe(false)
+  })
+
+  test('appointments with null or undefined staffId are excluded', () => {
+    const staff = [makeStaff('staff-1')]
+    const appointments = [
+      makeAppointment('a1', null, '2025-05-05T10:00:00.000Z'),
+      makeAppointment('a2', undefined, '2025-05-06T10:00:00.000Z'),
+    ]
+    const result = groupAppointmentsByDateAndStaff(appointments, weekDates, staff)
+    expect(result.get('2025-05-05').get('staff-1')).toHaveLength(0)
+    expect(result.get('2025-05-06').get('staff-1')).toHaveLength(0)
+  })
+
+  test('appointments with invalid dateTime are excluded silently', () => {
+    const staff = [makeStaff('staff-1')]
+    const appointments = [
+      makeAppointment('a1', 'staff-1', 'not-a-date'),
+      makeAppointment('a2', 'staff-1', null),
+      makeAppointment('a3', 'staff-1', ''),
+    ]
+    const result = groupAppointmentsByDateAndStaff(appointments, weekDates, staff)
+    expect(result.get('2025-05-05').get('staff-1')).toHaveLength(0)
+  })
+
+  test('appointments outside the week range are excluded', () => {
+    const staff = [makeStaff('staff-1')]
+    const appointments = [
+      makeAppointment('a1', 'staff-1', '2025-04-28T10:00:00.000Z'), // Previous week
+      makeAppointment('a2', 'staff-1', '2025-05-12T10:00:00.000Z'), // Next week
+    ]
+    const result = groupAppointmentsByDateAndStaff(appointments, weekDates, staff)
+    for (const [, staffMap] of result) {
+      for (const [, apts] of staffMap) {
+        expect(apts).toHaveLength(0)
+      }
+    }
+  })
+
+  test('uses dateTime fallback when rawDateTime is not available', () => {
+    const staff = [makeStaff('staff-1')]
+    const appointments = [
+      { appointmentId: 'a1', staffId: 'staff-1', dateTime: '2025-05-06T10:00:00.000Z', status: 'confirmed' },
+    ]
+    const result = groupAppointmentsByDateAndStaff(appointments, weekDates, staff)
+    expect(result.get('2025-05-06').get('staff-1')).toHaveLength(1)
+    expect(result.get('2025-05-06').get('staff-1')[0].appointmentId).toBe('a1')
+  })
+
+  test('empty staff list returns map with 7 date keys but empty staff maps', () => {
+    const appointments = [
+      makeAppointment('a1', 'staff-1', '2025-05-05T10:00:00.000Z'),
+    ]
+    const result = groupAppointmentsByDateAndStaff(appointments, weekDates, [])
+    expect(result.size).toBe(7)
+    for (const [, staffMap] of result) {
+      expect(staffMap.size).toBe(0)
+    }
+  })
+})
+
+
+// ─── formatWeekHeaderLabel ────────────────────────────────────
+
+describe('formatWeekHeaderLabel', () => {
+  test('same month: formats as "Mon D – Mon D, YYYY"', () => {
+    // Jan 12–18, 2025 (Sun–Sat, all in January)
+    const weekDates = [
+      new Date(2025, 0, 12), // Sun Jan 12
+      new Date(2025, 0, 13), // Mon Jan 13
+      new Date(2025, 0, 14), // Tue Jan 14
+      new Date(2025, 0, 15), // Wed Jan 15
+      new Date(2025, 0, 16), // Thu Jan 16
+      new Date(2025, 0, 17), // Fri Jan 17
+      new Date(2025, 0, 18), // Sat Jan 18
+    ]
+    expect(formatWeekHeaderLabel(weekDates)).toBe('Jan 12 \u2013 Jan 18, 2025')
+  })
+
+  test('cross-month: formats correctly across month boundary', () => {
+    // Dec 29, 2024 – Jan 4, 2025
+    const weekDates = [
+      new Date(2024, 11, 29), // Sun Dec 29
+      new Date(2024, 11, 30), // Mon Dec 30
+      new Date(2024, 11, 31), // Tue Dec 31
+      new Date(2025, 0, 1),   // Wed Jan 1
+      new Date(2025, 0, 2),   // Thu Jan 2
+      new Date(2025, 0, 3),   // Fri Jan 3
+      new Date(2025, 0, 4),   // Sat Jan 4
+    ]
+    expect(formatWeekHeaderLabel(weekDates)).toBe('Dec 29 \u2013 Jan 4, 2025')
+  })
+
+  test('cross-year: uses the end date year', () => {
+    // Dec 29, 2024 – Jan 4, 2025 — year should be 2025 (from Saturday)
+    const weekDates = [
+      new Date(2024, 11, 29),
+      new Date(2024, 11, 30),
+      new Date(2024, 11, 31),
+      new Date(2025, 0, 1),
+      new Date(2025, 0, 2),
+      new Date(2025, 0, 3),
+      new Date(2025, 0, 4),
+    ]
+    const result = formatWeekHeaderLabel(weekDates)
+    expect(result).toContain('2025')
+    expect(result).not.toContain('2024')
+  })
+
+  test('returns empty string for null input', () => {
+    expect(formatWeekHeaderLabel(null)).toBe('')
+  })
+
+  test('returns empty string for undefined input', () => {
+    expect(formatWeekHeaderLabel(undefined)).toBe('')
+  })
+
+  test('returns empty string for array with fewer than 7 dates', () => {
+    const weekDates = [
+      new Date(2025, 0, 12),
+      new Date(2025, 0, 13),
+      new Date(2025, 0, 14),
+    ]
+    expect(formatWeekHeaderLabel(weekDates)).toBe('')
+  })
+
+  test('uses en-dash (–) as separator', () => {
+    const weekDates = [
+      new Date(2025, 4, 4),  // Sun May 4
+      new Date(2025, 4, 5),
+      new Date(2025, 4, 6),
+      new Date(2025, 4, 7),
+      new Date(2025, 4, 8),
+      new Date(2025, 4, 9),
+      new Date(2025, 4, 10), // Sat May 10
+    ]
+    const result = formatWeekHeaderLabel(weekDates)
+    expect(result).toContain('\u2013') // en-dash
+    expect(result).toBe('May 4 \u2013 May 10, 2025')
+  })
+
+  test('Feb–Mar cross-month boundary', () => {
+    // Feb 23 – Mar 1, 2025
+    const weekDates = [
+      new Date(2025, 1, 23), // Sun Feb 23
+      new Date(2025, 1, 24),
+      new Date(2025, 1, 25),
+      new Date(2025, 1, 26),
+      new Date(2025, 1, 27),
+      new Date(2025, 1, 28),
+      new Date(2025, 2, 1),  // Sat Mar 1
+    ]
+    expect(formatWeekHeaderLabel(weekDates)).toBe('Feb 23 \u2013 Mar 1, 2025')
+  })
+})
+
+
+// ─── getAggregateWorkingHours ─────────────────────────────────
+
+import { getAggregateWorkingHours } from '../../app/utils/calendar.js'
+
+describe('getAggregateWorkingHours', () => {
+  // Monday May 5, 2025
+  const monday = new Date(2025, 4, 5)
+  // Sunday May 4, 2025
+  const sunday = new Date(2025, 4, 4)
+
+  const makeStaffWithSchedule = (visibleId, schedule) => ({
+    visibleId,
+    staffName: `Staff ${visibleId}`,
+    schedule,
+  })
+
+  test('returns earliest start and latest end across all staff', () => {
+    const staffList = [
+      makeStaffWithSchedule('s1', { monday: { start: '09:00', end: '17:00' } }),
+      makeStaffWithSchedule('s2', { monday: { start: '08:00', end: '16:00' } }),
+      makeStaffWithSchedule('s3', { monday: { start: '10:00', end: '19:00' } }),
+    ]
+    const result = getAggregateWorkingHours(staffList, monday)
+    expect(result).toEqual({ start: 480, end: 1140 }) // 8*60=480, 19*60=1140
+  })
+
+  test('returns null for both when no staff have hours on that day', () => {
+    const staffList = [
+      makeStaffWithSchedule('s1', { monday: null }),
+      makeStaffWithSchedule('s2', { monday: null }),
+    ]
+    const result = getAggregateWorkingHours(staffList, monday)
+    expect(result).toEqual({ start: null, end: null })
+  })
+
+  test('returns null for both when all staff have day off (sunday)', () => {
+    const staffList = [
+      makeStaffWithSchedule('s1', { sunday: null, monday: { start: '09:00', end: '17:00' } }),
+      makeStaffWithSchedule('s2', { sunday: null, monday: { start: '08:00', end: '16:00' } }),
+    ]
+    const result = getAggregateWorkingHours(staffList, sunday)
+    expect(result).toEqual({ start: null, end: null })
+  })
+
+  test('ignores staff with no schedule for the day', () => {
+    const staffList = [
+      makeStaffWithSchedule('s1', { monday: { start: '09:00', end: '17:00' } }),
+      makeStaffWithSchedule('s2', { monday: null }), // day off
+      makeStaffWithSchedule('s3', { monday: { start: '10:00', end: '18:00' } }),
+    ]
+    const result = getAggregateWorkingHours(staffList, monday)
+    expect(result).toEqual({ start: 540, end: 1080 }) // 9*60=540, 18*60=1080
+  })
+
+  test('handles schedule as JSON string', () => {
+    const staffList = [
+      makeStaffWithSchedule('s1', JSON.stringify({ monday: { start: '07:00', end: '15:00' } })),
+      makeStaffWithSchedule('s2', { monday: { start: '09:00', end: '17:00' } }),
+    ]
+    const result = getAggregateWorkingHours(staffList, monday)
+    expect(result).toEqual({ start: 420, end: 1020 }) // 7*60=420, 17*60=1020
+  })
+
+  test('treats invalid JSON string as no working hours', () => {
+    const staffList = [
+      makeStaffWithSchedule('s1', 'not valid json'),
+      makeStaffWithSchedule('s2', { monday: { start: '09:00', end: '17:00' } }),
+    ]
+    const result = getAggregateWorkingHours(staffList, monday)
+    expect(result).toEqual({ start: 540, end: 1020 }) // only s2 counts
+  })
+
+  test('all staff have invalid schedule returns null', () => {
+    const staffList = [
+      makeStaffWithSchedule('s1', 'invalid json'),
+      makeStaffWithSchedule('s2', 'also invalid'),
+    ]
+    const result = getAggregateWorkingHours(staffList, monday)
+    expect(result).toEqual({ start: null, end: null })
+  })
+
+  test('handles null schedule on a staff member gracefully', () => {
+    const staffList = [
+      makeStaffWithSchedule('s1', null),
+      makeStaffWithSchedule('s2', { monday: { start: '09:00', end: '17:00' } }),
+    ]
+    const result = getAggregateWorkingHours(staffList, monday)
+    expect(result).toEqual({ start: 540, end: 1020 })
+  })
+
+  test('returns null for empty staff list', () => {
+    const result = getAggregateWorkingHours([], monday)
+    expect(result).toEqual({ start: null, end: null })
+  })
+
+  test('returns null for null staff list', () => {
+    const result = getAggregateWorkingHours(null, monday)
+    expect(result).toEqual({ start: null, end: null })
+  })
+
+  test('returns null for null date', () => {
+    const staffList = [
+      makeStaffWithSchedule('s1', { monday: { start: '09:00', end: '17:00' } }),
+    ]
+    const result = getAggregateWorkingHours(staffList, null)
+    expect(result).toEqual({ start: null, end: null })
+  })
+
+  test('single staff member returns their exact hours', () => {
+    const staffList = [
+      makeStaffWithSchedule('s1', { monday: { start: '08:30', end: '16:45' } }),
+    ]
+    const result = getAggregateWorkingHours(staffList, monday)
+    expect(result).toEqual({ start: 510, end: 1005 }) // 8*60+30=510, 16*60+45=1005
+  })
+
+  test('staff with missing day key treated as no hours', () => {
+    const staffList = [
+      makeStaffWithSchedule('s1', { tuesday: { start: '09:00', end: '17:00' } }), // no monday key
+      makeStaffWithSchedule('s2', { monday: { start: '10:00', end: '18:00' } }),
+    ]
+    const result = getAggregateWorkingHours(staffList, monday)
+    expect(result).toEqual({ start: 600, end: 1080 }) // only s2 counts
   })
 })
