@@ -105,9 +105,9 @@ export async function POST(request: Request) {
     const categoryId = `cat-${trimmed.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}`;
 
     const { data, errors } = await client.models.ServiceCategory.create({
-      categoryId,
-      name: trimmed,
-      createdAt: new Date().toISOString(),
+      categoryId: categoryId as any,
+      name: trimmed as any,
+      createdAt: new Date().toISOString() as any,
     });
 
     if (errors) {
