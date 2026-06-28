@@ -44,7 +44,13 @@ export default function ResourceBookingPage({
 
   const handleBook = () => {
     if (!selected) return
-    router.push(`/booking/time?vendor=${selected.vendorId}&service=${selected.serviceId}`)
+    // Sauna is provider-independent — skip to time picker
+    // Spa room needs staff assignment — go to provider selection
+    if (resourceType === 'sauna') {
+      router.push(`/booking/time?service=${selected.serviceId}`)
+    } else {
+      router.push(`/booking/provider?service=${selected.serviceId}`)
+    }
   }
 
   if (loading) return <div style={{ padding: '2rem' }}>Loading...</div>

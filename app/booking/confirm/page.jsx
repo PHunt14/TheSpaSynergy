@@ -69,6 +69,8 @@ function ConfirmPageContent() {
     : {}
   const isBundle = !!servicesParam
   const serviceIds = servicesParam ? servicesParam.split(',') : service ? [service] : []
+  const scheduleParam = params.get('schedule')
+  const bundleSchedule = scheduleParam ? JSON.parse(decodeURIComponent(scheduleParam)) : null
 
   const [formData, setFormData] = useState({ name: '', email: '', phone: '', smsOptIn: false, notes: '' })
   const [loading, setLoading] = useState(false)
@@ -111,6 +113,7 @@ function ConfirmPageContent() {
       })
 
     // Fetch staff Square status if a staff member is assigned
+    // For "Any Available" (no staffId), we defer Square check until after auto-assignment
     if (staffId) {
       fetch(`/api/staff-schedules?visibleId=${staffId}`)
         .then(res => res.json())
@@ -120,7 +123,8 @@ function ConfirmPageContent() {
         })
         .catch(() => setStaffSquareConnected(false))
     } else {
-      setStaffSquareConnected(false)
+      // "Any Available" — assume card payment may be available (auto-assigned staff may have Square)
+      setStaffSquareConnected(true)
     }
 
     // Fetch vendor details (use vendor param or derive from first service)
@@ -132,13 +136,24 @@ function ConfirmPageContent() {
     }
   }, [])
 
-  // If no vendor param (bundle case), derive from first loaded service
+  // If no vendor param (bundle case or "Any Available"), derive from first loaded service or fetch house provider
   useEffect(() => {
     if (!vendor && allServiceDetails.length > 0 && !vendorDetails) {
       const vendorId = allServiceDetails[0].vendorId
-      fetch(`/api/vendors?vendorId=${vendorId}`)
-        .then(res => res.json())
-        .then(data => setVendorDetails(data.vendor))
+      if (vendorId) {
+        fetch(`/api/vendors?vendorId=${vendorId}`)
+          .then(res => res.json())
+          .then(data => setVendorDetails(data.vendor))
+      } else {
+        // Unified model: services don't have vendorId — fetch the house provider for Square form initialization
+        fetch('/api/vendors')
+          .then(res => res.json())
+          .then(data => {
+            const house = (data.vendors || []).find(v => v.isHouse)
+            if (house) setVendorDetails(house)
+            else if (data.vendors?.length > 0) setVendorDetails(data.vendors[0])
+          })
+      }
     }
   }, [allServiceDetails])
 
@@ -214,7 +229,16 @@ function ConfirmPageContent() {
     return `${dateOnly}T${hour24.toString().padStart(2, '0')}:${minutes}:00`
   }
 
-  const processPaymentWithToken = async (token) => {
+  // Build a dateTimeISO for a specific service using its scheduled start time (HH:MM format)
+  const buildDateTimeForService = (serviceId) => {
+    if (!bundleSchedule) return buildDateTimeISO()
+    const entry = bundleSchedule.find(e => e.serviceId === serviceId)
+    if (!entry || !entry.startTime) return buildDateTimeISO()
+    const dateOnly = date.split('T')[0]
+    return `${dateOnly}T${entry.startTime}:00`
+  }
+
+  const processPaymentWithToken = async (token, assignedStaffId) => {
     const paymentResponse = await fetch('/api/payment', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -222,7 +246,7 @@ function ConfirmPageContent() {
         sourceId: token,
         amount: totalPrice,
         vendorId: vendor || allServiceDetails[0]?.vendorId,
-        staffId: staffId || undefined,
+        staffId: assignedStaffId || staffId || undefined,
         serviceIds: allServiceDetails.map(s => s.serviceId),
         people: people || undefined
       })
@@ -232,10 +256,87 @@ function ConfirmPageContent() {
     return paymentData.paymentId
   }
 
-  const createAppointments = async (paymentId, pMethod) => {
+  /**
+   * Handles the "Any Available" payment flow:
+   * 1. Creates appointments (API auto-assigns staff)
+   * 2. Processes payment through assigned staff's Square credentials
+   * 3. Updates appointments with payment info
+   * 4. Navigates to success page
+   */
+  const handleAnyAvailablePayment = async (token) => {
     const dateTimeISO = buildDateTimeISO()
     const isResource = allServiceDetails.every(s => s.resourceType === 'sauna' || s.resourceType === 'room')
     const status = isResource ? 'confirmed' : 'pending-confirmation'
+
+    const appointmentResults = await Promise.all(
+      allServiceDetails.map(svc => {
+        const svcQty = getQty(svc)
+        return fetch('/api/appointments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            serviceId: svc.serviceId,
+            bundleId: bundleId || undefined,
+            dateTime: dateTimeISO,
+            customer: formData,
+            status,
+            ...(people ? { people } : {}),
+            ...(svcQty > 1 ? { quantity: svcQty, quantityMode } : {})
+          })
+        }).then(r => r.json())
+      })
+    )
+
+    const firstSuccess = appointmentResults.find(r => r.success)
+    if (!firstSuccess) {
+      throw new Error(appointmentResults[0]?.error || 'Appointment creation failed')
+    }
+
+    const assignedStaffId = firstSuccess.staffId
+    let paymentId = null
+    try {
+      paymentId = await processPaymentWithToken(token, assignedStaffId)
+    } catch (payError) {
+      console.error('Payment failed after appointment creation:', payError)
+      alert('Appointment booked but payment failed: ' + payError.message + '. Please pay in person.')
+    }
+
+    if (paymentId) {
+      await Promise.all(
+        appointmentResults.filter(r => r.appointmentId).map(r =>
+          fetch('/api/appointments', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              appointmentId: r.appointmentId,
+              paymentId,
+              paymentStatus: 'paid',
+              paymentAmount: totalPrice
+            })
+          })
+        )
+      )
+    }
+
+    const successUrl = new URLSearchParams({
+      id: firstSuccess.appointmentId || firstSuccess.appointmentIds?.[0] || firstSuccess.groupId,
+      dateTime: dateTimeISO,
+      service: allServiceDetails.map(s => s.name).join(', '),
+      payment: paymentId ? 'card' : 'in-person',
+      total: totalPrice.toFixed(2)
+    })
+    if (requiresConfirmation) successUrl.set('confirmation', 'required')
+    if (people) successUrl.set('people', people)
+    if (quantity > 1) successUrl.set('quantity', String(quantity))
+    window.location.href = `/booking/success?${successUrl}`
+  }
+
+  const createAppointments = async (paymentId, pMethod, assignedStaffIdOverride) => {
+    const dateTimeISO = buildDateTimeISO()
+    const isResource = allServiceDetails.every(s => s.resourceType === 'sauna' || s.resourceType === 'room')
+    const status = isResource ? 'confirmed' : 'pending-confirmation'
+    const isSauna = allServiceDetails.every(s => s.resourceType === 'sauna')
+    const effectiveStaffId = isSauna ? 'resource-sauna' : (assignedStaffIdOverride || staffId)
 
     // Multi-provider booking: single API call creates all appointments
     if (multiProvider) {
@@ -282,15 +383,18 @@ function ConfirmPageContent() {
     const results = await Promise.all(
       allServiceDetails.map(svc => {
         const svcQty = getQty(svc)
+        const svcDateTime = buildDateTimeForService(svc.serviceId)
+        // For sauna, use the house vendor (kera-studio) as the vendorId
+        const svcVendorId = svc.resourceType === 'sauna' ? 'vendor-kera-studio' : (svc.vendorId || vendor)
         return fetch('/api/appointments', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            vendorId: svc.vendorId,
+            vendorId: svcVendorId,
             serviceId: svc.serviceId,
-            staffId: staffId || undefined,
+            staffId: svc.resourceType === 'sauna' ? 'resource-sauna' : (effectiveStaffId || undefined),
             bundleId: bundleId || undefined,
-            dateTime: dateTimeISO,
+            dateTime: svcDateTime,
             customer: formData,
             status,
             paymentId,
@@ -358,7 +462,15 @@ function ConfirmPageContent() {
       const instance = type === 'apple' ? applePay : googlePay
       const result = await instance.tokenize()
       if (result.status !== 'OK') { alert('Payment failed'); setLoading(false); return }
-      const paymentId = await processPaymentWithToken(result.token)
+
+      // "Any Available" with wallet pay: create appointment first for auto-assignment (Req 5.5, 6.1)
+      if (!staffId) {
+        await handleAnyAvailablePayment(result.token)
+        return
+      }
+
+      // Specific staff selected — standard wallet payment flow
+      const paymentId = await processPaymentWithToken(result.token, staffId)
       await createAppointments(paymentId, 'card')
     } catch (error) {
       console.error('Wallet payment error:', error)
@@ -374,6 +486,18 @@ function ConfirmPageContent() {
     setLoading(true)
 
     try {
+      // "Any Available" with card payment: create appointment first to get assigned staffId,
+      // then process payment through the assigned staff's Square credentials (Req 5.5, 5.6, 6.1)
+      if (!staffId && paymentMethod === 'card') {
+        if (!card) { alert('Please enter card information'); setLoading(false); return }
+        const result = await card.tokenize()
+        if (result.status !== 'OK') { alert('Card tokenization failed'); setLoading(false); return }
+
+        await handleAnyAvailablePayment(result.token)
+        return
+      }
+
+      // Standard flow: staffId is known (specific staff selected) or in-person payment
       let paymentId = null
 
       if (paymentMethod === 'card') {
@@ -381,7 +505,7 @@ function ConfirmPageContent() {
         const result = await card.tokenize()
         if (result.status !== 'OK') { alert('Card tokenization failed'); setLoading(false); return }
 
-        paymentId = await processPaymentWithToken(result.token)
+        paymentId = await processPaymentWithToken(result.token, staffId)
       }
 
       await createAppointments(paymentId, paymentMethod)

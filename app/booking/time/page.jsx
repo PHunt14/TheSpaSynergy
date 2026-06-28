@@ -10,6 +10,7 @@ function TimePageContent() {
   const params = useSearchParams()
   const service = params.get('service')
   const vendor = params.get('vendor')
+  const staffId = params.get('staffId') // New unified flow: specific staff member
   const multiProvider = params.get('multiProvider') === 'true'
   const quantityParam = params.get('quantity')
   const quantity = quantityParam ? parseInt(quantityParam) : 1
@@ -27,7 +28,7 @@ function TimePageContent() {
   const [quantityMode, setQuantityMode] = useState('sequential')
 
   useEffect(() => {
-    if (!service || !vendor) return
+    if (!service) return
     
     // Fetch service info
     fetch('/api/services')
@@ -37,20 +38,24 @@ function TimePageContent() {
         setServiceInfo(svc)
       })
     
-    // Fetch vendor info
-    fetch('/api/vendors')
-      .then(res => res.json())
-      .then(data => {
-        const vnd = data.vendors?.find(v => v.vendorId === vendor)
-        setVendorInfo(vnd)
-      })
+    // Fetch vendor info only if vendor param is provided (legacy flow)
+    if (vendor) {
+      fetch('/api/providers')
+        .then(res => res.json())
+        .then(data => {
+          const vnd = (data.providers || data.vendors || []).find(v => v.vendorId === vendor)
+          setVendorInfo(vnd)
+        })
+    }
   }, [service, vendor])
 
   const fetchAvailableDates = (date) => {
-    if (!vendor || !service) return
+    if (!service) return
     const month = date.getMonth() + 1
     const year = date.getFullYear()
-    fetch(`/api/available-dates?vendorId=${vendor}&serviceId=${service}&month=${month}&year=${year}`)
+    const vendorParam = vendor ? `&vendorId=${vendor}` : ''
+    const staffParam = staffId ? `&staffId=${staffId}` : ''
+    fetch(`/api/available-dates?serviceId=${service}${vendorParam}${staffParam}&month=${month}&year=${year}`)
       .then(res => res.json())
       .then(data => {
         setAvailableDates(new Set(data.availableDates || []))
@@ -59,8 +64,8 @@ function TimePageContent() {
   }
 
   useEffect(() => {
-    if (vendor && service && isBookingEnabled) fetchAvailableDates(selectedDate)
-  }, [vendor, service])
+    if (service && isBookingEnabled) fetchAvailableDates(selectedDate)
+  }, [service, staffId])
 
   const isDateAvailable = (date) => {
     if (!availableDates) return true
@@ -75,7 +80,7 @@ function TimePageContent() {
   }
 
   useEffect(() => {
-    if (!vendor || !service || !selectedDate || !isBookingEnabled) return
+    if (!service || !selectedDate || !isBookingEnabled) return
 
     setLoading(true)
     setSelectedTime(null)
@@ -84,7 +89,10 @@ function TimePageContent() {
 
     const multiProviderParam = multiProvider ? '&multiProvider=true' : ''
     const quantityParams = quantity > 1 ? `&quantity=${quantity}&mode=${quantityMode}` : ''
-    fetch(`/api/availability?vendorId=${vendor}&serviceId=${service}&date=${dateStr}${multiProviderParam}${quantityParams}`)
+    // Build availability URL: unified flow uses serviceId + optional staffId
+    const vendorParam = vendor ? `&vendorId=${vendor}` : ''
+    const staffParam = staffId ? `&staffId=${staffId}` : ''
+    fetch(`/api/availability?serviceId=${service}&date=${dateStr}${vendorParam}${staffParam}${multiProviderParam}${quantityParams}`)
       .then(res => res.json())
       .then(data => {
         if (data.bookingDisabled) {
@@ -244,8 +252,10 @@ function TimePageContent() {
             const dateStr = selectedDate.toISOString().split('T')[0]
             const multiProviderParam = multiProvider ? '&multiProvider=true' : ''
             const quantityParams = quantity > 1 ? `&quantity=${quantity}&mode=${quantityMode}` : ''
+            const vendorParam = vendor ? `&vendorId=${vendor}` : ''
+            const staffParam = staffId ? `&staffId=${staffId}` : ''
             try {
-              const res = await fetch(`/api/availability?vendorId=${vendor}&serviceId=${service}&date=${dateStr}${multiProviderParam}${quantityParams}`)
+              const res = await fetch(`/api/availability?serviceId=${service}&date=${dateStr}${vendorParam}${staffParam}${multiProviderParam}${quantityParams}`)
               const data = await res.json()
               const freshSlots = data.availableSlots || []
               const stillAvailable = freshSlots.some(s => s.display === selectedTime)
@@ -258,7 +268,7 @@ function TimePageContent() {
             } catch (e) {
               // If re-check fails, proceed anyway — server-side check will catch conflicts
             }
-            const url = `/booking/confirm?vendor=${vendor}&service=${service}&date=${selectedDate.toISOString()}&time=${selectedTime}${multiProvider ? '&multiProvider=true' : ''}${quantity > 1 ? `&quantity=${quantity}&mode=${quantityMode}` : ''}${assignedStaff ? `&staffId=${assignedStaff.id}&staffName=${encodeURIComponent(assignedStaff.name)}` : ''}`
+            const url = `/booking/confirm?service=${service}&date=${selectedDate.toISOString()}&time=${selectedTime}${vendor ? `&vendor=${vendor}` : ''}${staffId ? `&staffId=${staffId}` : ''}${multiProvider ? '&multiProvider=true' : ''}${quantity > 1 ? `&quantity=${quantity}&mode=${quantityMode}` : ''}${assignedStaff ? `&staffId=${assignedStaff.id}&staffName=${encodeURIComponent(assignedStaff.name)}` : ''}`
             window.location.href = url
           }}
         >

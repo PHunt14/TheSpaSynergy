@@ -13,7 +13,10 @@ import {
   getBlockPosition,
   getDateRangeForView,
   computeOverlapLayout,
+  formatWeekHeaderLabel,
 } from '../../utils/calendar'
+import MultiStaffView from './MultiStaffView'
+import MultiStaffWeekView from './MultiStaffWeekView'
 
 // ── Constants ─────────────────────────────────────────────────
 
@@ -91,17 +94,18 @@ function AppointmentBlock({ appointment, startHour, onClick, column = 0, totalCo
 
 // ── Appointment Detail Modal ──────────────────────────────────
 
-function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onEdit, onRebook, vendorId, userRole }) {
+function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onEdit, onRebook, vendorId, currentUserStaffId, userRole }) {
   const [editing, setEditing] = useState(false)
   const [services, setServices] = useState([])
   const [staffList, setStaffList] = useState([])
   const [vendors, setVendors] = useState([])
   const [saving, setSaving] = useState(false)
+  const [overlapWarning, setOverlapWarning] = useState(null)
+  const [pendingPayload, setPendingPayload] = useState(null)
   const [editForm, setEditForm] = useState({
     dateTime: '',
     serviceId: '',
     staffId: '',
-    vendorId: '',
     status: '',
     customerName: '',
     customerPhone: '',
@@ -132,54 +136,42 @@ function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onEdit, 
       dateTime: dtLocal,
       serviceId: appointment.serviceId || '',
       staffId: appointment.staffId || '',
-      vendorId: appointment.vendorId || vendorId || '',
       status: appointment.status || '',
       customerName: appointment.customer?.name || '',
       customerPhone: appointment.customer?.phone || '',
       customerEmail: appointment.customer?.email || '',
     })
     setEditing(true)
-    // Load services and staff
-    loadEditData(appointment.vendorId || vendorId)
+    setOverlapWarning(null)
+    setPendingPayload(null)
+    // Load all services and all staff (unified access — no vendor filtering)
+    loadEditData()
   }
 
-  const loadEditData = (vid) => {
-    if (!vid) return
-    fetch(`/api/services?vendorId=${vid}`).then(r => r.json()).then(d => setServices((d.services || []).filter(s => s.isActive !== false)))
-    fetch(`/api/staff-schedules?vendorId=${vid}`).then(r => r.json()).then(d => setStaffList((d.schedules || []).filter(s => s.isActive !== false)))
+  const loadEditData = () => {
+    fetch('/api/services').then(r => r.json()).then(d => setServices((d.services || []).filter(s => s.isActive !== false)))
+    fetch('/api/staff-schedules?all=true').then(r => r.json()).then(d => setStaffList((d.schedules || []).filter(s => s.isActive !== false)))
     fetch('/api/vendors').then(r => r.json()).then(d => setVendors(d.vendors || []))
   }
 
-  const handleVendorChange = (newVendorId) => {
-    setEditForm(prev => ({ ...prev, vendorId: newVendorId, serviceId: '', staffId: '' }))
-    // Reload services and staff for new vendor
-    fetch(`/api/services?vendorId=${newVendorId}`).then(r => r.json()).then(d => setServices((d.services || []).filter(s => s.isActive !== false)))
-    fetch(`/api/staff-schedules?vendorId=${newVendorId}`).then(r => r.json()).then(d => setStaffList((d.schedules || []).filter(s => s.isActive !== false)))
-  }
-
-  const handleSave = async () => {
+  const handleSave = async (forceConfirmOverlap = false) => {
     setSaving(true)
+    setOverlapWarning(null)
     try {
       // Build update payload
       const updates = {}
       let hasChanges = false
 
+      // Record who performed the edit for audit (Req 4.5)
+      if (currentUserStaffId) {
+        updates.createdBy = currentUserStaffId
+      }
+
       // Check dateTime change
       if (editForm.dateTime) {
         const newDT = new Date(editForm.dateTime).toISOString()
         if (newDT !== appointment.rawDateTime) {
-          // Use reschedule endpoint for time changes
-          const res = await fetch('/api/appointments/reschedule', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ appointmentId: appointment.appointmentId, newDateTime: newDT })
-          })
-          if (!res.ok) {
-            const data = await res.json()
-            alert('Failed to update time: ' + (data.error || 'Unknown error'))
-            setSaving(false)
-            return
-          }
+          updates.dateTime = newDT
           hasChanges = true
         }
       }
@@ -189,11 +181,10 @@ function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onEdit, 
         if (editForm.staffId) {
           // If the service is also changing, skip the reassign endpoint (it validates
           // against the current service's allowedStaff which would be stale). Instead,
-          // include staffId and vendorId directly in the PATCH so they update atomically.
+          // include staffId directly in the PATCH so they update atomically.
           const serviceAlsoChanging = editForm.serviceId !== (appointment.serviceId || '')
           if (serviceAlsoChanging) {
             updates.staffId = editForm.staffId
-            // vendorId will be set by the service change block below
           } else {
             const res = await fetch('/api/appointments/reassign', {
               method: 'POST',
@@ -213,7 +204,7 @@ function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onEdit, 
             }
           }
         } else {
-          // Clear staff assignment via PATCH
+          // Clear staff assignment
           updates.staffId = null
         }
         hasChanges = true
@@ -225,20 +216,9 @@ function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onEdit, 
         hasChanges = true
       }
 
-      // Check service change — also update vendorId to match the service's vendor
+      // Check service change
       if (editForm.serviceId !== (appointment.serviceId || '')) {
         updates.serviceId = editForm.serviceId
-        // Find the selected service's vendorId and sync it to the appointment
-        const selectedService = services.find(s => s.serviceId === editForm.serviceId)
-        if (selectedService && selectedService.vendorId) {
-          updates.vendorId = selectedService.vendorId
-        }
-        hasChanges = true
-      }
-
-      // Check vendor change (if vendor was changed without a service change, still sync it)
-      if (!updates.vendorId && editForm.vendorId !== (appointment.vendorId || '')) {
-        updates.vendorId = editForm.vendorId
         hasChanges = true
       }
 
@@ -256,13 +236,28 @@ function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onEdit, 
         hasChanges = true
       }
 
-      // Apply remaining updates via PATCH
-      if (Object.keys(updates).length > 0) {
+      // Apply all updates via PATCH (includes createdBy for audit)
+      if (hasChanges || updates.createdBy) {
+        const payload = { appointmentId: appointment.appointmentId, ...updates }
+        if (forceConfirmOverlap) {
+          payload.confirmOverlap = true
+        }
+
         const res = await fetch('/api/appointments', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ appointmentId: appointment.appointmentId, ...updates })
+          body: JSON.stringify(payload)
         })
+
+        if (res.status === 409) {
+          // Overlap conflict detected — show warning and ask for confirmation
+          const data = await res.json()
+          setOverlapWarning(data.message || 'This overlaps with an existing appointment. Save anyway?')
+          setPendingPayload(payload)
+          setSaving(false)
+          return
+        }
+
         if (!res.ok) {
           const data = await res.json()
           alert('Failed to save changes: ' + (data.error || 'Unknown error'))
@@ -279,6 +274,32 @@ function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onEdit, 
       alert('Error saving: ' + (error.message || 'Unknown error'))
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleConfirmOverlap = async () => {
+    if (!pendingPayload) return
+    setSaving(true)
+    setOverlapWarning(null)
+    try {
+      const res = await fetch('/api/appointments', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...pendingPayload, confirmOverlap: true })
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        alert('Failed to save changes: ' + (data.error || 'Unknown error'))
+        setSaving(false)
+        return
+      }
+      onEdit()
+      onClose()
+    } catch (error) {
+      alert('Error saving: ' + (error.message || 'Unknown error'))
+    } finally {
+      setSaving(false)
+      setPendingPayload(null)
     }
   }
 
@@ -372,6 +393,28 @@ function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onEdit, 
           <>
             {/* Edit mode */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {/* Overlap Warning */}
+              {overlapWarning && (
+                <div style={{ background: '#fff3cd', border: '1px solid #ffc107', borderRadius: '8px', padding: '1rem', marginBottom: '0.5rem' }}>
+                  <p style={{ margin: 0, fontWeight: '600', color: '#856404' }}>⚠️ Scheduling Conflict</p>
+                  <p style={{ margin: '0.5rem 0', fontSize: '0.9rem', color: '#856404' }}>{overlapWarning}</p>
+                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
+                    <button
+                      onClick={handleConfirmOverlap}
+                      style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: 'none', background: '#ffc107', color: '#856404', cursor: 'pointer', fontWeight: '500', fontSize: '0.85rem' }}
+                    >
+                      Save Anyway
+                    </button>
+                    <button
+                      onClick={() => { setOverlapWarning(null); setPendingPayload(null) }}
+                      style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: '1px solid var(--color-border)', background: 'white', cursor: 'pointer', fontSize: '0.85rem' }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Date & Time */}
               <div>
                 <label htmlFor="edit-datetime" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Date & Time</label>
@@ -383,21 +426,6 @@ function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onEdit, 
                   style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', boxSizing: 'border-box' }}
                 />
               </div>
-
-              {/* Vendor */}
-              {vendors.length > 1 && (
-                <div>
-                  <label htmlFor="edit-vendor" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Vendor</label>
-                  <select
-                    id="edit-vendor"
-                    value={editForm.vendorId}
-                    onChange={(e) => handleVendorChange(e.target.value)}
-                    style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem' }}
-                  >
-                    {vendors.map(v => <option key={v.vendorId} value={v.vendorId}>{v.name}</option>)}
-                  </select>
-                </div>
-              )}
 
               {/* Service */}
               <div>
@@ -666,7 +694,7 @@ function MonthView({ currentDate, appointments, onAppointmentClick }) {
 
 // ── New Appointment / Block Time Modal ────────────────────────
 
-function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServiceId, defaultCustomer, onClose, onCreated }) {
+function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServiceId, defaultCustomer, onClose, onCreated, currentUserStaffId }) {
   const [mode, setMode] = useState('appointment') // 'appointment' or 'block'
   const [blockType, setBlockType] = useState('single') // 'single' or 'multiday'
   const [form, setForm] = useState({
@@ -688,15 +716,21 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
   const [blockEndTime, setBlockEndTime] = useState('')
   const [durationMode, setDurationMode] = useState('endtime') // 'endtime' or 'duration'
   const [submitting, setSubmitting] = useState(false)
+  const [overlapWarning, setOverlapWarning] = useState(null)
+  const [pendingBody, setPendingBody] = useState(null)
 
   const selectedService = services.find(s => s.serviceId === serviceId)
   const isMultiProvider = selectedService?.providersRequired > 1
 
+  // Unified access: fetch ALL services and ALL staff regardless of vendor (Req 4.1, 4.2, 4.3)
   useEffect(() => {
-    if (!vendorId) return
-    fetch(`/api/services?vendorId=${vendorId}`).then(r => r.json()).then(d => setServices((d.services || []).filter(s => s.vendorId === vendorId && s.isActive !== false)))
-    fetch(`/api/staff-schedules?vendorId=${vendorId}`).then(r => r.json()).then(d => setStaffList((d.schedules || []).filter(s => s.isActive !== false)))
-  }, [vendorId])
+    fetch('/api/services').then(r => r.json()).then(d => setServices((d.services || []).filter(s => s.isActive !== false)))
+    fetch('/api/staff-schedules?all=true').then(r => r.json()).then(d => {
+      const staff = (d.schedules || []).filter(s => s.isActive !== false)
+      setStaffList(staff)
+      setAllStaff(staff)
+    })
+  }, [])
 
   // Fetch all staff across vendors when a multi-provider service is selected
   useEffect(() => {
@@ -704,7 +738,7 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
     fetch('/api/staff-schedules?all=true').then(r => r.json()).then(d => setAllStaff((d.schedules || []).filter(s => s.isActive !== false)))
   }, [isMultiProvider])
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (forceConfirmOverlap = false) => {
     if (mode === 'block' && blockType === 'multiday') {
       if (!blockStartDate) { alert('Please select a start date'); return }
       if (!blockEndDate) { alert('Please select an end date'); return }
@@ -714,6 +748,7 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
     if (isMultiProvider && (!staffId || !staffId2)) { alert('Please select both staff members for this service'); return }
     if (isMultiProvider && staffId === staffId2) { alert('Please select two different staff members'); return }
     setSubmitting(true)
+    setOverlapWarning(null)
     try {
       if (mode === 'block' && blockType === 'multiday') {
         // Create a blocked time entry for each day in the range (full day blocks)
@@ -741,7 +776,8 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
             customerName: 'Blocked Time',
             notes: form.notes || `Blocked ${days.length} day(s)`,
             isBlockedTime: true,
-            duration: 960
+            duration: 960,
+            createdBy: currentUserStaffId || undefined,
           }
           const res = await fetch('/api/appointments/manual', {
             method: 'POST',
@@ -757,14 +793,28 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
         onClose()
       } else {
         const body = mode === 'block'
-          ? { vendorId, staffId: staffId || undefined, dateTime: form.dateTime, customerName: 'Blocked Time', notes: form.notes, isBlockedTime: true, duration }
-          : { vendorId, serviceId: serviceId || undefined, staffId: staffId || undefined, staffIds: isMultiProvider ? [staffId, staffId2] : undefined, dateTime: form.dateTime, customerName: form.customerName, customerPhone: form.customerPhone, customerEmail: form.customerEmail, notes: form.notes }
+          ? { vendorId, staffId: staffId || undefined, dateTime: form.dateTime, customerName: 'Blocked Time', notes: form.notes, isBlockedTime: true, duration, createdBy: currentUserStaffId || undefined }
+          : { vendorId, serviceId: serviceId || undefined, staffId: staffId || undefined, staffIds: isMultiProvider ? [staffId, staffId2] : undefined, dateTime: form.dateTime, customerName: form.customerName, customerPhone: form.customerPhone, customerEmail: form.customerEmail, notes: form.notes, createdBy: currentUserStaffId || undefined }
+
+        if (forceConfirmOverlap) {
+          body.confirmOverlap = true
+        }
 
         const res = await fetch('/api/appointments/manual', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body)
         })
+
+        if (res.status === 409) {
+          // Overlap conflict detected — show warning and ask for confirmation
+          const data = await res.json()
+          setOverlapWarning(data.message || 'This overlaps with an existing appointment. Save anyway?')
+          setPendingBody(body)
+          setSubmitting(false)
+          return
+        }
+
         if (res.ok) {
           onCreated()
           onClose()
@@ -776,6 +826,31 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
     } catch (error) {
       alert('Error: ' + (error.message || 'Unknown error'))
     } finally { setSubmitting(false) }
+  }
+
+  const handleConfirmOverlap = async () => {
+    if (!pendingBody) return
+    setSubmitting(true)
+    setOverlapWarning(null)
+    try {
+      const res = await fetch('/api/appointments/manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...pendingBody, confirmOverlap: true })
+      })
+      if (res.ok) {
+        onCreated()
+        onClose()
+      } else {
+        const data = await res.json()
+        alert('Failed: ' + (data.error || 'Unknown error'))
+      }
+    } catch (error) {
+      alert('Error: ' + (error.message || 'Unknown error'))
+    } finally {
+      setSubmitting(false)
+      setPendingBody(null)
+    }
   }
 
   return (
@@ -837,7 +912,7 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
           <select id="new-apt-staff" value={staffId} onChange={(e) => setStaffId(e.target.value)}
             style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem' }}>
             <option value="">None</option>
-            {(isMultiProvider ? allStaff : staffList).map(s => <option key={s.visibleId} value={s.visibleId}>{s.staffName}{s.vendorId !== vendorId ? ` (${s.vendorId.replace('vendor-', '')})` : ''}</option>)}
+            {staffList.map(s => <option key={s.visibleId} value={s.visibleId}>{s.staffName}</option>)}
           </select>
         </div>
 
@@ -848,7 +923,7 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
             <select id="new-apt-staff2" value={staffId2} onChange={(e) => setStaffId2(e.target.value)}
               style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem' }}>
               <option value="">Select second staff</option>
-              {(allStaff.length > 0 ? allStaff : staffList).filter(s => s.visibleId !== staffId).map(s => <option key={s.visibleId} value={s.visibleId}>{s.staffName}{s.vendorId !== vendorId ? ` (${s.vendorId.replace('vendor-', '')})` : ''}</option>)}
+              {staffList.filter(s => s.visibleId !== staffId).map(s => <option key={s.visibleId} value={s.visibleId}>{s.staffName}</option>)}
             </select>
           </div>
         )}
@@ -974,9 +1049,32 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
             style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', boxSizing: 'border-box' }} />
         </div>
 
+        {/* Overlap Warning (Req 4.6) */}
+        {overlapWarning && (
+          <div style={{ background: '#fff3cd', border: '1px solid #ffc107', borderRadius: '8px', padding: '1rem', marginBottom: '1rem' }}>
+            <p style={{ margin: 0, fontWeight: '600', color: '#856404' }}>⚠️ Scheduling Conflict</p>
+            <p style={{ margin: '0.5rem 0', fontSize: '0.9rem', color: '#856404' }}>{overlapWarning}</p>
+            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
+              <button
+                onClick={handleConfirmOverlap}
+                disabled={submitting}
+                style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: 'none', background: '#ffc107', color: '#856404', cursor: 'pointer', fontWeight: '500', fontSize: '0.85rem' }}
+              >
+                Save Anyway
+              </button>
+              <button
+                onClick={() => { setOverlapWarning(null); setPendingBody(null) }}
+                style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: '1px solid var(--color-border)', background: 'white', cursor: 'pointer', fontSize: '0.85rem' }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Submit */}
         <div style={{ display: 'flex', gap: '0.75rem' }}>
-          <button onClick={handleSubmit} disabled={submitting} className="cta" style={{ flex: 1, opacity: submitting ? 0.6 : 1 }}>
+          <button onClick={() => handleSubmit(false)} disabled={submitting} className="cta" style={{ flex: 1, opacity: submitting ? 0.6 : 1 }}>
             {submitting ? 'Saving...' : mode === 'block' ? 'Block Time' : 'Add Appointment'}
           </button>
           <button onClick={onClose} style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', background: 'white', cursor: 'pointer' }}>
@@ -996,15 +1094,43 @@ export default function Calendar() {
   const [initError, setInitError] = useState(null)
   const [userVendorId, setUserVendorId] = useState(null)
   const [userRole, setUserRole] = useState(null)
+  const [userStaffId, setUserStaffId] = useState(null)
   const [vendors, setVendors] = useState([])
   const [allStaff, setAllStaff] = useState([])
-  const [selectedStaffId, setSelectedStaffId] = useState(null)
-  const [view, setView] = useState('week')
+  const [selectedStaffId, setSelectedStaffId] = useState('everyone')
+  const [view, setViewState] = useState(() => {
+    try {
+      const stored = sessionStorage.getItem('calendarView')
+      if (stored && ['day', 'week', 'month'].includes(stored)) {
+        return stored
+      }
+    } catch {
+      // sessionStorage unavailable (private browsing) — fall back to default
+    }
+    return 'week'
+  })
+
+  // Wrap setView to persist to sessionStorage
+  const setView = (newView) => {
+    setViewState(newView)
+    try {
+      sessionStorage.setItem('calendarView', newView)
+    } catch {
+      // sessionStorage unavailable (private browsing) — ignore
+    }
+  }
+
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedAppointment, setSelectedAppointment] = useState(null)
   const [startHour, setStartHour] = useState(DEFAULT_START_HOUR)
   const [endHour, setEndHour] = useState(DEFAULT_END_HOUR)
   const [newAppointmentDateTime, setNewAppointmentDateTime] = useState(null)
+
+  // Multi-staff view state
+  const [multiStaffAppointments, setMultiStaffAppointments] = useState([])
+  const [multiStaffLoading, setMultiStaffLoading] = useState(false)
+  const [multiStaffError, setMultiStaffError] = useState(null)
+  const [defaultStaffId, setDefaultStaffId] = useState(null)
 
   // Action handlers
   const handleConfirm = async (appointment) => {
@@ -1017,6 +1143,7 @@ export default function Calendar() {
       })
       if (res.ok) {
         loadAppointments()
+        if (selectedStaffId === 'everyone') loadMultiStaffAppointments()
       } else {
         alert('Failed to confirm appointment')
       }
@@ -1035,6 +1162,7 @@ export default function Calendar() {
       })
       if (res.ok) {
         loadAppointments()
+        if (selectedStaffId === 'everyone') loadMultiStaffAppointments()
       } else {
         alert('Failed to cancel appointment')
       }
@@ -1046,6 +1174,7 @@ export default function Calendar() {
   const handleReschedule = () => {
     // Edit is now handled inline in the modal
     loadAppointments()
+    if (selectedStaffId === 'everyone') loadMultiStaffAppointments()
   }
 
   const [rebookData, setRebookData] = useState(null)
@@ -1069,6 +1198,12 @@ export default function Calendar() {
     })
   }
 
+  // Handle day click from MultiStaffWeekView — switch to day view for the clicked date
+  const handleDayClick = (date) => {
+    setCurrentDate(date)
+    setView('day')
+  }
+
   useEffect(() => {
     loadUserVendor()
   }, [])
@@ -1083,8 +1218,10 @@ export default function Calendar() {
       ])
       const vendorId = session.tokens?.idToken?.payload['custom:vendorId']
       const role = session.tokens?.idToken?.payload['custom:role'] || 'vendor'
+      const staffId = session.tokens?.idToken?.payload['custom:staffId'] || session.tokens?.idToken?.payload['sub']
       setUserVendorId(vendorId)
       setUserRole(role)
+      setUserStaffId(staffId)
       setInitError(null)
 
       const staff = (staffData.schedules || []).filter(s => s.isActive !== false)
@@ -1092,8 +1229,14 @@ export default function Calendar() {
       setVendors(vendorData.vendors || [])
 
       // Default to the current user's staff record, or first staff member
-      const myStaff = vendorId ? staff.find(s => s.vendorId === vendorId) : null
-      setSelectedStaffId(myStaff?.visibleId || staff[0]?.visibleId || null)
+      if (!selectedStaffId) {
+        const myStaff = vendorId ? staff.find(s => s.vendorId === vendorId) : null
+        setSelectedStaffId(myStaff?.visibleId || staff[0]?.visibleId || null)
+        // Set userStaffId if we can match a staff record to the current user
+        if (myStaff && !userStaffId) {
+          setUserStaffId(myStaff.visibleId)
+        }
+      }
     } catch (error) {
       console.error('Error loading calendar data:', error)
       if (retryCount < 2) {
@@ -1106,13 +1249,13 @@ export default function Calendar() {
   }
 
   useEffect(() => {
-    if (selectedStaffId) {
+    if (selectedStaffId && selectedStaffId !== 'everyone') {
       loadAppointments()
     }
   }, [selectedStaffId, currentDate, view])
 
   const loadAppointments = (retryCount = 0) => {
-    if (!selectedStaffId) return
+    if (!selectedStaffId || selectedStaffId === 'everyone') return
     setLoading(true)
 
     const { start, end } = getDateRangeForView(view, currentDate)
@@ -1142,6 +1285,49 @@ export default function Calendar() {
       })
   }
 
+  // Multi-staff data fetching — fetch all appointments for the vendor within the selected day/week
+  const loadMultiStaffAppointments = (retryCount = 0) => {
+    if (!userVendorId) return
+    setMultiStaffLoading(true)
+    setMultiStaffError(null)
+
+    // Use 'week' range when Everyone is selected and view is 'week', otherwise single day
+    const effectiveView = (selectedStaffId === 'everyone' && view === 'week') ? 'week' : 'everyone'
+    const { start, end } = getDateRangeForView(effectiveView, currentDate)
+    const params = new URLSearchParams({
+      vendorId: userVendorId,
+      startDate: start.toISOString(),
+      endDate: end.toISOString(),
+    })
+
+    fetch(`/api/dashboard?${params}`)
+      .then(res => {
+        if (!res.ok) throw new Error(`Server returned ${res.status}`)
+        return res.json()
+      })
+      .then(data => {
+        setMultiStaffAppointments(data.appointments || [])
+        setMultiStaffLoading(false)
+        setMultiStaffError(null)
+      })
+      .catch(err => {
+        console.error('Error loading multi-staff appointments:', err)
+        if (retryCount < 2) {
+          setTimeout(() => loadMultiStaffAppointments(retryCount + 1), 1000 * (retryCount + 1))
+        } else {
+          setMultiStaffLoading(false)
+          setMultiStaffError('Failed to load appointments. Please try again.')
+        }
+      })
+  }
+
+  // Fetch multi-staff appointments when 'everyone' is selected or when date changes
+  useEffect(() => {
+    if (selectedStaffId === 'everyone' && userVendorId) {
+      loadMultiStaffAppointments()
+    }
+  }, [selectedStaffId, view, currentDate, userVendorId])
+
   // Navigation
   const navigateDate = (direction) => {
     const newDate = new Date(currentDate)
@@ -1160,6 +1346,9 @@ export default function Calendar() {
     }
     if (view === 'week') {
       const dates = getWeekDates(currentDate)
+      if (selectedStaffId === 'everyone') {
+        return formatWeekHeaderLabel(dates)
+      }
       const start = dates[0]
       const end = dates[6]
       if (start.getMonth() === end.getMonth()) {
@@ -1168,7 +1357,7 @@ export default function Calendar() {
       return `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
     }
     return currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-  }, [view, currentDate])
+  }, [view, currentDate, selectedStaffId])
 
   // Time slots for the grid
   const timeSlots = useMemo(() => generateTimeSlots(startHour, endHour), [startHour, endHour])
@@ -1222,10 +1411,11 @@ export default function Calendar() {
         </div>
         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
           <select
-            value={selectedStaffId || ''}
+            value={selectedStaffId || 'everyone'}
             onChange={(e) => setSelectedStaffId(e.target.value)}
             style={{ padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '0.9rem' }}
           >
+            <option value="everyone">Everyone</option>
             {vendors.map(vendor => {
               const vendorStaff = staffByVendor[vendor.vendorId] || []
               if (vendorStaff.length === 0) return null
@@ -1270,7 +1460,7 @@ export default function Calendar() {
           <button onClick={() => navigateDate(1)} style={{ padding: '0.4rem 0.8rem', borderRadius: '6px', border: '1px solid var(--color-border)', background: 'white', cursor: 'pointer', fontSize: '0.9rem' }}>→</button>
         </div>
         <h2 style={{ margin: 0, fontSize: '1.1rem' }}>{headerLabel}</h2>
-        {/* Hour range adjuster (day/week only) */}
+        {/* Hour range adjuster (day/week/everyone only) */}
         {view !== 'month' && (
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', fontSize: '0.8rem' }}>
             <select value={startHour} onChange={(e) => setStartHour(Number(e.target.value))} style={{ padding: '0.3rem', borderRadius: '4px', border: '1px solid var(--color-border)', fontSize: '0.8rem' }}>
@@ -1288,10 +1478,73 @@ export default function Calendar() {
         )}
       </div>
 
-      {loading && <p style={{ textAlign: 'center', color: 'var(--color-text-light)' }}>Loading appointments...</p>}
+      {loading && selectedStaffId !== 'everyone' && <p style={{ textAlign: 'center', color: 'var(--color-text-light)' }}>Loading appointments...</p>}
+
+      {/* Multi-staff view loading and error states */}
+      {selectedStaffId === 'everyone' && multiStaffLoading && (
+        <p style={{ textAlign: 'center', color: 'var(--color-text-light)' }}>Loading appointments...</p>
+      )}
+      {selectedStaffId === 'everyone' && multiStaffError && !multiStaffLoading && (
+        <div style={{ textAlign: 'center', padding: '1.5rem' }}>
+          <p style={{ color: '#dc3545', marginBottom: '0.75rem' }}>{multiStaffError}</p>
+          <button
+            onClick={() => loadMultiStaffAppointments()}
+            style={{ padding: '0.5rem 1.5rem', borderRadius: '8px', border: 'none', background: 'var(--color-primary)', color: 'white', cursor: 'pointer', fontWeight: '500' }}
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {/* Multi-Staff (Everyone) View */}
+      {selectedStaffId === 'everyone' && view === 'day' && !multiStaffLoading && !multiStaffError && (
+        <MultiStaffView
+          date={currentDate}
+          allStaff={allStaff}
+          appointments={multiStaffAppointments}
+          startHour={startHour}
+          endHour={endHour}
+          onAppointmentClick={setSelectedAppointment}
+          onSlotClick={(dateTime, staffId) => {
+            setNewAppointmentDateTime(dateTime)
+            setDefaultStaffId(staffId)
+          }}
+          vendors={vendors}
+          TimeBlockColumn={TimeBlockColumn}
+        />
+      )}
+
+      {/* Multi-Staff (Everyone) Week View */}
+      {selectedStaffId === 'everyone' && view === 'week' && !multiStaffLoading && !multiStaffError && (
+        <MultiStaffWeekView
+          selectedDate={currentDate}
+          allStaff={allStaff}
+          appointments={multiStaffAppointments}
+          startHour={startHour}
+          endHour={endHour}
+          onAppointmentClick={setSelectedAppointment}
+          onSlotClick={(dateTime) => {
+            setNewAppointmentDateTime(dateTime)
+          }}
+          onDayClick={handleDayClick}
+          vendors={vendors}
+        />
+      )}
+
+      {/* Multi-Staff (Everyone) Month — unavailable */}
+      {selectedStaffId === 'everyone' && view === 'month' && !multiStaffLoading && !multiStaffError && (
+        <div style={{ textAlign: 'center', padding: '3rem 1.5rem', color: 'var(--color-text-light)' }}>
+          <p style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>
+            Monthly view is not available for all-staff display.
+          </p>
+          <p style={{ fontSize: '0.9rem' }}>
+            Please select an individual staff member or switch to Day or Week view.
+          </p>
+        </div>
+      )}
 
       {/* Day View — Time Block */}
-      {!loading && view === 'day' && (
+      {!loading && view === 'day' && selectedStaffId !== 'everyone' && (
         <div style={{ display: 'flex', border: '1px solid var(--color-border)', borderRadius: '8px', overflow: 'hidden' }}>
           {/* Time labels */}
           <div style={{ width: '60px', flexShrink: 0, background: 'var(--color-accent)' }}>
@@ -1320,7 +1573,7 @@ export default function Calendar() {
       )}
 
       {/* Week View — Time Block */}
-      {!loading && view === 'week' && (
+      {!loading && view === 'week' && selectedStaffId !== 'everyone' && (
         <div style={{ display: 'flex', border: '1px solid var(--color-border)', borderRadius: '8px', overflow: 'auto' }}>
           {/* Time labels */}
           <div style={{ width: '50px', flexShrink: 0, background: 'var(--color-accent)' }}>
@@ -1369,7 +1622,7 @@ export default function Calendar() {
       )}
 
       {/* Month View — Card List */}
-      {!loading && view === 'month' && (
+      {!loading && view === 'month' && selectedStaffId !== 'everyone' && (
         <MonthView
           currentDate={currentDate}
           appointments={appointments}
@@ -1387,6 +1640,7 @@ export default function Calendar() {
           onEdit={handleReschedule}
           onRebook={handleRebook}
           vendorId={selectedStaffVendorId}
+          currentUserStaffId={userStaffId}
           userRole={userRole}
         />
       )}
@@ -1396,11 +1650,12 @@ export default function Calendar() {
         <NewAppointmentModal
           dateTime={rebookData?.dateTime || newAppointmentDateTime}
           vendorId={rebookData?.vendorId || selectedStaffVendorId}
-          defaultStaffId={rebookData?.staffId || selectedStaffId}
+          defaultStaffId={rebookData?.staffId || defaultStaffId || selectedStaffId}
           defaultServiceId={rebookData?.serviceId || ''}
           defaultCustomer={rebookData ? { name: rebookData.customerName, phone: rebookData.customerPhone, email: rebookData.customerEmail } : null}
-          onClose={() => { setNewAppointmentDateTime(null); setRebookData(null) }}
-          onCreated={loadAppointments}
+          onClose={() => { setNewAppointmentDateTime(null); setRebookData(null); setDefaultStaffId(null) }}
+          onCreated={() => { loadAppointments(); if (selectedStaffId === 'everyone') loadMultiStaffAppointments() }}
+          currentUserStaffId={userStaffId}
         />
       )}
     </div>

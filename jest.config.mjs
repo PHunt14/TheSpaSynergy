@@ -5,16 +5,24 @@ const config = {
     {
       displayName: 'unit',
       testEnvironment: 'node',
-      transform: {},
+      transform: {
+        '\\.[jt]sx?$': ['ts-jest', {
+          tsconfig: 'tsconfig.json',
+          useESM: true,
+          jsx: 'react-jsx',
+        }],
+      },
+      extensionsToTreatAsEsm: ['.ts', '.jsx'],
       testMatch: ['**/__tests__/**/*.test.mjs'],
       testPathIgnorePatterns: ['/node_modules/', '/services/'],
+      transformIgnorePatterns: ['/node_modules/'],
     },
     // React component tests (jsdom environment)
     {
       displayName: 'components',
       testEnvironment: 'jest-environment-jsdom',
       transform: {
-        '^.+\\.(js|jsx|ts|tsx)$': ['ts-jest', {
+        '^.+\\.(js|jsx|ts|tsx|mjs)$': ['ts-jest', {
           tsconfig: 'tsconfig.json',
           useESM: false,
           jsx: 'react-jsx',
@@ -25,7 +33,7 @@ const config = {
       moduleNameMapper: {
         '^@/(.*)$': '<rootDir>/$1',
       },
-      transformIgnorePatterns: ['/node_modules/(?!(@testing-library)/)'],
+      transformIgnorePatterns: ['/node_modules/(?!(@testing-library|react-datepicker|clsx|rxjs)/)'],
     },
   ],
 }

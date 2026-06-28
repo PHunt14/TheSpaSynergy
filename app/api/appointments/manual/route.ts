@@ -113,12 +113,9 @@ export async function POST(request: Request) {
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await request.json();
-    const { vendorId, serviceId, staffId, staffIds, dateTime, customerName, customerPhone, customerEmail, notes, isBlockedTime, duration } = body;
+    const { vendorId, serviceId, staffId, staffIds, dateTime, customerName, customerPhone, customerEmail, notes, isBlockedTime, duration, createdBy, confirmOverlap } = body;
 
     if (!vendorId || !dateTime) return Response.json({ error: 'vendorId and dateTime are required' }, { status: 400 });
-    if (user.role === 'vendor' && vendorId !== user.vendorId) {
-      return Response.json({ error: 'Can only add appointments to your own calendar' }, { status: 403 });
-    }
 
     const appointmentId = randomUUID();
 
@@ -126,7 +123,7 @@ export async function POST(request: Request) {
       const { errors } = await client.models.Appointment.create({
         appointmentId, vendorId, serviceId: 'blocked', staffId: staffId || undefined, dateTime,
         customer: JSON.stringify({ name: 'Blocked Time', notes: notes || '', isBlockedTime: true, duration: duration || 60 }),
-        status: 'blocked', createdAt: new Date().toISOString(),
+        status: 'blocked', createdBy: createdBy || undefined, createdAt: new Date().toISOString(),
       } as any);
 
       if (errors) {
@@ -135,6 +132,23 @@ export async function POST(request: Request) {
       }
 
       return Response.json({ success: true, appointmentId });
+    }
+
+    // Overlap detection (Req 4.6): check before saving if a staffId is specified
+    if (staffId && !confirmOverlap) {
+      let svcDuration = duration || 60;
+      if (serviceId && serviceId !== 'manual') {
+        const { data: svcData } = await client.models.Service.get({ serviceId });
+        if (svcData?.duration) svcDuration = svcData.duration as number;
+      }
+      const overlap = await detectManualOverlap(staffId, dateTime, svcDuration, undefined);
+      if (overlap) {
+        return Response.json({
+          warning: 'Scheduling conflict detected',
+          conflict: overlap,
+          message: 'This overlaps with an existing appointment. Save anyway?',
+        }, { status: 409 });
+      }
     }
 
     // Multi-provider booking (e.g., couples head bath)
@@ -151,7 +165,7 @@ export async function POST(request: Request) {
         const { errors: createErrors } = await client.models.Appointment.create({
           appointmentId: aptId, vendorId: staffVendorId, serviceId: serviceId || 'manual', staffId: sid, groupId, dateTime,
           customer: JSON.stringify({ name: customerName || 'Manual Entry', phone: customerPhone || '', email: customerEmail || '', notes: notes || '', isManual: true }),
-          status: 'confirmed', createdAt: new Date().toISOString(),
+          status: 'confirmed', createdBy: createdBy || undefined, createdAt: new Date().toISOString(),
         } as any);
 
         if (createErrors) {
@@ -181,7 +195,7 @@ export async function POST(request: Request) {
     const { errors } = await client.models.Appointment.create({
       appointmentId, vendorId, serviceId: serviceId || 'manual', staffId: staffId || undefined, dateTime,
       customer: JSON.stringify({ name: customerName || 'Manual Entry', phone: customerPhone || '', email: customerEmail || '', notes: notes || '', isManual: true }),
-      status: 'confirmed', createdAt: new Date().toISOString(),
+      status: 'confirmed', createdBy: createdBy || undefined, createdAt: new Date().toISOString(),
     } as any);
 
     if (errors) {
@@ -199,4 +213,60 @@ export async function POST(request: Request) {
     console.error('Error creating manual appointment:', error);
     return Response.json({ error: 'Failed to create appointment' }, { status: 500 });
   }
+}
+
+/**
+ * Overlap detection helper for manual appointments (Req 4.6)
+ * Two time intervals overlap if: slot1Start < slot2End AND slot1End > slot2Start
+ * Returns the conflicting appointment info if overlap exists, null otherwise.
+ */
+async function detectManualOverlap(
+  staffId: string,
+  dateTime: string,
+  durationMinutes: number,
+  excludeAppointmentId?: string
+): Promise<{ appointmentId: string; dateTime: string; staffId: string } | null> {
+  const date = dateTime.includes('T') ? dateTime.split('T')[0] : dateTime.split(' ')[0];
+  const timeStr = dateTime.includes('T') ? dateTime.split('T')[1].substring(0, 5) : '00:00';
+  const [h, m] = timeStr.split(':').map(Number);
+  const newStart = h * 60 + m;
+  const newEnd = newStart + durationMinutes;
+
+  // Fetch staff's vendorId to query appointments by vendor index
+  const { data: staffSchedule } = await client.models.StaffSchedule.get({ visibleId: staffId });
+  if (!staffSchedule?.vendorId) return null;
+
+  const { data: appointments } = await client.models.Appointment.listAppointmentByVendorIdAndDateTime({
+    vendorId: staffSchedule.vendorId,
+    dateTime: { beginsWith: date },
+  } as any);
+
+  if (!appointments || appointments.length === 0) return null;
+
+  for (const apt of appointments) {
+    if (apt.status === 'cancelled' || apt.status === 'blocked') continue;
+    if (excludeAppointmentId && apt.appointmentId === excludeAppointmentId) continue;
+    if (apt.staffId !== staffId) continue;
+
+    const aptTime = apt.dateTime?.includes('T') ? apt.dateTime.split('T')[1].substring(0, 5) : '00:00';
+    const [ah, am] = aptTime.split(':').map(Number);
+    const existStart = ah * 60 + am;
+
+    let existDuration = 60;
+    if (apt.serviceId && apt.serviceId !== 'blocked' && apt.serviceId !== 'manual') {
+      const { data: existService } = await client.models.Service.get({ serviceId: apt.serviceId });
+      if (existService?.duration) existDuration = existService.duration as number;
+    }
+    const existEnd = existStart + existDuration;
+
+    if (newStart < existEnd && newEnd > existStart) {
+      return {
+        appointmentId: apt.appointmentId,
+        dateTime: apt.dateTime,
+        staffId: apt.staffId,
+      };
+    }
+  }
+
+  return null;
 }

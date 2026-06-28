@@ -17,6 +17,9 @@ import {
 
 // ── calculatePaymentSplits ────────────────────────────────────
 
+// NOTE: vendorId in service objects below represents the vendor context resolved at runtime
+// from the assigned staff member's provider (StaffSchedule.vendorId), not a persisted field
+// on the Service data model. The Service model no longer contains vendorId (Requirement 9.1).
 describe('calculatePaymentSplits', () => {
   const houseVendorId = 'vendor-house'
 

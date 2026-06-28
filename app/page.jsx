@@ -24,10 +24,10 @@ export default function Home() {
         </p>
         <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginTop: '1.5rem', flexWrap: 'wrap' }}>
           <a href="/services" className="cta">Book an Appointment</a>
-          <a href="/vendors" className="cta" style={{ background: 'transparent', border: '2px solid var(--color-primary)', color: 'var(--color-primary)' }}>Get to Know Us</a>
+          <a href="/sauna" className="cta" style={{ background: 'var(--color-warm)' }}>Book the Sauna</a>
+          <a href="/providers" className="cta" style={{ background: 'var(--color-primary)' }}>Get to Know Us</a>
         </div>
         <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginTop: '1rem', flexWrap: 'wrap' }}>
-          <a href="/sauna" className="cta" style={{ background: 'var(--color-warm)' }}>Book the Sauna</a>
           <a href="/spa-room" className="cta" style={{ background: '#7B6D8F' }}>Book the Spa Room</a>
         </div>
       </section>

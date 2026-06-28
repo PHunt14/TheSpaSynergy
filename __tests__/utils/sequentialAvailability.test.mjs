@@ -34,9 +34,8 @@ const shortMondaySchedule = { monday: { start: '09:00', end: '11:00' } }
 const tuesdaySchedule = { tuesday: { start: '09:00', end: '17:00' } }
 const monTueSchedule = { monday: { start: '09:00', end: '17:00' }, tuesday: { start: '09:00', end: '17:00' } }
 
-const makeService = (id, vendorId, duration, allowedStaff = ['staff-1'], providersRequired = 1) => ({
+const makeService = (id, duration, allowedStaff = ['staff-1'], providersRequired = 1) => ({
   serviceId: id,
-  vendorId,
   duration,
   allowedStaff,
   providersRequired,
@@ -85,7 +84,7 @@ describe('calculateTotalBundleDuration', () => {
 
 describe('calculateServiceSchedule', () => {
   test('single service starts at given time', () => {
-    const services = [makeService('svc-1', 'v-a', 60)]
+    const services = [makeService('svc-1', 60)]
     const schedule = calculateServiceSchedule(services, '09:00', 15)
 
     expect(schedule).toHaveLength(1)
@@ -98,8 +97,8 @@ describe('calculateServiceSchedule', () => {
 
   test('two services with buffer between them', () => {
     const services = [
-      makeService('svc-1', 'v-a', 60),
-      makeService('svc-2', 'v-b', 30)
+      makeService('svc-1', 60),
+      makeService('svc-2', 30)
     ]
     const schedule = calculateServiceSchedule(services, '09:00', 15)
 
@@ -110,9 +109,9 @@ describe('calculateServiceSchedule', () => {
 
   test('three services with correct sequential timing', () => {
     const services = [
-      makeService('svc-1', 'v-a', 45),
-      makeService('svc-2', 'v-b', 30),
-      makeService('svc-3', 'v-c', 60)
+      makeService('svc-1', 45),
+      makeService('svc-2', 30),
+      makeService('svc-3', 60)
     ]
     const schedule = calculateServiceSchedule(services, '10:00', 10)
 
@@ -124,8 +123,8 @@ describe('calculateServiceSchedule', () => {
 
   test('zero buffer: services are back-to-back', () => {
     const services = [
-      makeService('svc-1', 'v-a', 30),
-      makeService('svc-2', 'v-b', 45)
+      makeService('svc-1', 30),
+      makeService('svc-2', 45)
     ]
     const schedule = calculateServiceSchedule(services, '14:00', 0)
 
@@ -135,8 +134,8 @@ describe('calculateServiceSchedule', () => {
 
   test('handles times that cross noon correctly', () => {
     const services = [
-      makeService('svc-1', 'v-a', 90),
-      makeService('svc-2', 'v-b', 60)
+      makeService('svc-1', 90),
+      makeService('svc-2', 60)
     ]
     const schedule = calculateServiceSchedule(services, '11:00', 15)
 
@@ -146,9 +145,9 @@ describe('calculateServiceSchedule', () => {
 
   test('total span matches calculateTotalBundleDuration', () => {
     const services = [
-      makeService('svc-1', 'v-a', 60),
-      makeService('svc-2', 'v-b', 45),
-      makeService('svc-3', 'v-c', 30)
+      makeService('svc-1', 60),
+      makeService('svc-2', 45),
+      makeService('svc-3', 30)
     ]
     const buffer = 15
     const schedule = calculateServiceSchedule(services, '09:00', buffer)
@@ -166,8 +165,8 @@ describe('calculateServiceSchedule', () => {
 describe('findSlotsForOrder', () => {
   test('returns slots when staff is available for all services', () => {
     const services = [
-      makeService('svc-1', 'v-a', 60, ['staff-1']),
-      makeService('svc-2', 'v-b', 30, ['staff-2'])
+      makeService('svc-1', 60, ['staff-1']),
+      makeService('svc-2', 30, ['staff-2'])
     ]
     const staffSchedulesByService = {
       'svc-1': [makeStaff('staff-1', 'v-a', mondaySchedule)],
@@ -190,7 +189,7 @@ describe('findSlotsForOrder', () => {
 
   test('returns empty when no staff works on the requested day', () => {
     const services = [
-      makeService('svc-1', 'v-a', 60, ['staff-1'])
+      makeService('svc-1', 60, ['staff-1'])
     ]
     const staffSchedulesByService = {
       'svc-1': [makeStaff('staff-1', 'v-a', tuesdaySchedule)] // only works Tuesday
@@ -209,7 +208,7 @@ describe('findSlotsForOrder', () => {
 
   test('excludes slots where staff has conflicting appointments', () => {
     const services = [
-      makeService('svc-1', 'v-a', 60, ['staff-1'])
+      makeService('svc-1', 60, ['staff-1'])
     ]
     const staffSchedulesByService = {
       'svc-1': [makeStaff('staff-1', 'v-a', mondaySchedule)]
@@ -237,7 +236,7 @@ describe('findSlotsForOrder', () => {
 
   test('excludes slots outside staff working hours', () => {
     const services = [
-      makeService('svc-1', 'v-a', 60, ['staff-1'])
+      makeService('svc-1', 60, ['staff-1'])
     ]
     const staffSchedulesByService = {
       'svc-1': [makeStaff('staff-1', 'v-a', shortMondaySchedule)] // 09:00-11:00
@@ -265,8 +264,8 @@ describe('findSlotsForOrder', () => {
 
   test('handles multi-service sequential constraint: second service must fit after first + buffer', () => {
     const services = [
-      makeService('svc-1', 'v-a', 60, ['staff-1']),
-      makeService('svc-2', 'v-b', 60, ['staff-2'])
+      makeService('svc-1', 60, ['staff-1']),
+      makeService('svc-2', 60, ['staff-2'])
     ]
     const staffSchedulesByService = {
       'svc-1': [makeStaff('staff-1', 'v-a', shortMondaySchedule)], // 09:00-11:00
@@ -300,7 +299,7 @@ describe('findSlotsForOrder', () => {
 
   test('requires providersRequired staff to be available', () => {
     const services = [
-      makeService('svc-1', 'v-a', 60, ['staff-1', 'staff-2'], 2) // needs 2 providers
+      makeService('svc-1', 60, ['staff-1', 'staff-2'], 2) // needs 2 providers
     ]
     const staffSchedulesByService = {
       'svc-1': [
@@ -323,7 +322,7 @@ describe('findSlotsForOrder', () => {
 
   test('returns slots when providersRequired staff are all available', () => {
     const services = [
-      makeService('svc-1', 'v-a', 60, ['staff-1', 'staff-2'], 2)
+      makeService('svc-1', 60, ['staff-1', 'staff-2'], 2)
     ]
     const staffSchedulesByService = {
       'svc-1': [
@@ -345,7 +344,7 @@ describe('findSlotsForOrder', () => {
 
   test('cancelled appointments do not block slots', () => {
     const services = [
-      makeService('svc-1', 'v-a', 60, ['staff-1'])
+      makeService('svc-1', 60, ['staff-1'])
     ]
     const staffSchedulesByService = {
       'svc-1': [makeStaff('staff-1', 'v-a', mondaySchedule)]
@@ -372,8 +371,8 @@ describe('findSlotsForOrder', () => {
 describe('getSequentialBundleSlots', () => {
   test('uses customer-specified order when provided', () => {
     const services = [
-      makeService('svc-1', 'v-a', 30, ['staff-1']),
-      makeService('svc-2', 'v-b', 30, ['staff-2'])
+      makeService('svc-1', 30, ['staff-1']),
+      makeService('svc-2', 30, ['staff-2'])
     ]
     const staffSchedulesByService = {
       'svc-1': [makeStaff('staff-1', 'v-a', mondaySchedule)],
@@ -399,8 +398,8 @@ describe('getSequentialBundleSlots', () => {
 
   test('finds optimal order when no order specified', () => {
     const services = [
-      makeService('svc-1', 'v-a', 30, ['staff-1']),
-      makeService('svc-2', 'v-b', 30, ['staff-2'])
+      makeService('svc-1', 30, ['staff-1']),
+      makeService('svc-2', 30, ['staff-2'])
     ]
     const staffSchedulesByService = {
       'svc-1': [makeStaff('staff-1', 'v-a', mondaySchedule)],
@@ -426,8 +425,8 @@ describe('getSequentialBundleSlots', () => {
   test('multi-day scheduling distributes services across days', () => {
     // Two services that each need a full day (long duration relative to working hours)
     const services = [
-      makeService('svc-1', 'v-a', 420, ['staff-1']), // 7 hours
-      makeService('svc-2', 'v-b', 420, ['staff-2'])  // 7 hours
+      makeService('svc-1', 420, ['staff-1']), // 7 hours
+      makeService('svc-2', 420, ['staff-2'])  // 7 hours
     ]
     const staffSchedulesByService = {
       'svc-1': [makeStaff('staff-1', 'v-a', monTueSchedule)], // works Mon+Tue
@@ -458,7 +457,7 @@ describe('getSequentialBundleSlots', () => {
   test('returns empty slots when services cannot fit in any configuration', () => {
     // Service too long for the working hours, even single day
     const services = [
-      makeService('svc-1', 'v-a', 600, ['staff-1']) // 10 hours, but staff only works 8
+      makeService('svc-1', 600, ['staff-1']) // 10 hours, but staff only works 8
     ]
     const staffSchedulesByService = {
       'svc-1': [makeStaff('staff-1', 'v-a', mondaySchedule)] // 09:00-17:00 = 8h
@@ -480,8 +479,8 @@ describe('getSequentialBundleSlots', () => {
 
   test('slots are sorted by start time', () => {
     const services = [
-      makeService('svc-1', 'v-a', 30, ['staff-1']),
-      makeService('svc-2', 'v-b', 30, ['staff-2'])
+      makeService('svc-1', 30, ['staff-1']),
+      makeService('svc-2', 30, ['staff-2'])
     ]
     const staffSchedulesByService = {
       'svc-1': [makeStaff('staff-1', 'v-a', mondaySchedule)],
@@ -511,7 +510,7 @@ describe('getSequentialBundleSlots', () => {
 
 describe('Edge cases', () => {
   test('single service: no buffer applied, slots returned normally', () => {
-    const services = [makeService('svc-1', 'v-a', 60, ['staff-1'])]
+    const services = [makeService('svc-1', 60, ['staff-1'])]
     const staffSchedulesByService = {
       'svc-1': [makeStaff('staff-1', 'v-a', mondaySchedule)]
     }
@@ -537,8 +536,8 @@ describe('Edge cases', () => {
   test('services that do not fit in a single day return empty when multiDay is false', () => {
     // Two 5-hour services with 15min buffer = 10h 15min, but working day is 8h
     const services = [
-      makeService('svc-1', 'v-a', 300, ['staff-1']),
-      makeService('svc-2', 'v-b', 300, ['staff-2'])
+      makeService('svc-1', 300, ['staff-1']),
+      makeService('svc-2', 300, ['staff-2'])
     ]
     const staffSchedulesByService = {
       'svc-1': [makeStaff('staff-1', 'v-a', mondaySchedule)],
@@ -561,8 +560,8 @@ describe('Edge cases', () => {
 
   test('slot startTime equals first service startTime (Property 7)', () => {
     const services = [
-      makeService('svc-1', 'v-a', 30, ['staff-1']),
-      makeService('svc-2', 'v-b', 30, ['staff-2'])
+      makeService('svc-1', 30, ['staff-1']),
+      makeService('svc-2', 30, ['staff-2'])
     ]
     const staffSchedulesByService = {
       'svc-1': [makeStaff('staff-1', 'v-a', mondaySchedule)],

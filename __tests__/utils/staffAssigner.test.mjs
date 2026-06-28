@@ -3,7 +3,7 @@
  *
  * Unit tests for the assignStaff function:
  * - Cross-vendor staff assignment
- * - Auto-assign preference logic
+ * - Fewest bookings preference logic
  * - Error when insufficient staff available
  * - All staff from same vendor (no cross-vendor split)
  * - Conflict detection
@@ -85,26 +85,31 @@ describe('assignStaff', () => {
     expect(result.every(r => r.vendorId === 'vendor-a')).toBe(true)
   })
 
-  test('auto-assign preference: prefers staff with matching auto-assign rules', () => {
-    const autoAssignRules = [{ action: 'auto-assign', days: ['monday'] }]
+  test('fewest bookings preference: prefers staff with fewer non-cancelled bookings', () => {
     const staffSchedules = [
-      makeStaff('staff-1', 'vendor-a', mondaySchedule), // no auto-assign
-      makeStaff('staff-2', 'vendor-b', mondaySchedule, autoAssignRules), // has auto-assign for monday
-      makeStaff('staff-3', 'vendor-c', mondaySchedule, autoAssignRules), // has auto-assign for monday
+      makeStaff('staff-1', 'vendor-a', mondaySchedule),
+      makeStaff('staff-2', 'vendor-b', mondaySchedule),
+      makeStaff('staff-3', 'vendor-c', mondaySchedule),
+    ]
+    // staff-1 has 2 existing bookings, staff-2 has 1, staff-3 has 0
+    const appointments = [
+      { dateTime: '2025-01-06T08:00', staffId: 'staff-1', status: 'confirmed', customer: JSON.stringify({ name: 'Test' }) },
+      { dateTime: '2025-01-06T12:00', staffId: 'staff-1', status: 'confirmed', customer: JSON.stringify({ name: 'Test' }) },
+      { dateTime: '2025-01-06T08:00', staffId: 'staff-2', status: 'confirmed', customer: JSON.stringify({ name: 'Test' }) },
     ]
     const result = assignStaff({
       service: baseService,
       staffSchedules,
-      appointments: [],
+      appointments,
       date: '2025-01-06', // Monday
       time: '10:00',
       bufferMinutes: 15,
     })
     expect(result).toHaveLength(2)
-    // Both assigned should be the auto-assign staff
+    // staff-3 (0 bookings) and staff-2 (1 booking) should be preferred over staff-1 (2 bookings)
     const assignedIds = result.map(r => r.staffId)
-    expect(assignedIds).toContain('staff-2')
     expect(assignedIds).toContain('staff-3')
+    expect(assignedIds).toContain('staff-2')
   })
 
   test('throws error when insufficient staff available', () => {

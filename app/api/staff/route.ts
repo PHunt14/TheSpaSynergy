@@ -76,14 +76,15 @@ export async function POST(request: Request) {
     console.log('Staff POST - currentUser:', currentUser);
     if (!currentUser) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
+    // Only admin can create/invite staff members
+    const normalizedRole = currentUser.role === 'admin' ? 'admin' : 'staff';
+    if (normalizedRole !== 'admin') {
+      return Response.json({ error: 'Unauthorized: Insufficient permissions to manage staff' }, { status: 403 });
+    }
+
     const { email, firstName, lastName, vendorId, role } = await request.json();
     if (!email || !role) return Response.json({ error: 'Email and role required' }, { status: 400 });
     if (role === 'vendor' && !vendorId) return Response.json({ error: 'VendorId required for vendor role' }, { status: 400 });
-
-    if (currentUser.role === 'vendor' || currentUser.role === 'owner') {
-      if (role === 'admin') return Response.json({ error: 'Unauthorized: Cannot create admin users' }, { status: 403 });
-      if (vendorId && vendorId !== currentUser.vendorId) return Response.json({ error: 'Unauthorized: Can only invite staff to your own vendor' }, { status: 403 });
-    }
 
     const userPoolId = getUserPoolId();
     if (!userPoolId) return Response.json({ error: 'User pool not configured' }, { status: 500 });
@@ -187,9 +188,10 @@ export async function DELETE(request: Request) {
     }
 
     const currentUser = await getCurrentUserFromSession();
-    // Vendor cannot delete any users
-    if (currentUser?.role === 'vendor') {
-      return Response.json({ error: 'Unauthorized: Vendor cannot delete users' }, { status: 403 });
+    // Only admin can delete users
+    const normalizedRole = currentUser?.role === 'admin' ? 'admin' : 'staff';
+    if (normalizedRole !== 'admin') {
+      return Response.json({ error: 'Unauthorized: Insufficient permissions to remove staff' }, { status: 403 });
     }
 
     const client = await getClientWithCredentials();
@@ -227,8 +229,9 @@ export async function PATCH(request: Request) {
     const client = await getClientWithCredentials();
 
     const currentUser = await getCurrentUserFromSession();
-    // Vendor can only edit their own account
-    if (currentUser?.role === 'vendor') {
+    // Staff role can only edit their own account
+    const normalizedRole = currentUser?.role === 'admin' ? 'admin' : 'staff';
+    if (normalizedRole !== 'admin') {
       const getUserCommand = new AdminGetUserCommand({
         UserPoolId: userPoolId,
         Username: username
@@ -247,13 +250,13 @@ export async function PATCH(request: Request) {
       const currentEmail = emailResult;
       
       if (targetEmail !== currentEmail) {
-        return Response.json({ error: 'Unauthorized: Vendor can only edit their own account' }, { status: 403 });
+        return Response.json({ error: 'Unauthorized: Insufficient permissions to manage staff' }, { status: 403 });
       }
-      // Vendor cannot change their own role or vendor
+      // Staff cannot change their own role or vendor
       const targetRole = targetUser.UserAttributes?.find(attr => attr.Name === 'custom:role')?.Value || 'staff';
       const targetVendorId = targetUser.UserAttributes?.find(attr => attr.Name === 'custom:vendorId')?.Value;
       if (role !== targetRole || vendorId !== targetVendorId) {
-        return Response.json({ error: 'Unauthorized: Vendor cannot change role or vendor' }, { status: 403 });
+        return Response.json({ error: 'Unauthorized: Staff cannot change role or vendor assignment' }, { status: 403 });
       }
     }
 

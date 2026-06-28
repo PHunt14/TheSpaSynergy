@@ -35,13 +35,21 @@ const schema = a.schema({
     .identifier(['vendorId'])
     .authorization((allow) => [allow.publicApiKey()]),
 
+  ServiceCategory: a
+    .model({
+      categoryId: a.id().required(),
+      name: a.string().required(),
+      createdAt: a.string(),
+    })
+    .identifier(['categoryId'])
+    .authorization((allow) => [allow.publicApiKey()]),
+
   Service: a
     .model({
       serviceId: a.id().required(),
-      vendorId: a.string().required(),
       name: a.string().required(),
       description: a.string(),
-      category: a.string(),
+      categories: a.string().array(),
       resourceType: a.string().default('staff'),
       duration: a.integer().required(),
       price: a.float().required(),
@@ -56,13 +64,11 @@ const schema = a.schema({
       parentServiceIds: a.string().array(),
       providersRequired: a.integer().default(1),
       maxQuantityPerBooking: a.integer().default(1),
-      leadVendorId: a.string(),
       minPeople: a.integer(),
       maxPeople: a.integer(),
       paymentSplitRules: a.json(),
     })
     .identifier(['serviceId'])
-    .secondaryIndexes((index) => [index('vendorId')])
     .authorization((allow) => [allow.publicApiKey()]),
 
   Bundle: a
@@ -120,6 +126,7 @@ const schema = a.schema({
       paymentStatus: a.string(),
       paymentRaw: a.json(),
       clientId: a.string(),
+      createdBy: a.string(),
       createdAt: a.datetime(),
     })
     .identifier(['appointmentId'])
@@ -149,6 +156,7 @@ const schema = a.schema({
       smsAlertPhone: a.string(),
       emailAlertsEnabled: a.boolean().default(false),
       isActive: a.boolean().default(true),
+      bookingDisabledUntil: a.string(),
       squareAccessToken: a.string(),
       squareRefreshToken: a.string(),
       squareLocationId: a.string(),

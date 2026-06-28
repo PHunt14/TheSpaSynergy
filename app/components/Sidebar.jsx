@@ -9,7 +9,7 @@ const navItems = [
   { href: '/dashboard/calendar', label: 'Calendar', icon: '📅' },
   { href: '/dashboard/services', label: 'Services', icon: '💆' },
   { href: '/dashboard/bundles', label: 'Packages', icon: '📦' },
-  { href: '/dashboard/vendors', label: 'Practitioners', icon: '👤' },
+  { href: '/dashboard/providers', label: 'Providers', icon: '👤' },
   { href: '/dashboard/staff', label: 'Staff', icon: '👥' },
   { href: '/dashboard/clients', label: 'Clients', icon: '🧑‍🤝‍🧑' },
   { href: '/dashboard/settings', label: 'Settings', icon: '⚙️' },

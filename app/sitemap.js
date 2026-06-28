@@ -13,7 +13,7 @@ export default function sitemap() {
       priority: 0.9,
     },
     {
-      url: 'https://thespasynergy.com/vendors',
+      url: 'https://thespasynergy.com/providers',
       lastModified: new Date(),
       changeFrequency: 'weekly',
       priority: 0.8,

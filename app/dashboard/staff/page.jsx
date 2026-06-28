@@ -59,7 +59,9 @@ export default function Staff() {
         fetch('/api/staff').then(r => r.json())
       ])
       const vendorId = session.tokens?.idToken?.payload['custom:vendorId']
-      const role = session.tokens?.idToken?.payload['custom:role'] || 'vendor'
+      const rawRole = session.tokens?.idToken?.payload['custom:role'] || 'vendor'
+      // Map legacy roles to the two-role model
+      const role = rawRole === 'admin' ? 'admin' : 'staff'
       const email = session.tokens?.idToken?.payload['email']
       setCurrentUserRole(role)
       setCurrentUserVendorId(vendorId)
@@ -83,14 +85,14 @@ export default function Staff() {
 
   useEffect(() => {
     if (vendors.length > 0) loadSchedules()
-  }, [vendors, currentUserVendorId])
+  }, [vendors])
 
   const loadSchedules = async () => {
     try {
-      const url = currentUserRole === 'vendor' && currentUserVendorId
-        ? `/api/staff-schedules?vendorId=${currentUserVendorId}`
-        : '/api/staff-schedules'
-      const res = await fetch(url)
+      // Role-based filtering is handled server-side by the API:
+      // - Admin: returns all staff across all providers (Req 10.4)
+      // - Vendor/owner: returns only staff for their vendorId (Req 10.5)
+      const res = await fetch('/api/staff-schedules')
       const data = await res.json()
       setSchedules(data.schedules || [])
     } catch (error) { console.error('Error loading schedules:', error) }
@@ -278,7 +280,8 @@ export default function Staff() {
         Manage dashboard users and staff working schedules.
       </p>
 
-      {/* ===== INVITE USER ===== */}
+      {/* ===== INVITE USER (admin only) ===== */}
+      {currentUserRole === 'admin' && (
       <div style={{ background: 'var(--color-accent)', padding: '2rem', borderRadius: '8px', marginBottom: '2rem', maxWidth: '500px' }}>
         <h3>Invite New User</h3>
         <form onSubmit={handleInvite}>
@@ -319,6 +322,7 @@ export default function Staff() {
           </button>
         </form>
       </div>
+      )}
 
       {/* ===== CURRENT USERS TABLE ===== */}
       <div style={{ marginBottom: '3rem' }}>
@@ -353,8 +357,8 @@ export default function Staff() {
                     </td>
                     <td style={{ padding: '1rem' }}>{user.email}</td>
                     <td style={{ padding: '1rem' }}>
-                      {editingUser === user.username && (currentUserRole !== 'vendor' || user.email === currentUserEmail) ? (
-                        <select defaultValue={user.role} onChange={(e) => user.editRole = e.target.value} disabled={currentUserRole === 'vendor'} style={inputStyle}>
+                      {editingUser === user.username && (currentUserRole === 'admin' || user.email === currentUserEmail) ? (
+                        <select defaultValue={user.role} onChange={(e) => user.editRole = e.target.value} disabled={currentUserRole !== 'admin'} style={inputStyle}>
                           <option value="vendor">Vendor</option>
                           <option value="owner">Owner</option>
                           <option value="admin">Admin</option>
@@ -366,8 +370,8 @@ export default function Staff() {
                       )}
                     </td>
                     <td style={{ padding: '1rem' }}>
-                      {editingUser === user.username && (currentUserRole !== 'vendor' || user.email === currentUserEmail) ? (
-                        <select defaultValue={user.vendorId || ''} onChange={(e) => user.editVendorId = e.target.value} disabled={currentUserRole === 'vendor'} style={inputStyle}>
+                      {editingUser === user.username && (currentUserRole === 'admin' || user.email === currentUserEmail) ? (
+                        <select defaultValue={user.vendorId || ''} onChange={(e) => user.editVendorId = e.target.value} disabled={currentUserRole !== 'admin'} style={inputStyle}>
                           <option value="">All</option>
                           {vendors.map(v => <option key={v.vendorId} value={v.vendorId}>{v.name}</option>)}
                         </select>
@@ -388,7 +392,7 @@ export default function Staff() {
                         </>
                       ) : (
                         <>
-                          {(currentUserRole !== 'vendor' || user.email === currentUserEmail) && (
+                          {(currentUserRole === 'admin' || user.email === currentUserEmail) && (
                             <button onClick={() => setEditingUser(user.username)} style={btnStyle('#2196F3')}>Edit</button>
                           )}
                           {currentUserRole === 'admin' && (
@@ -409,7 +413,7 @@ export default function Staff() {
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
           <h2>Staff Schedules</h2>
-          {editingSchedule === null && (
+          {editingSchedule === null && currentUserRole === 'admin' && (
             <button onClick={startNewSchedule} className="cta" style={{ marginTop: 0 }}>+ Add Staff Schedule</button>
           )}
         </div>
@@ -601,8 +605,12 @@ export default function Staff() {
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <button onClick={() => startEditSchedule(s)} style={btnStyle('#2196F3')}>Edit</button>
-                      <button onClick={() => deleteSchedule(s.visibleId, s.staffName)} style={btnStyle('#F44336')}>Delete</button>
+                      {currentUserRole === 'admin' && (
+                        <button onClick={() => startEditSchedule(s)} style={btnStyle('#2196F3')}>Edit</button>
+                      )}
+                      {currentUserRole === 'admin' && (
+                        <button onClick={() => deleteSchedule(s.visibleId, s.staffName)} style={btnStyle('#F44336')}>Delete</button>
+                      )}
                     </div>
                   </div>
                   <div style={{ marginTop: '0.75rem', fontSize: '0.9rem' }}>{formatScheduleDisplay(s)}</div>

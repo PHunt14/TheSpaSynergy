@@ -475,7 +475,7 @@ describe('POST /api/payment (integration — staff-level auth)', () => {
   let handler
 
   beforeAll(async () => {
-    handler = await import('../../app/api/payment/route.js')
+    handler = await import('../../app/api/payment/route.ts')
   })
 
   beforeEach(() => {

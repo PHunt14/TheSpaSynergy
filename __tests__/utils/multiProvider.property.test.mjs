@@ -199,46 +199,63 @@ describe('Feature: couples-multi-provider-booking, Property 3: Assigned Staff Ar
   })
 })
 
-// ── Property 4: Auto-Assign Preference ────────────────────────
+// ── Property 4: Fewest Bookings Preference ────────────────────────
 
-describe('Feature: couples-multi-provider-booking, Property 4: Auto-Assign Preference', () => {
-  test('staff with matching auto-assign rules are preferred over those without', () => {
+describe('Feature: couples-multi-provider-booking, Property 4: Fewest Bookings Preference', () => {
+  test('staff with fewer non-cancelled bookings are preferred over those with more', () => {
     fc.assert(
       fc.property(
-        fc.integer({ min: 1, max: 3 }), // number of auto-assign staff
-        (autoAssignCount) => {
+        fc.integer({ min: 0, max: 5 }), // bookings for staff-1
+        fc.integer({ min: 0, max: 5 }), // bookings for staff-2
+        fc.integer({ min: 0, max: 5 }), // bookings for staff-3
+        (count1, count2, count3) => {
           const providersRequired = 2
-          const totalStaff = providersRequired + autoAssignCount + 1
-          const staffIds = Array.from({ length: totalStaff }, (_, i) => `staff-${i + 1}`)
+          const staffIds = ['staff-1', 'staff-2', 'staff-3']
 
           const service = { duration: 60, providersRequired, allowedStaff: staffIds }
 
-          // First autoAssignCount staff have auto-assign rules
           const staffSchedules = staffIds.map((id, i) => ({
             visibleId: id,
             vendorId: `vendor-${i + 1}`,
             isActive: true,
             name: `Staff ${id}`,
             schedule: JSON.stringify({ monday: { start: '09:00', end: '17:00' } }),
-            autoAssignRules: i < autoAssignCount
-              ? JSON.stringify([{ action: 'auto-assign', days: ['monday'] }])
-              : null,
           }))
+
+          // Create non-conflicting appointments at different times for each staff
+          const appointments = []
+          const counts = [count1, count2, count3]
+          for (let s = 0; s < staffIds.length; s++) {
+            for (let j = 0; j < counts[s]; j++) {
+              const hour = String(7 - j).padStart(2, '0') // place at early hours to avoid conflict with 10:00
+              appointments.push({
+                dateTime: `2025-01-06T0${s}:${hour}`,
+                staffId: staffIds[s],
+                status: 'confirmed',
+                customer: JSON.stringify({ name: 'Test' }),
+              })
+            }
+          }
 
           const result = assignStaff({
             service,
             staffSchedules,
-            appointments: [],
+            appointments,
             date: '2025-01-06',
             time: '10:00',
             bufferMinutes: 15,
           })
 
-          const autoAssignIds = staffIds.slice(0, autoAssignCount)
-          const assignedAutoCount = result.filter(r => autoAssignIds.includes(r.staffId)).length
-          const expectedAutoCount = Math.min(autoAssignCount, providersRequired)
-
-          return assignedAutoCount === expectedAutoCount
+          // The assigned staff should be among those with the fewest bookings
+          const sortedCounts = [...counts].sort((a, b) => a - b)
+          const threshold = sortedCounts[providersRequired - 1] // max count among chosen staff
+          const assignedIds = result.map(r => r.staffId)
+          
+          // Every assigned staff member should have count <= threshold
+          return assignedIds.every(id => {
+            const idx = staffIds.indexOf(id)
+            return counts[idx] <= threshold
+          })
         }
       ),
       { numRuns: 100 }

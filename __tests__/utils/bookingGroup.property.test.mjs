@@ -47,12 +47,15 @@ function cancelGroup(appointments) {
 
 /**
  * Simulates reassignment validation logic.
+ * Updated for unified business model: authorization based on
+ * appointment ownership (vendorId on appointment matches requesting vendor)
+ * or service openness (allowedStaff empty means any vendor can manage).
  */
 function validateReassignment({ appointment, newStaffId, service, staffSchedules, appointments, requestingVendorId }) {
   const allowedStaff = service.allowedStaff || []
 
   // Check allowedStaff
-  if (!allowedStaff.includes(newStaffId)) {
+  if (allowedStaff.length > 0 && !allowedStaff.includes(newStaffId)) {
     return { valid: false, error: 'Staff member not eligible for this service' }
   }
 
@@ -72,10 +75,10 @@ function validateReassignment({ appointment, newStaffId, service, staffSchedules
     return { valid: false, error: 'Staff member has a conflicting appointment' }
   }
 
-  // Check authorization
-  const isLeadVendor = requestingVendorId === service.leadVendorId
+  // Check authorization: requestor must own the appointment's staff or allowedStaff is empty (open service)
   const ownsStaff = requestingVendorId === appointment.vendorId
-  if (!isLeadVendor && !ownsStaff) {
+  const isOpenService = allowedStaff.length === 0
+  if (!ownsStaff && !isOpenService) {
     return { valid: false, error: 'Not authorized' }
   }
 
@@ -239,13 +242,12 @@ describe('Feature: couples-multi-provider-booking, Property 10: Reassignment Val
             duration: 60,
             providersRequired: 2,
             allowedStaff,
-            leadVendorId: 'vendor-lead',
           }
 
           const appointment = {
             appointmentId: 'apt-1',
             groupId: 'group-1',
-            vendorId: 'vendor-lead',
+            vendorId: 'vendor-a', // resolved from StaffSchedule
             staffId: 'staff-1',
             serviceId: 'svc-1',
             dateTime: '2025-01-06T10:00',
@@ -258,7 +260,7 @@ describe('Feature: couples-multi-provider-booking, Property 10: Reassignment Val
             service,
             staffSchedules: [],
             appointments: [],
-            requestingVendorId: 'vendor-lead',
+            requestingVendorId: 'vendor-a', // owns the appointment
           })
 
           if (isAllowed) {
@@ -288,13 +290,12 @@ describe('Feature: couples-multi-provider-booking, Property 11: Reassignment Rej
             duration: 60,
             providersRequired: 2,
             allowedStaff,
-            leadVendorId: 'vendor-lead',
           }
 
           const appointment = {
             appointmentId: 'apt-1',
             groupId: 'group-1',
-            vendorId: 'vendor-lead',
+            vendorId: 'vendor-a', // resolved from StaffSchedule
             staffId: 'staff-1',
             serviceId: 'svc-1',
             dateTime: '2025-01-06T10:00',
@@ -312,7 +313,7 @@ describe('Feature: couples-multi-provider-booking, Property 11: Reassignment Rej
             service,
             staffSchedules: [],
             appointments: existingAppointments,
-            requestingVendorId: 'vendor-lead',
+            requestingVendorId: 'vendor-a', // owns the appointment
           })
 
           if (hasConflict) {

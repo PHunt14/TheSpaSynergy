@@ -19,10 +19,10 @@ function BundleTimeContent() {
 
   const [selectedDate, setSelectedDate] = useState(null)
   const [selectedTime, setSelectedTime] = useState(null)
+  const [selectedSchedule, setSelectedSchedule] = useState(null)
   const [availableSlots, setAvailableSlots] = useState([])
   const [loading, setLoading] = useState(false)
   const [services, setServices] = useState([])
-  const [vendorInfo, setVendorInfo] = useState(null)
   const [bundle, setBundle] = useState(null)
   const [availableDates, setAvailableDates] = useState(null)
   const [dataReady, setDataReady] = useState(false)
@@ -54,15 +54,10 @@ function BundleTimeContent() {
     
     Promise.all([
       fetch('/api/services').then(res => res.json()),
-      fetch('/api/vendors').then(res => res.json()),
       fetch('/api/bundles').then(res => res.json())
-    ]).then(([serviceData, vendorData, bundleData]) => {
+    ]).then(([serviceData, bundleData]) => {
       const selected = serviceData.services?.filter(s => serviceIds.includes(s.serviceId)) || []
       setServices(selected)
-      if (selected.length > 0) {
-        const vnd = vendorData.vendors?.find(v => v.vendorId === selected[0].vendorId)
-        setVendorInfo(vnd)
-      }
       if (bundleId) {
         setBundle(bundleData.bundles?.find(b => b.bundleId === bundleId))
       }
@@ -71,12 +66,11 @@ function BundleTimeContent() {
   }, [])
 
   const fetchAvailableDates = (date) => {
-    const vendorId = services[0]?.vendorId
-    if (!vendorId || serviceIds.length === 0) return
+    if (serviceIds.length === 0) return
     const month = date.getMonth() + 1
     const year = date.getFullYear()
     const daysParam = allowedDays ? `&allowedDays=${allowedDays.join(',')}` : ''
-    fetch(`/api/available-dates?vendorId=${vendorId}&serviceId=${serviceIds[0]}&month=${month}&year=${year}${daysParam}`)
+    fetch(`/api/available-dates?serviceId=${serviceIds[0]}&month=${month}&year=${year}${daysParam}`)
       .then(res => res.json())
       .then(data => setAvailableDates(new Set(data.availableDates || [])))
       .catch(() => {})
@@ -114,14 +108,11 @@ function BundleTimeContent() {
     setSelectedTime(null)
 
     const dateStr = selectedDate.toISOString().split('T')[0]
-    const vendorId = services[0]?.vendorId
-
-    if (!vendorId) return
 
     // Use bundle-availability for multi-service, single-service availability otherwise
     const url = serviceIds.length > 1
       ? `/api/bundle-availability?serviceIds=${serviceIds.join(',')}&date=${dateStr}`
-      : `/api/availability?vendorId=${vendorId}&serviceId=${serviceIds[0]}&date=${dateStr}`
+      : `/api/availability?serviceId=${serviceIds[0]}&date=${dateStr}`
 
     fetch(url)
       .then(res => res.json())
@@ -132,7 +123,7 @@ function BundleTimeContent() {
       .catch(() => setLoading(false))
   }, [selectedDate, services])
 
-  if (!isBookingEnabled) return <BookingDisabled phone={vendorInfo?.phone} vendorName={vendorInfo?.name} />
+  if (!isBookingEnabled) return <BookingDisabled />
 
   const totalDuration = services.reduce((sum, s) => sum + s.duration, 0)
   const totalPrice = services.reduce((sum, s) => sum + s.price, 0)
@@ -192,8 +183,8 @@ function BundleTimeContent() {
               key={slot.time}
               role="button"
               tabIndex={0}
-              onClick={() => setSelectedTime(slot.display)}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedTime(slot.display); } }}
+              onClick={() => { setSelectedTime(slot.display); setSelectedSchedule(slot.schedule || null) }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedTime(slot.display); setSelectedSchedule(slot.schedule || null) } }}
               style={{
                 padding: '1rem',
                 borderRadius: '8px',
@@ -213,7 +204,7 @@ function BundleTimeContent() {
 
       {selectedTime && (
         <Link
-          href={`/booking/confirm?${bundleId ? `bundleId=${bundleId}&` : ''}services=${serviceIds.join(',')}&date=${selectedDate.toISOString()}&time=${selectedTime}${people ? `&people=${people}` : ''}${quantitiesParam ? `&quantities=${quantitiesParam}` : ''}`}
+          href={`/booking/confirm?${bundleId ? `bundleId=${bundleId}&` : ''}services=${serviceIds.join(',')}&date=${selectedDate.toISOString()}&time=${selectedTime}${people ? `&people=${people}` : ''}${quantitiesParam ? `&quantities=${quantitiesParam}` : ''}${selectedSchedule ? `&schedule=${encodeURIComponent(JSON.stringify(selectedSchedule))}` : ''}`}
           className="cta"
         >
           Continue
