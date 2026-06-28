@@ -25,6 +25,7 @@ function TimePageContent() {
   const [bookingBlocked, setBookingBlocked] = useState(false)
   const [disabledUntil, setDisabledUntil] = useState(null)
   const [availableDates, setAvailableDates] = useState(null)
+  const [datesLoading, setDatesLoading] = useState(true)
   const [quantityMode, setQuantityMode] = useState('sequential')
 
   useEffect(() => {
@@ -51,6 +52,7 @@ function TimePageContent() {
 
   const fetchAvailableDates = (date) => {
     if (!service) return
+    setDatesLoading(true)
     const month = date.getMonth() + 1
     const year = date.getFullYear()
     const vendorParam = vendor ? `&vendorId=${vendor}` : ''
@@ -59,8 +61,9 @@ function TimePageContent() {
       .then(res => res.json())
       .then(data => {
         setAvailableDates(new Set(data.availableDates || []))
+        setDatesLoading(false)
       })
-      .catch(() => {})
+      .catch(() => { setDatesLoading(false) })
   }
 
   useEffect(() => {
@@ -68,13 +71,13 @@ function TimePageContent() {
   }, [service, staffId])
 
   const isDateAvailable = (date) => {
-    if (!availableDates) return true
+    if (!availableDates || datesLoading) return false
     const dateStr = date.toISOString().split('T')[0]
     return availableDates.has(dateStr)
   }
 
   const getDayClassName = (date) => {
-    if (!availableDates) return ''
+    if (!availableDates || datesLoading) return 'unavailable-day'
     const dateStr = date.toISOString().split('T')[0]
     return availableDates.has(dateStr) ? '' : 'unavailable-day'
   }
@@ -177,7 +180,7 @@ function TimePageContent() {
 
       <div style={{ marginTop: '1.5rem' }}>
         <h3>{serviceInfo?.requiresConsultation ? 'Preferred Date' : 'Select Your Date'}</h3>
-        <div className="spa-datepicker">
+        <div className={`spa-datepicker${datesLoading ? ' spa-datepicker--loading' : ''}`}>
           <DatePicker
             selected={selectedDate}
             onChange={setSelectedDate}
