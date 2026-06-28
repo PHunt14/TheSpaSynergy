@@ -9,6 +9,7 @@ export default function DashboardHome() {
   const [userVendorId, setUserVendorId] = useState(null)
   const [userRole, setUserRole] = useState(null)
   const [vendors, setVendors] = useState([])
+  const [selectedVendorId, setSelectedVendorId] = useState('all')
   const [period, setPeriod] = useState('month')
 
   useEffect(() => {
@@ -22,6 +23,10 @@ export default function DashboardHome() {
       const role = session.tokens?.idToken?.payload['custom:role'] || 'vendor'
       setUserVendorId(vendorId)
       setUserRole(role)
+
+      if (role !== 'admin' && vendorId) {
+        setSelectedVendorId(vendorId)
+      }
     } catch (error) {
       console.error('Error loading user:', error)
       setLoading(false)
@@ -32,19 +37,44 @@ export default function DashboardHome() {
     if (userRole === 'admin') {
       fetch('/api/vendors').then(r => r.json()).then(d => {
         setVendors(d.vendors || [])
-        if (!userVendorId && d.vendors?.length > 0) setUserVendorId(d.vendors[0].vendorId)
       })
     }
   }, [userRole])
 
   useEffect(() => {
-    if (!userVendorId) return
+    if (userRole === 'admin' && selectedVendorId === 'all' && vendors.length > 0) {
+      loadAllVendorAppointments()
+    } else if (selectedVendorId && selectedVendorId !== 'all') {
+      loadSingleVendorAppointments(selectedVendorId)
+    } else if (userRole !== 'admin' && userVendorId) {
+      loadSingleVendorAppointments(userVendorId)
+    }
+  }, [selectedVendorId, userVendorId, userRole, vendors])
+
+  const loadSingleVendorAppointments = (vendorId) => {
     setLoading(true)
-    fetch(`/api/dashboard?vendorId=${userVendorId}`)
+    fetch(`/api/dashboard?vendorId=${vendorId}`)
       .then(r => r.json())
       .then(d => { setAppointments(d.appointments || []); setLoading(false) })
       .catch(() => setLoading(false))
-  }, [userVendorId])
+  }
+
+  const loadAllVendorAppointments = () => {
+    setLoading(true)
+    Promise.all(
+      vendors.map(v =>
+        fetch(`/api/dashboard?vendorId=${v.vendorId}`)
+          .then(r => r.json())
+          .then(d => d.appointments || [])
+          .catch(() => [])
+      )
+    )
+      .then(results => {
+        setAppointments(results.flat())
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
+  }
 
   const now = new Date()
 
@@ -96,13 +126,14 @@ export default function DashboardHome() {
 
       {userRole === 'admin' && vendors.length > 0 && (
         <div style={{ marginBottom: '2rem' }}>
-          <label htmlFor="vendor-select-overview" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Select Vendor:</label>
+          <label htmlFor="vendor-select-overview" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>View:</label>
           <select
             id="vendor-select-overview"
-            value={userVendorId || ''}
-            onChange={(e) => setUserVendorId(e.target.value)}
+            value={selectedVendorId || 'all'}
+            onChange={(e) => setSelectedVendorId(e.target.value)}
             style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem', minWidth: '250px' }}
           >
+            <option value="all">All Vendors</option>
             {vendors.map(v => <option key={v.vendorId} value={v.vendorId}>{v.name}</option>)}
           </select>
         </div>
