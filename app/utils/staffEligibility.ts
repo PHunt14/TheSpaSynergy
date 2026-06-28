@@ -45,8 +45,12 @@ export function getEligibleStaff(
   const allowedStaff = service.allowedStaff;
 
   // If allowedStaff is null, undefined, or empty → all active staff are eligible
+  // Exclude resource calendars (e.g. resource-sauna) — they are only eligible
+  // when explicitly listed in a service's allowedStaff.
   if (!allowedStaff || allowedStaff.length === 0) {
-    return allStaff.filter((staff) => staff.isActive);
+    return allStaff.filter(
+      (staff) => staff.isActive && !staff.visibleId.startsWith('resource-')
+    );
   }
 
   // If allowedStaff has specific IDs → only active staff with matching IDs

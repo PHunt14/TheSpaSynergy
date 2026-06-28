@@ -12,6 +12,7 @@ const staff = [
   { visibleId: 's2', staffName: 'Bob', vendorId: 'v1', isActive: false },
   { visibleId: 's3', staffName: 'Carol', vendorId: 'v2', isActive: true },
   { visibleId: 's4', staffName: 'Dave', vendorId: 'v2', isActive: true },
+  { visibleId: 'resource-sauna', staffName: 'Sauna', vendorId: 'v1', isActive: true },
 ]
 
 describe('Staff Eligibility Resolver', () => {
@@ -59,6 +60,25 @@ describe('Staff Eligibility Resolver', () => {
       const service = { serviceId: '7', name: 'Test', allowedStaff: null }
       const result = getEligibleStaff(service, inactiveStaff)
       expect(result).toEqual([])
+    })
+
+    test('excludes resource calendars from "all staff" when allowedStaff is null', () => {
+      const service = { serviceId: '8', name: 'Haircut', allowedStaff: null }
+      const result = getEligibleStaff(service, staff)
+      expect(result.map(s => s.visibleId)).not.toContain('resource-sauna')
+      expect(result.map(s => s.visibleId)).toEqual(['s1', 's3', 's4'])
+    })
+
+    test('excludes resource calendars from "all staff" when allowedStaff is empty', () => {
+      const service = { serviceId: '9', name: 'Facial', allowedStaff: [] }
+      const result = getEligibleStaff(service, staff)
+      expect(result.map(s => s.visibleId)).not.toContain('resource-sauna')
+    })
+
+    test('includes resource calendar when explicitly listed in allowedStaff', () => {
+      const service = { serviceId: '10', name: 'Sauna Session', allowedStaff: ['resource-sauna'] }
+      const result = getEligibleStaff(service, staff)
+      expect(result.map(s => s.visibleId)).toEqual(['resource-sauna'])
     })
   })
 
