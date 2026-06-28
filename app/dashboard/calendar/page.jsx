@@ -1227,6 +1227,7 @@ export default function Calendar() {
       const staff = (staffData.schedules || []).filter(s => s.isActive !== false)
       setAllStaff(staff)
       setVendors(vendorData.vendors || [])
+      setLoading(false)
 
       // Default to the current user's staff record, or first staff member
       if (!selectedStaffId) {
@@ -1285,28 +1286,44 @@ export default function Calendar() {
       })
   }
 
-  // Multi-staff data fetching — fetch all appointments for the vendor within the selected day/week
+  // Multi-staff data fetching — fetch all appointments across all vendors within the selected day/week
   const loadMultiStaffAppointments = (retryCount = 0) => {
-    if (!userVendorId) return
+    if (vendors.length === 0 && !userVendorId) return
     setMultiStaffLoading(true)
     setMultiStaffError(null)
 
     // Use 'week' range when Everyone is selected and view is 'week', otherwise single day
     const effectiveView = (selectedStaffId === 'everyone' && view === 'week') ? 'week' : 'everyone'
     const { start, end } = getDateRangeForView(effectiveView, currentDate)
-    const params = new URLSearchParams({
-      vendorId: userVendorId,
-      startDate: start.toISOString(),
-      endDate: end.toISOString(),
-    })
 
-    fetch(`/api/dashboard?${params}`)
-      .then(res => {
-        if (!res.ok) throw new Error(`Server returned ${res.status}`)
-        return res.json()
+    // Fetch appointments across all vendors (unified model)
+    const vendorIds = vendors.length > 0
+      ? vendors.map(v => v.vendorId)
+      : (userVendorId ? [userVendorId] : [])
+
+    if (vendorIds.length === 0) {
+      setMultiStaffLoading(false)
+      return
+    }
+
+    Promise.all(
+      vendorIds.map(vid => {
+        const params = new URLSearchParams({
+          vendorId: vid,
+          startDate: start.toISOString(),
+          endDate: end.toISOString(),
+        })
+        return fetch(`/api/dashboard?${params}`)
+          .then(res => {
+            if (!res.ok) throw new Error(`Server returned ${res.status}`)
+            return res.json()
+          })
+          .then(data => data.appointments || [])
       })
-      .then(data => {
-        setMultiStaffAppointments(data.appointments || [])
+    )
+      .then(results => {
+        const allAppointments = results.flat()
+        setMultiStaffAppointments(allAppointments)
         setMultiStaffLoading(false)
         setMultiStaffError(null)
       })
@@ -1323,10 +1340,10 @@ export default function Calendar() {
 
   // Fetch multi-staff appointments when 'everyone' is selected or when date changes
   useEffect(() => {
-    if (selectedStaffId === 'everyone' && userVendorId) {
+    if (selectedStaffId === 'everyone' && (vendors.length > 0 || userVendorId)) {
       loadMultiStaffAppointments()
     }
-  }, [selectedStaffId, view, currentDate, userVendorId])
+  }, [selectedStaffId, view, currentDate, userVendorId, vendors])
 
   // Navigation
   const navigateDate = (direction) => {
