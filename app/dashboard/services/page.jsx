@@ -54,7 +54,7 @@ export default function Services() {
     try {
       const [session, scheduleRes] = await Promise.all([
         fetchAuthSession(),
-        fetch('/api/staff-schedules').then(r => r.json())
+        fetch('/api/staff-schedules?all=true').then(r => r.json())
       ])
       const role = session.tokens?.idToken?.payload['custom:role'] || 'staff'
       const staffId = session.tokens?.idToken?.payload['custom:staffId'] || ''
