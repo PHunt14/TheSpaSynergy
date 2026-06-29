@@ -42,6 +42,10 @@ export default function Services() {
   const [categoryError, setCategoryError] = useState('')
   const categoryInputRef = useRef(null)
 
+  const [searchQuery, setSearchQuery] = useState('')
+  const [filterCategory, setFilterCategory] = useState('')
+  const [sortBy, setSortBy] = useState('name')
+
   useEffect(() => {
     initServices()
   }, [])
@@ -1018,25 +1022,90 @@ export default function Services() {
       )}
 
       {!loading && services.length > 0 && (() => {
-        const parentServices = services.filter(s => !(s.parentServiceIds?.length > 0))
+        // Filter services
+        let filtered = services
+        if (searchQuery.trim()) {
+          const q = searchQuery.toLowerCase()
+          filtered = filtered.filter(s =>
+            s.name?.toLowerCase().includes(q) ||
+            s.description?.toLowerCase().includes(q) ||
+            s.serviceId?.toLowerCase().includes(q)
+          )
+        }
+        if (filterCategory) {
+          filtered = filtered.filter(s =>
+            (s.categories && s.categories.includes(filterCategory)) ||
+            (s.category && s.category === filterCategory)
+          )
+        }
+
+        // Sort services
+        filtered = [...filtered].sort((a, b) => {
+          if (sortBy === 'name') return (a.name || '').localeCompare(b.name || '')
+          if (sortBy === 'price') return (a.price || 0) - (b.price || 0)
+          if (sortBy === 'duration') return (a.duration || 0) - (b.duration || 0)
+          return 0
+        })
+
+        const parentServices = filtered.filter(s => !(s.parentServiceIds?.length > 0))
         const getAddons = (parentId) => services.filter(s => s.parentServiceIds?.includes(parentId))
 
+        // Collect all categories for filter dropdown
+        const allCategories = [...new Set(
+          services.flatMap(s => s.categories || (s.category ? [s.category] : []))
+        )].sort()
+
         return (
-          <div style={{ display: 'grid', gap: '1rem' }}>
-            {parentServices.map(service => {
-              const addons = getAddons(service.serviceId)
-              return (
-                <div key={service.serviceId} style={{ borderRadius: '8px', overflow: 'hidden', border: addons.length > 0 ? '1px solid var(--color-border)' : 'none' }}>
-                  {ServiceRow({ service, isAddon: false })}
-                  {addons.map(addon => (
-                    <Fragment key={addon.serviceId}>
-                      {ServiceRow({ service: addon, isAddon: true })}
-                    </Fragment>
-                  ))}
-                </div>
-              )
-            })}
-          </div>
+          <>
+            {/* Filter & Sort Controls */}
+            <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+              <input
+                type="text"
+                placeholder="Search services..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{ flex: '1 1 200px', padding: '0.6rem 0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '0.9rem' }}
+              />
+              <select
+                value={filterCategory}
+                onChange={(e) => setFilterCategory(e.target.value)}
+                style={{ padding: '0.6rem 0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '0.9rem' }}
+              >
+                <option value="">All Categories</option>
+                {allCategories.map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                style={{ padding: '0.6rem 0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '0.9rem' }}
+              >
+                <option value="name">Sort: Name</option>
+                <option value="price">Sort: Price</option>
+                <option value="duration">Sort: Duration</option>
+              </select>
+              <span style={{ fontSize: '0.85rem', color: 'var(--color-text-light)' }}>
+                {parentServices.length} service{parentServices.length !== 1 ? 's' : ''}
+              </span>
+            </div>
+
+            <div style={{ display: 'grid', gap: '1rem' }}>
+              {parentServices.map(service => {
+                const addons = getAddons(service.serviceId)
+                return (
+                  <div key={service.serviceId} style={{ borderRadius: '8px', overflow: 'hidden', border: addons.length > 0 ? '1px solid var(--color-border)' : 'none' }}>
+                    {ServiceRow({ service, isAddon: false })}
+                    {addons.map(addon => (
+                      <Fragment key={addon.serviceId}>
+                        {ServiceRow({ service: addon, isAddon: true })}
+                      </Fragment>
+                    ))}
+                  </div>
+                )
+              })}
+            </div>
+          </>
         )
       })()}
     </div>
