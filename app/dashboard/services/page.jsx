@@ -511,7 +511,7 @@ export default function Services() {
   // AllowedStaff multi-select component (no vendor filtering)
   const AllowedStaffSelector = () => {
     const activeStaff = staffSchedules
-      .filter(s => s.isActive !== false)
+      .filter(s => s.isActive !== false && !s.visibleId.startsWith('resource-'))
       .sort((a, b) => (a.staffName || '').localeCompare(b.staffName || ''))
 
     return (
