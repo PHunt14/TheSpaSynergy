@@ -137,6 +137,20 @@ export default function MultiStaffView({
             TimeBlockColumn={TimeBlockColumn}
           />
         ))}
+        {/* Unassigned appointments column */}
+        {groupedAppointments.has('__unassigned__') && groupedAppointments.get('__unassigned__').length > 0 && (
+          <StaffColumn
+            key="__unassigned__"
+            staff={{ visibleId: '__unassigned__', staffName: 'Unassigned' }}
+            date={date}
+            appointments={groupedAppointments.get('__unassigned__')}
+            startHour={startHour}
+            endHour={endHour}
+            onAppointmentClick={onAppointmentClick}
+            onSlotClick={onSlotClick}
+            TimeBlockColumn={TimeBlockColumn}
+          />
+        )}
       </div>
     </div>
   )

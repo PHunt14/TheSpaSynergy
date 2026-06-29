@@ -194,11 +194,11 @@ export function computeOverlapLayout(appointments, startHour) {
  * Group appointments by staffId, returning a Map<staffId, Appointment[]>.
  * Cancelled appointments are excluded from all buckets.
  * Appointments with no staffId or whose staffId doesn't match any active staff
- * are not placed in any bucket (not displayed in multi-staff view).
+ * are placed in an '__unassigned__' bucket so they remain visible.
  *
  * @param {Array} appointments - All appointments for the day
  * @param {Array} staffList - Active staff members with visibleId
- * @returns {Map<string, Array>} Map of staffId to their appointments
+ * @returns {Map<string, Array>} Map of staffId to their appointments (includes '__unassigned__' key if any)
  */
 export function groupAppointmentsByStaff(appointments, staffList) {
   const staffIds = new Set(staffList.map(s => s.visibleId))
@@ -206,11 +206,17 @@ export function groupAppointmentsByStaff(appointments, staffList) {
   for (const staff of staffList) {
     grouped.set(staff.visibleId, [])
   }
+  const unassigned = []
   for (const apt of appointments) {
     if (apt.status === 'cancelled') continue
-    if (staffIds.has(apt.staffId)) {
+    if (apt.staffId && staffIds.has(apt.staffId)) {
       grouped.get(apt.staffId).push(apt)
+    } else {
+      unassigned.push(apt)
     }
+  }
+  if (unassigned.length > 0) {
+    grouped.set('__unassigned__', unassigned)
   }
   return grouped
 }
@@ -219,7 +225,7 @@ export function groupAppointmentsByStaff(appointments, staffList) {
 /**
  * Group appointments by date (YYYY-MM-DD) and then by staffId.
  * Cancelled appointments are excluded. Appointments with no staffId or
- * whose staffId doesn't match any active staff are excluded.
+ * whose staffId doesn't match any active staff are placed under '__unassigned__'.
  * Appointments whose dateTime doesn't parse or doesn't fall on a weekDate are excluded.
  *
  * @param {Array} appointments - All appointments for the week
@@ -240,12 +246,12 @@ export function groupAppointmentsByDateAndStaff(appointments, weekDates, staffLi
     for (const staff of staffList) {
       staffMap.set(staff.visibleId, [])
     }
+    staffMap.set('__unassigned__', [])
     grouped.set(key, staffMap)
   }
 
   for (const apt of appointments) {
     if (apt.status === 'cancelled') continue
-    if (!apt.staffId || !staffIds.has(apt.staffId)) continue
 
     const aptDate = parseAppointmentDate(apt.rawDateTime || apt.dateTime)
     if (!aptDate) continue
@@ -253,7 +259,11 @@ export function groupAppointmentsByDateAndStaff(appointments, weekDates, staffLi
     const key = formatDateKey(aptDate)
     if (!dateKeys.has(key)) continue
 
-    grouped.get(key).get(apt.staffId).push(apt)
+    if (apt.staffId && staffIds.has(apt.staffId)) {
+      grouped.get(key).get(apt.staffId).push(apt)
+    } else {
+      grouped.get(key).get('__unassigned__').push(apt)
+    }
   }
 
   return grouped

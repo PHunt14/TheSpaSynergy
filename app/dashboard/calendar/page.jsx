@@ -1406,6 +1406,7 @@ export default function Calendar() {
   if (!userRole || allStaff.length === 0) return <div style={{ padding: '2rem' }}>Loading...</div>
 
   // Group staff by vendor for the selector
+  const resourceStaff = allStaff.filter(s => s.visibleId.startsWith('resource-'))
   const staffByVendor = vendors.reduce((acc, v) => {
     acc[v.vendorId] = allStaff.filter(s => s.vendorId === v.vendorId && !s.visibleId.startsWith('resource-'))
     return acc
@@ -1466,10 +1467,17 @@ export default function Calendar() {
                     ))}
                   </optgroup>
                 )}
+                {resourceStaff.length > 0 && (
+                  <optgroup label="Resources">
+                    {resourceStaff.map(s => (
+                      <option key={s.visibleId} value={s.visibleId}>{s.staffName || s.visibleId}</option>
+                    ))}
+                  </optgroup>
+                )}
               </>
             ) : (
-              allStaff.filter(s => !s.visibleId.startsWith('resource-')).map(s => (
-                <option key={s.visibleId} value={s.visibleId}>{s.staffName}</option>
+              allStaff.map(s => (
+                <option key={s.visibleId} value={s.visibleId}>{s.staffName || s.visibleId}</option>
               ))
             )}
           </select>

@@ -616,12 +616,14 @@ describe('groupAppointmentsByStaff', () => {
     expect(result.get('staff-1')).toEqual([])
   })
 
-  test('empty staff list returns empty map', () => {
+  test('empty staff list places appointments in __unassigned__ bucket', () => {
     const appointments = [
       makeAppointment('a1', 'staff-1', 'confirmed'),
     ]
     const result = groupAppointmentsByStaff(appointments, [])
-    expect(result.size).toBe(0)
+    expect(result.size).toBe(1)
+    expect(result.has('__unassigned__')).toBe(true)
+    expect(result.get('__unassigned__')).toHaveLength(1)
   })
 })
 
@@ -912,13 +914,14 @@ describe('groupAppointmentsByDateAndStaff', () => {
     }
   })
 
-  test('each date key contains a map with all staffIds', () => {
+  test('each date key contains a map with all staffIds plus __unassigned__', () => {
     const staff = [makeStaff('staff-1'), makeStaff('staff-2')]
     const result = groupAppointmentsByDateAndStaff([], weekDates, staff)
     for (const [, staffMap] of result) {
-      expect(staffMap.size).toBe(2)
+      expect(staffMap.size).toBe(3) // staff-1, staff-2, __unassigned__
       expect(staffMap.has('staff-1')).toBe(true)
       expect(staffMap.has('staff-2')).toBe(true)
+      expect(staffMap.has('__unassigned__')).toBe(true)
     }
   })
 
@@ -1005,14 +1008,15 @@ describe('groupAppointmentsByDateAndStaff', () => {
     expect(result.get('2025-05-06').get('staff-1')[0].appointmentId).toBe('a1')
   })
 
-  test('empty staff list returns map with 7 date keys but empty staff maps', () => {
+  test('empty staff list returns map with 7 date keys with only __unassigned__ bucket', () => {
     const appointments = [
       makeAppointment('a1', 'staff-1', '2025-05-05T10:00:00.000Z'),
     ]
     const result = groupAppointmentsByDateAndStaff(appointments, weekDates, [])
     expect(result.size).toBe(7)
     for (const [, staffMap] of result) {
-      expect(staffMap.size).toBe(0)
+      expect(staffMap.size).toBe(1) // only __unassigned__
+      expect(staffMap.has('__unassigned__')).toBe(true)
     }
   })
 })
