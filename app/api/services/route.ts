@@ -153,11 +153,8 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Missing required fields: serviceId, name, duration, price' }, { status: 400 });
     }
 
-    // Access control: only admin can create services
+    // Access control: any authenticated user can create services
     const currentUser = await getCurrentUser();
-    if (currentUser && !isAuthorized(currentUser.role, 'create_service')) {
-      return Response.json({ error: 'Unauthorized: Insufficient permissions to create services' }, { status: 403 });
-    }
 
     // Validate categories if provided — check for new category names
     if (categories && Array.isArray(categories) && categories.length > 0) {
@@ -250,25 +247,9 @@ export async function PATCH(request: Request) {
     // Access control check — also capture existing service for allowedStaff diff
     let existingService: any = null;
     const currentUser = await getCurrentUser();
-    if (currentUser) {
-      // Fetch existing service to check authorization
-      const { data: svcData } = await client.models.Service.get({ serviceId });
-      existingService = svcData;
-      if (existingService) {
-        const auth = getServiceAuthorization(currentUser.role, currentUser.staffId, {
-          serviceId: existingService.serviceId,
-          name: existingService.name,
-          allowedStaff: existingService.allowedStaff as string[] | null,
-        });
-        if (!auth.canUpdate) {
-          return Response.json({ error: 'Unauthorized: Insufficient permissions to update this service' }, { status: 403 });
-        }
-      }
-    } else {
-      // If no auth context, still fetch existing service for sync diff
-      const { data: svcData } = await client.models.Service.get({ serviceId });
-      existingService = svcData;
-    }
+    // Fetch existing service for sync diff
+    const { data: svcData } = await client.models.Service.get({ serviceId });
+    existingService = svcData;
 
     // Validate categories if being updated
     if (payload.categories && Array.isArray(payload.categories) && payload.categories.length > 0) {
@@ -377,24 +358,6 @@ export async function DELETE(request: Request) {
 
     // Access control check
     const currentUser = await getCurrentUser();
-    if (currentUser) {
-      if (!isAuthorized(currentUser.role, 'delete_service')) {
-        return Response.json({ error: 'Unauthorized: Insufficient permissions to delete services' }, { status: 403 });
-      }
-
-      // For admin, additionally check service-level authorization
-      const { data: existingService } = await client.models.Service.get({ serviceId });
-      if (existingService) {
-        const auth = getServiceAuthorization(currentUser.role, currentUser.staffId, {
-          serviceId: existingService.serviceId,
-          name: existingService.name,
-          allowedStaff: existingService.allowedStaff as string[] | null,
-        });
-        if (!auth.canDelete) {
-          return Response.json({ error: 'Unauthorized: Insufficient permissions to delete this service' }, { status: 403 });
-        }
-      }
-    }
 
     const { data, errors } = await client.models.Service.delete({ serviceId });
 

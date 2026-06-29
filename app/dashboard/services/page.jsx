@@ -98,8 +98,8 @@ export default function Services() {
   }
 
   // Helper to check if user can perform an action
-  const canCreate = currentUserRole === 'admin'
-  const canDelete = currentUserRole === 'admin'
+  const canCreate = true
+  const canDelete = true
 
   const handleAddService = async (e) => {
     e.preventDefault()
@@ -975,7 +975,7 @@ export default function Services() {
         </div>
         {editingService?.serviceId === service.serviceId && (
           <div style={{ marginTop: '0.5rem' }}>
-            {currentUserRole === 'admin' ? renderServiceForm(true) : <StaffPriceEditForm />}
+            {renderServiceForm(true)}
           </div>
         )}
         {!isAddon && managingAddonsFor?.serviceId === service.serviceId && (
