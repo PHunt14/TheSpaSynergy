@@ -777,7 +777,7 @@ export default function Services() {
         </select>
       </div>
 
-      {newService.resourceType === 'staff' && <AllowedStaffSelector />}
+      {(newService.resourceType === 'staff' || newService.resourceType === 'room') && <AllowedStaffSelector />}
 
       <div style={{ display: 'flex', gap: '1rem' }}>
         <button type="submit" className="cta">{isEdit ? 'Update Service' : 'Save Service'}</button>

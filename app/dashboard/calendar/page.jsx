@@ -1228,7 +1228,6 @@ export default function Calendar() {
       setAllStaff(staff)
       setVendors(vendorData.vendors || [])
       setLoading(false)
-      console.log(`[Calendar] Loaded ${staff.length} staff, ${(vendorData.vendors || []).length} vendors, userVendorId=${vendorId}, role=${role}`)
 
       // Default to the current user's staff record, or first staff member
       if (!selectedStaffId) {
@@ -1290,25 +1289,25 @@ export default function Calendar() {
       })
   }
 
-  // Multi-staff data fetching — used by confirm/cancel/rebook handlers to refresh
+  // Multi-staff data fetching — fetch appointments for all staff members directly
+  // Uses the same staffId-based API path that works for individual staff views
   const loadMultiStaffAppointments = () => {
-    if (vendors.length === 0 && !userVendorId) return
+    if (allStaff.length === 0) return
+    fetchAllStaffAppointments()
+  }
 
-    const effectiveView = (selectedStaffId === 'everyone' && view === 'week') ? 'week' : 'everyone'
-    const { start, end } = getDateRangeForView(effectiveView, currentDate)
-    const vendorIds = vendors.length > 0
-      ? vendors.map(v => v.vendorId)
-      : (userVendorId ? [userVendorId] : [])
-
-    if (vendorIds.length === 0) return
-
+  const fetchAllStaffAppointments = () => {
     setMultiStaffLoading(true)
     setMultiStaffError(null)
 
+    const effectiveView = (view === 'week') ? 'week' : 'everyone'
+    const { start, end } = getDateRangeForView(effectiveView, currentDate)
+
+    // Query each staff member's appointments — same path that works for individual views
     Promise.all(
-      vendorIds.map(vid => {
+      allStaff.map(staff => {
         const params = new URLSearchParams({
-          vendorId: vid,
+          staffId: staff.visibleId,
           startDate: start.toISOString(),
           endDate: end.toISOString(),
         })
@@ -1319,7 +1318,16 @@ export default function Calendar() {
       })
     )
       .then(results => {
-        setMultiStaffAppointments(results.flat())
+        // Deduplicate by appointmentId
+        const seen = new Set()
+        const allAppointments = []
+        for (const apt of results.flat()) {
+          if (!seen.has(apt.appointmentId)) {
+            seen.add(apt.appointmentId)
+            allAppointments.push(apt)
+          }
+        }
+        setMultiStaffAppointments(allAppointments)
         setMultiStaffLoading(false)
         setMultiStaffError(null)
       })
@@ -1329,69 +1337,12 @@ export default function Calendar() {
       })
   }
 
-  // Fetch multi-staff appointments when 'everyone' is selected or when date changes
+  // Fetch multi-staff appointments when 'everyone' is selected or when date/view changes
   useEffect(() => {
     if (selectedStaffId !== 'everyone') return
-    if (vendors.length === 0 && !userVendorId) {
-      console.warn('[Calendar] Everyone useEffect: waiting for vendors or userVendorId')
-      return
-    }
-    console.log(`[Calendar] Everyone useEffect firing: ${vendors.length} vendors, userVendorId=${userVendorId}`)
-
-    // Inline the fetch here to avoid stale closure issues with vendors state
-    const effectiveView = (view === 'week') ? 'week' : 'everyone'
-    const { start, end } = getDateRangeForView(effectiveView, currentDate)
-    const vendorIds = vendors.length > 0
-      ? vendors.map(v => v.vendorId)
-      : (userVendorId ? [userVendorId] : [])
-
-    if (vendorIds.length === 0) {
-      setMultiStaffLoading(false)
-      return
-    }
-
-    setMultiStaffLoading(true)
-    setMultiStaffError(null)
-    console.log(`[Calendar] Fetching appointments for ${vendorIds.length} vendor(s), range: ${start.toISOString()} → ${end.toISOString()}`)
-
-    Promise.all(
-      vendorIds.map(vid => {
-        const params = new URLSearchParams({
-          vendorId: vid,
-          startDate: start.toISOString(),
-          endDate: end.toISOString(),
-        })
-        return fetch(`/api/dashboard?${params}`)
-          .then(res => {
-            if (!res.ok) {
-              console.warn(`[Calendar] Dashboard fetch for vendor ${vid} returned ${res.status}`)
-              return { appointments: [] }
-            }
-            return res.json()
-          })
-          .then(data => {
-            console.log(`[Calendar] Vendor ${vid}: ${(data.appointments || []).length} appointments`)
-            return data.appointments || []
-          })
-          .catch(err => {
-            console.warn(`[Calendar] Dashboard fetch for vendor ${vid} failed:`, err)
-            return []
-          })
-      })
-    )
-      .then(results => {
-        const allAppointments = results.flat()
-        console.log(`[Calendar] Total appointments loaded: ${allAppointments.length}`)
-        setMultiStaffAppointments(allAppointments)
-        setMultiStaffLoading(false)
-        setMultiStaffError(null)
-      })
-      .catch(err => {
-        console.error('[Calendar] Error loading multi-staff appointments:', err)
-        setMultiStaffLoading(false)
-        setMultiStaffError('Failed to load appointments. Please try again.')
-      })
-  }, [selectedStaffId, view, currentDate, userVendorId, vendors.length])
+    if (allStaff.length === 0) return
+    fetchAllStaffAppointments()
+  }, [selectedStaffId, view, currentDate, allStaff.length, userVendorId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Navigation
   const navigateDate = (direction) => {
