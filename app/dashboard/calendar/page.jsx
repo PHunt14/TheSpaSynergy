@@ -1268,7 +1268,10 @@ export default function Calendar() {
 
     fetch(`/api/dashboard?${params}`)
       .then(res => {
-        if (!res.ok) throw new Error(`Server returned ${res.status}`)
+        if (!res.ok) {
+          console.error(`Dashboard staff fetch returned ${res.status} for staffId=${selectedStaffId}`)
+          throw new Error(`Server returned ${res.status}`)
+        }
         return res.json()
       })
       .then(data => {
@@ -1278,9 +1281,9 @@ export default function Calendar() {
       .catch(err => {
         console.error('Error loading appointments:', err)
         if (retryCount < 2) {
-          // Retry after a short delay — server auth may not be ready yet
           setTimeout(() => loadAppointments(retryCount + 1), 1000 * (retryCount + 1))
         } else {
+          setAppointments([])
           setLoading(false)
         }
       })
@@ -1315,10 +1318,17 @@ export default function Calendar() {
         })
         return fetch(`/api/dashboard?${params}`)
           .then(res => {
-            if (!res.ok) throw new Error(`Server returned ${res.status}`)
+            if (!res.ok) {
+              console.warn(`Dashboard fetch for vendor ${vid} returned ${res.status}`)
+              return { appointments: [] }
+            }
             return res.json()
           })
           .then(data => data.appointments || [])
+          .catch(err => {
+            console.warn(`Dashboard fetch for vendor ${vid} failed:`, err)
+            return []
+          })
       })
     )
       .then(results => {
@@ -1397,9 +1407,12 @@ export default function Calendar() {
 
   // Group staff by vendor for the selector
   const staffByVendor = vendors.reduce((acc, v) => {
-    acc[v.vendorId] = allStaff.filter(s => s.vendorId === v.vendorId)
+    acc[v.vendorId] = allStaff.filter(s => s.vendorId === v.vendorId && !s.visibleId.startsWith('resource-'))
     return acc
   }, {})
+  // Staff not belonging to any known vendor
+  const knownVendorIds = new Set(vendors.map(v => v.vendorId))
+  const ungroupedStaff = allStaff.filter(s => !knownVendorIds.has(s.vendorId) && !s.visibleId.startsWith('resource-'))
   const selectedStaffRecord = allStaff.find(s => s.visibleId === selectedStaffId)
   const selectedStaffVendorId = selectedStaffRecord?.vendorId || userVendorId || vendors[0]?.vendorId
 
@@ -1433,17 +1446,32 @@ export default function Calendar() {
             style={{ padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '0.9rem' }}
           >
             <option value="everyone">Everyone</option>
-            {vendors.map(vendor => {
-              const vendorStaff = staffByVendor[vendor.vendorId] || []
-              if (vendorStaff.length === 0) return null
-              return (
-                <optgroup key={vendor.vendorId} label={vendor.name}>
-                  {vendorStaff.map(s => (
-                    <option key={s.visibleId} value={s.visibleId}>{s.staffName}</option>
-                  ))}
-                </optgroup>
-              )
-            })}
+            {vendors.length > 0 ? (
+              <>
+                {vendors.map(vendor => {
+                  const vendorStaff = staffByVendor[vendor.vendorId] || []
+                  if (vendorStaff.length === 0) return null
+                  return (
+                    <optgroup key={vendor.vendorId} label={vendor.name}>
+                      {vendorStaff.map(s => (
+                        <option key={s.visibleId} value={s.visibleId}>{s.staffName}</option>
+                      ))}
+                    </optgroup>
+                  )
+                })}
+                {ungroupedStaff.length > 0 && (
+                  <optgroup label="Other">
+                    {ungroupedStaff.map(s => (
+                      <option key={s.visibleId} value={s.visibleId}>{s.staffName}</option>
+                    ))}
+                  </optgroup>
+                )}
+              </>
+            ) : (
+              allStaff.filter(s => !s.visibleId.startsWith('resource-')).map(s => (
+                <option key={s.visibleId} value={s.visibleId}>{s.staffName}</option>
+              ))
+            )}
           </select>
           <div style={{ display: 'flex', background: 'var(--color-accent)', borderRadius: '8px', padding: '3px' }}>
             {['day', 'week', 'month'].map(v => (

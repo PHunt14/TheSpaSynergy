@@ -27,7 +27,7 @@ const getCurrentUser = async () => {
         const idToken = session.tokens?.idToken;
         if (!idToken) return null;
         return {
-          role: idToken.payload['custom:role'] as string || 'vendor',
+          role: idToken.payload['custom:role'] as string || 'staff',
           vendorId: idToken.payload['custom:vendorId'] as string
         };
       }

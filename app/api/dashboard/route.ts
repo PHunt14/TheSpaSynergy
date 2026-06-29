@@ -26,7 +26,7 @@ const getCurrentUser = async () => {
         const idToken = session.tokens?.idToken;
         if (!idToken) return null;
         return {
-          role: idToken.payload['custom:role'] as string || 'vendor',
+          role: idToken.payload['custom:role'] as string || 'staff',
           vendorId: idToken.payload['custom:vendorId'] as string
         };
       }
@@ -132,6 +132,7 @@ export async function GET(request: Request) {
   }
 
   // Vendor/owner can only access their own vendor's appointments
+  // Admin and staff roles can access any vendor's data
   if ((currentUser.role === 'vendor' || currentUser.role === 'owner') && vendorId !== currentUser.vendorId) {
     return Response.json({ error: 'Unauthorized: Cannot access other vendor appointments' }, { status: 403 });
   }
