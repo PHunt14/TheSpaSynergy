@@ -315,6 +315,7 @@ function getStaffWorkingHoursForDay(staff: any, dayOfWeek: string, requestedDate
 /**
  * Fetches appointments for a specific staff member on a given date.
  * Filters out cancelled appointments and the excluded appointment.
+ * Enriches each appointment with the actual service duration for accurate overlap detection.
  */
 async function getStaffAppointments(
   vendorId: string,
@@ -334,12 +335,33 @@ async function getStaffAppointments(
     nextToken = (result as any).nextToken;
   } while (nextToken);
 
-  return allAppointments.filter(apt => {
+  const filtered = allAppointments.filter(apt => {
     if (apt.status === 'cancelled') return false;
     if (excludeAppointmentId && apt.appointmentId === excludeAppointmentId) return false;
     // Only include appointments for this specific staff member
     if (apt.staffId && apt.staffId !== staffVisibleId) return false;
     return true;
+  });
+
+  // Enrich with actual service duration for overlap detection
+  const serviceIds = [...new Set(filtered.map(a => a.serviceId).filter(Boolean))];
+  const serviceMap: Record<string, number> = {};
+  await Promise.all(serviceIds.map(async (sid) => {
+    const { data } = await client.models.Service.get({ serviceId: sid });
+    if (data?.duration) serviceMap[sid] = data.duration as number;
+  }));
+
+  return filtered.map(apt => {
+    const duration = serviceMap[apt.serviceId];
+    if (duration) {
+      // Inject duration into customer object so generateTimeSlots can read it
+      let customer = apt.customer;
+      if (typeof customer === 'string') { try { customer = JSON.parse(customer); } catch { customer = {}; } }
+      if (!customer) customer = {};
+      customer.duration = duration;
+      return { ...apt, customer: JSON.stringify(customer) };
+    }
+    return apt;
   });
 }
 

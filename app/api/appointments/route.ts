@@ -322,7 +322,7 @@ export async function POST(request: Request) {
       staffId: assignedStaffId || undefined,
       bundleId: bundleId || undefined,
       dateTime,
-      customer: JSON.stringify(customer),
+      customer: JSON.stringify({ ...customer, duration }),
       status: status || 'pending-confirmation',
       paymentId,
       paymentStatus: paymentStatus || undefined,
