@@ -848,8 +848,11 @@ export default function Services() {
                 <div key={addon.serviceId} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'white', border: '1px solid var(--color-border)', borderRadius: '6px', padding: '0.4rem 0.75rem', fontSize: '0.85rem' }}>
                   <span>{addon.name} (${addon.price})</span>
                   <button onClick={() => handleDetachAddon(addon.serviceId, parentService.serviceId)}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f44336', fontWeight: 'bold', fontSize: '1.1rem', lineHeight: 1, padding: '0 0.25rem' }}
-                    title="Remove from this service">✕</button>
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#FF9800', fontWeight: 'bold', fontSize: '1rem', lineHeight: 1, padding: '0 0.25rem' }}
+                    title="Detach from this service (keeps the add-on)">✕</button>
+                  <button onClick={() => { if (confirm(`Permanently delete "${addon.name}"? This removes it from all services.`)) handleDelete(addon) }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f44336', fontSize: '0.85rem', lineHeight: 1, padding: '0 0.25rem' }}
+                    title="Permanently delete this add-on">🗑</button>
                 </div>
               ))}
             </div>
