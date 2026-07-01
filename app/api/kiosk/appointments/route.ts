@@ -11,9 +11,13 @@ export async function GET(request: Request) {
   const bundleId = searchParams.get('bundleId');
 
   try {
+    // Use local date string (Eastern Time) to match appointment dateTime format
+    // Appointments are stored with local time like "2026-06-30T12:30"
     const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString();
+    const eastern = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+    // eastern = "YYYY-MM-DD"
+    const todayStart = `${eastern}T00:00`;
+    const todayEnd = `${eastern}T23:59`;
 
     // Get all active vendors
     const { data: vendors } = await client.models.Vendor.list();
