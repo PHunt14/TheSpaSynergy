@@ -45,7 +45,7 @@ export async function GET(request: Request) {
     const vendorIds = new Set<string>();
 
     for (const service of services) {
-      vendorIds.add(service.vendorId);
+      if (service.vendorId) vendorIds.add(service.vendorId);
       const allowed = (service.allowedStaff as string[]) || [];
       if (allowed.length > 0) {
         allowed.forEach(id => allStaffIds.add(id));
@@ -61,7 +61,7 @@ export async function GET(request: Request) {
       staffSchedules = (allStaff || []).filter((s: any) => s.isActive !== false);
       staffSchedules.forEach((s: any) => {
         allStaffIds.add(s.visibleId);
-        vendorIds.add(s.vendorId);
+        if (s.vendorId) vendorIds.add(s.vendorId);
       });
     } else {
       const staffPromises = Array.from(allStaffIds).map(id =>
@@ -69,6 +69,10 @@ export async function GET(request: Request) {
       );
       const staffResults = await Promise.all(staffPromises);
       staffSchedules = staffResults.filter(r => !r.errors && r.data).map(r => r.data) as any[];
+      // Add staff vendorIds so we query their appointments correctly
+      staffSchedules.forEach((s: any) => {
+        if (s.vendorId) vendorIds.add(s.vendorId);
+      });
     }
 
     // Exclude staff with active booking blackout
