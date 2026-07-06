@@ -217,7 +217,9 @@ export async function POST(request: Request) {
 
 /**
  * Overlap detection helper for manual appointments (Req 4.6)
- * Two time intervals overlap if: slot1Start < slot2End AND slot1End > slot2Start
+ * Uses shared overlap detection that enforces buffer time on both sides.
+ * For vendor/admin bookings, blocked time IS included in overlap detection
+ * (vendors still get warned but can override via confirmOverlap).
  * Returns the conflicting appointment info if overlap exists, null otherwise.
  */
 async function detectManualOverlap(
@@ -227,14 +229,14 @@ async function detectManualOverlap(
   excludeAppointmentId?: string
 ): Promise<{ appointmentId: string; dateTime: string; staffId: string } | null> {
   const date = dateTime.includes('T') ? dateTime.split('T')[0] : dateTime.split(' ')[0];
-  const timeStr = dateTime.includes('T') ? dateTime.split('T')[1].substring(0, 5) : '00:00';
-  const [h, m] = timeStr.split(':').map(Number);
-  const newStart = h * 60 + m;
-  const newEnd = newStart + durationMinutes;
 
   // Fetch staff's vendorId to query appointments by vendor index
   const { data: staffSchedule } = await client.models.StaffSchedule.get({ visibleId: staffId });
   if (!staffSchedule?.vendorId) return null;
+
+  // Get buffer minutes from vendor config
+  const { data: vendor } = await client.models.Vendor.get({ vendorId: staffSchedule.vendorId });
+  const vendorBuffer = vendor?.bufferMinutes ?? 15;
 
   const { data: appointments } = await client.models.Appointment.listAppointmentByVendorIdAndDateTime({
     vendorId: staffSchedule.vendorId,
@@ -243,30 +245,26 @@ async function detectManualOverlap(
 
   if (!appointments || appointments.length === 0) return null;
 
-  for (const apt of appointments) {
-    if (apt.status === 'cancelled' || apt.status === 'blocked') continue;
-    if (excludeAppointmentId && apt.appointmentId === excludeAppointmentId) continue;
-    if (apt.staffId !== staffId) continue;
+  // Build service duration map for existing appointments
+  const serviceIds = [...new Set(appointments.map((a: any) => a.serviceId).filter(Boolean))];
+  const serviceDurationMap: Record<string, number> = {};
+  await Promise.all(serviceIds.map(async (sid: string) => {
+    if (sid === 'blocked' || sid === 'manual') return;
+    const { data: svc } = await client.models.Service.get({ serviceId: sid });
+    if (svc?.duration) serviceDurationMap[sid] = svc.duration as number;
+  }));
 
-    const aptTime = apt.dateTime?.includes('T') ? apt.dateTime.split('T')[1].substring(0, 5) : '00:00';
-    const [ah, am] = aptTime.split(':').map(Number);
-    const existStart = ah * 60 + am;
+  // Import and use shared detection
+  const { detectConflict } = await import('@/app/utils/overlapDetection');
 
-    let existDuration = 60;
-    if (apt.serviceId && apt.serviceId !== 'blocked' && apt.serviceId !== 'manual') {
-      const { data: existService } = await client.models.Service.get({ serviceId: apt.serviceId });
-      if (existService?.duration) existDuration = existService.duration as number;
-    }
-    const existEnd = existStart + existDuration;
-
-    if (newStart < existEnd && newEnd > existStart) {
-      return {
-        appointmentId: apt.appointmentId,
-        dateTime: apt.dateTime,
-        staffId: apt.staffId,
-      };
-    }
-  }
-
-  return null;
+  return detectConflict(
+    staffId,
+    dateTime,
+    durationMinutes,
+    vendorBuffer,
+    appointments,
+    serviceDurationMap,
+    excludeAppointmentId,
+    true // isVendorBooking — vendors can override via confirmOverlap
+  );
 }
