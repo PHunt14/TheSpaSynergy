@@ -92,7 +92,7 @@ export function extractDateFromDateTime(dateTime: string): string {
  * 3. Fall back to defaultDuration
  */
 export function getEffectiveAppointmentDuration(
-  appointment: { serviceId?: string; customer?: string | Record<string, any>; status?: string },
+  appointment: { serviceId?: string; customer?: any; status?: string },
   serviceDurationMap: Record<string, number>,
   defaultDuration: number = 60
 ): number {
@@ -152,7 +152,7 @@ export function detectConflict(
     dateTime: string;
     status?: string;
     serviceId?: string;
-    customer?: string | Record<string, any>;
+    customer?: any;
     createdBy?: string;
   }>,
   serviceDurationMap: Record<string, number>,
