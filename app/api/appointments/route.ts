@@ -5,6 +5,7 @@ import config from '../../../amplify_outputs.json' with { type: 'json' };
 import { randomUUID } from 'crypto';
 import { resolveAppointmentDetails, sendAppointmentNotifications, sendStaffBookingNotification } from '@/lib/appointment-notifications';
 import { assignStaff } from '@/app/utils/staffAssigner.js';
+import { detectConflict, extractDateFromDateTime } from '@/app/utils/overlapDetection';
 
 const client = generateServerClientUsingCookies<Schema>({
   config,
@@ -61,7 +62,7 @@ export async function PATCH(request: Request) {
           if (svc?.duration) duration = svc.duration as number;
         }
 
-        const overlap = await detectOverlap(client, effectiveStaffId, effectiveDateTime, duration, appointmentId);
+        const overlap = await detectOverlap(client, effectiveStaffId, effectiveDateTime, duration, appointmentId, true);
         if (overlap) {
           return Response.json({
             warning: 'Scheduling conflict detected',
@@ -111,6 +112,10 @@ export async function POST(request: Request) {
     if (!serviceId || !dateTime || !customer) {
       return Response.json({ error: 'Missing required fields' }, { status: 400 });
     }
+
+    // Customer bookings NEVER allow overlap override — only vendor/admin via manual route can do so
+    // The confirmOverlap flag is only respected for the PATCH endpoint (which is admin-only via calendar UI)
+    const isCustomerBooking = !createdBy;
 
     // Check global booking blackout
     const { data: globalSetting } = await client.models.SiteSettings.get({ settingKey: 'globalBookingDisabledUntil' });
@@ -214,8 +219,22 @@ export async function POST(request: Request) {
         for (const apt of existingApts) {
           if (apt.status === 'cancelled') continue;
           if (apt.staffId !== staffId) continue;
-          const { data: aptSvc } = await client.models.Service.get({ serviceId: apt.serviceId });
-          const aptDuration = aptSvc?.duration || 30;
+
+          // Determine the existing appointment's actual duration
+          let aptDuration: number;
+          const aptCustomer = typeof apt.customer === 'string' ? (() => { try { return JSON.parse(apt.customer); } catch { return {}; } })() : (apt.customer || {});
+
+          if (aptCustomer.isBlockedTime && aptCustomer.duration) {
+            // Blocked time stores its duration in the customer JSON
+            aptDuration = aptCustomer.duration;
+          } else if (aptCustomer.duration) {
+            // Manual/enriched appointments store duration in customer JSON
+            aptDuration = aptCustomer.duration;
+          } else {
+            const { data: aptSvc } = await client.models.Service.get({ serviceId: apt.serviceId });
+            aptDuration = (aptSvc?.duration as number) || 60;
+          }
+
           if (slotsOverlap(apt.dateTime, aptDuration, bufferMins, bufferMins)) {
             return Response.json({ error: 'This time slot is no longer available' }, { status: 409 });
           }
@@ -289,10 +308,17 @@ export async function POST(request: Request) {
       }
 
       // Overlap detection (Req 4.6): check before saving
-      if (!confirmOverlap) {
+      // Customer bookings ALWAYS enforce overlap — never allow confirmOverlap override
+      if (isCustomerBooking || !confirmOverlap) {
         const svcDuration = serviceCheck?.duration || 60;
-        const overlap = await detectOverlap(client, assignedStaffId, dateTime, svcDuration as number, undefined);
+        const overlap = await detectOverlap(client, assignedStaffId, dateTime, svcDuration as number, undefined, !isCustomerBooking);
         if (overlap) {
+          // For customer bookings: hard block with no override option
+          if (isCustomerBooking) {
+            return Response.json({
+              error: 'This time slot is no longer available. Please select a different time.',
+            }, { status: 409 });
+          }
           return Response.json({
             warning: 'Scheduling conflict detected',
             conflict: overlap,
@@ -362,7 +388,8 @@ export async function POST(request: Request) {
 
 /**
  * Overlap detection helper (Req 4.6)
- * Two time intervals overlap if: slot1Start < slot2End AND slot1End > slot2Start
+ * Uses shared overlap detection that enforces buffer time on both sides.
+ * Blocked time is treated as a real conflict — customers cannot book over it.
  * Returns the conflicting appointment info if overlap exists, null otherwise.
  */
 async function detectOverlap(
@@ -370,18 +397,18 @@ async function detectOverlap(
   staffId: string,
   dateTime: string,
   durationMinutes: number,
-  excludeAppointmentId?: string
+  excludeAppointmentId?: string,
+  isVendorBooking: boolean = false
 ): Promise<{ appointmentId: string; dateTime: string; staffId: string } | null> {
-  const date = dateTime.includes('T') ? dateTime.split('T')[0] : dateTime.split(' ')[0];
-  const timeStr = dateTime.includes('T') ? dateTime.split('T')[1].substring(0, 5) : '00:00';
-  const [h, m] = timeStr.split(':').map(Number);
-  const newStart = h * 60 + m;
-  const newEnd = newStart + durationMinutes;
+  const date = extractDateFromDateTime(dateTime);
 
   // Fetch existing appointments for this staff on the same date
-  // We look up the staff's vendorId to query by vendor index, then filter by staffId
   const { data: staffSchedule } = await amplifyClient.models.StaffSchedule.get({ visibleId: staffId });
   if (!staffSchedule?.vendorId) return null;
+
+  // Get buffer minutes from vendor config
+  const { data: vendor } = await amplifyClient.models.Vendor.get({ vendorId: staffSchedule.vendorId });
+  const vendorBuffer = vendor?.bufferMinutes ?? 15;
 
   const { data: appointments } = await amplifyClient.models.Appointment.listAppointmentByVendorIdAndDateTime({
     vendorId: staffSchedule.vendorId,
@@ -390,38 +417,32 @@ async function detectOverlap(
 
   if (!appointments || appointments.length === 0) return null;
 
-  for (const apt of appointments) {
-    // Skip cancelled appointments
-    if (apt.status === 'cancelled') continue;
-    // Skip the appointment being edited (if updating)
-    if (excludeAppointmentId && apt.appointmentId === excludeAppointmentId) continue;
-    // Only check appointments for the same staff member
-    if (apt.staffId !== staffId) continue;
+  // Build service duration map for all unique serviceIds in the existing appointments
+  const serviceIds = [...new Set(appointments.map((a: any) => a.serviceId).filter(Boolean))];
+  const serviceDurationMap: Record<string, number> = {};
+  await Promise.all(serviceIds.map(async (sid: string) => {
+    if (sid === 'blocked' || sid === 'manual') return;
+    const { data: svc } = await amplifyClient.models.Service.get({ serviceId: sid });
+    if (svc?.duration) serviceDurationMap[sid] = svc.duration as number;
+    // Use per-service buffer if defined, storing for later use
+    if (svc?.bufferMinutes != null) serviceDurationMap[`__buffer__${sid}`] = svc.bufferMinutes as number;
+  }));
 
-    // Get the existing appointment's time range
-    const aptTime = apt.dateTime?.includes('T') ? apt.dateTime.split('T')[1].substring(0, 5) : '00:00';
-    const [ah, am] = aptTime.split(':').map(Number);
-    const existStart = ah * 60 + am;
+  // Determine the buffer to use for the new appointment
+  // Check if the new service has a per-service buffer
+  const newServiceBuffer = serviceDurationMap[`__buffer__${appointments[0]?.serviceId}`];
+  const bufferMinutes = newServiceBuffer ?? vendorBuffer;
 
-    // Get duration of existing appointment's service
-    let existDuration = 60; // default fallback
-    if (apt.serviceId) {
-      const { data: existService } = await amplifyClient.models.Service.get({ serviceId: apt.serviceId });
-      if (existService?.duration) existDuration = existService.duration as number;
-    }
-    const existEnd = existStart + existDuration;
-
-    // Overlap check: newStart < existEnd AND newEnd > existStart
-    if (newStart < existEnd && newEnd > existStart) {
-      return {
-        appointmentId: apt.appointmentId,
-        dateTime: apt.dateTime,
-        staffId: apt.staffId,
-      };
-    }
-  }
-
-  return null;
+  return detectConflict(
+    staffId,
+    dateTime,
+    durationMinutes,
+    bufferMinutes,
+    appointments,
+    serviceDurationMap,
+    excludeAppointmentId,
+    isVendorBooking
+  );
 }
 
 async function handleMultiProviderBooking(body: any, amplifyClient: any) {
