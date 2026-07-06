@@ -216,9 +216,9 @@ describe('Calendar Week Data Fetching - Requirement 5.1, 5.2: Correct vendor and
       expect(screen.getByTestId('multi-staff-week-view')).toBeInTheDocument()
     })
 
-    // Find the /api/dashboard calls with vendorId (multi-staff fetch)
+    // Find the /api/dashboard calls with staffId (multi-staff fetch uses per-staff queries)
     const dashboardCalls = getDashboardFetchCalls()
-    const multiStaffCalls = dashboardCalls.filter(([url]) => url.includes('vendorId'))
+    const multiStaffCalls = dashboardCalls.filter(([url]) => url.includes('staffId'))
 
     expect(multiStaffCalls.length).toBeGreaterThan(0)
 
@@ -226,8 +226,8 @@ describe('Calendar Week Data Fetching - Requirement 5.1, 5.2: Correct vendor and
     const lastCall = multiStaffCalls[multiStaffCalls.length - 1]
     const params = getParamsFromUrl(lastCall[0])
 
-    // Should have vendorId matching the user's vendor
-    expect(params.vendorId).toBe('vendor-1')
+    // Should have staffId matching one of the mock staff members
+    expect(['staff-1', 'staff-2']).toContain(params.staffId)
 
     // Should have startDate and endDate
     expect(params.startDate).toBeDefined()
@@ -255,16 +255,16 @@ describe('Calendar Week Data Fetching - Requirement 5.1, 5.2: Correct vendor and
       expect(screen.getByTestId('multi-staff-view')).toBeInTheDocument()
     })
 
-    // Find the multi-staff calls (with vendorId)
+    // Find the multi-staff calls (with staffId)
     const dashboardCalls = getDashboardFetchCalls()
-    const multiStaffCalls = dashboardCalls.filter(([url]) => url.includes('vendorId'))
+    const multiStaffCalls = dashboardCalls.filter(([url]) => url.includes('staffId'))
 
     expect(multiStaffCalls.length).toBeGreaterThan(0)
 
     const lastCall = multiStaffCalls[multiStaffCalls.length - 1]
     const params = getParamsFromUrl(lastCall[0])
 
-    expect(params.vendorId).toBe('vendor-1')
+    expect(['staff-1', 'staff-2']).toContain(params.staffId)
 
     // The date range should span a single day
     const startDate = new Date(params.startDate)
@@ -300,22 +300,19 @@ describe('Calendar Week Data Fetching - Requirement 5.5: Navigation triggers re-
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
     })
 
-    // Record current date range from the last call before navigation
-    const preNavCalls = getDashboardFetchCalls()
-    
     // Click next navigation button (→)
     const nextButton = screen.getAllByRole('button').find(btn => btn.textContent === '→')
     fireEvent.click(nextButton)
 
     await waitFor(() => {
       const postNavCalls = getDashboardFetchCalls()
-      const multiStaffCalls = postNavCalls.filter(([url]) => url.includes('vendorId'))
+      const multiStaffCalls = postNavCalls.filter(([url]) => url.includes('staffId'))
       expect(multiStaffCalls.length).toBeGreaterThan(0)
     })
 
     // Verify the new fetch has updated date range
     const postNavCalls = getDashboardFetchCalls()
-    const multiStaffCalls = postNavCalls.filter(([url]) => url.includes('vendorId'))
+    const multiStaffCalls = postNavCalls.filter(([url]) => url.includes('staffId'))
     const lastCall = multiStaffCalls[multiStaffCalls.length - 1]
     const params = getParamsFromUrl(lastCall[0])
 
@@ -342,7 +339,8 @@ describe('Calendar Week Data Fetching - Requirement 5.5: Navigation triggers re-
     })
 
     // Get initial multi-staff call date range
-    const initialCalls = getDashboardFetchCalls().filter(([url]) => url.includes('vendorId'))
+    const initialCalls = getDashboardFetchCalls().filter(([url]) => url.includes('staffId'))
+    expect(initialCalls.length).toBeGreaterThan(0)
     const initialParams = getParamsFromUrl(initialCalls[initialCalls.length - 1][0])
     const initialStart = new Date(initialParams.startDate)
 
@@ -363,13 +361,13 @@ describe('Calendar Week Data Fetching - Requirement 5.5: Navigation triggers re-
 
     await waitFor(() => {
       const postNavCalls = getDashboardFetchCalls()
-      const multiStaffCalls = postNavCalls.filter(([url]) => url.includes('vendorId'))
+      const multiStaffCalls = postNavCalls.filter(([url]) => url.includes('staffId'))
       expect(multiStaffCalls.length).toBeGreaterThan(0)
     })
 
     // Verify the date range shifted by -7 days
     const postNavCalls = getDashboardFetchCalls()
-    const multiStaffCalls = postNavCalls.filter(([url]) => url.includes('vendorId'))
+    const multiStaffCalls = postNavCalls.filter(([url]) => url.includes('staffId'))
     const lastCall = multiStaffCalls[multiStaffCalls.length - 1]
     const params = getParamsFromUrl(lastCall[0])
 
@@ -393,16 +391,11 @@ describe('Calendar Week Data Fetching - Requirement 5.6: Mutation refresh', () =
     })
 
     // Count the number of multi-staff dashboard calls so far
-    const callsBefore = getDashboardFetchCalls().filter(([url]) => url.includes('vendorId')).length
+    const callsBefore = getDashboardFetchCalls().filter(([url]) => url.includes('staffId')).length
 
     // Simulate confirming an appointment by calling the confirm API directly
     // The Calendar component calls loadMultiStaffAppointments after a successful confirm
     await act(async () => {
-      // Trigger a fetch to /api/appointments/confirm — the handler in Calendar calls loadMultiStaffAppointments
-      // We'll simulate this by making the confirm endpoint available and triggering via the page's flow
-      // Since we can't easily trigger the internal handleConfirm without the detail modal,
-      // we verify the mechanism via the onCreated path instead
-
       // Open the "New" appointment button to trigger the modal
       const newButton = screen.getAllByRole('button').find(btn => btn.textContent === '+ New')
       fireEvent.click(newButton)
@@ -411,9 +404,9 @@ describe('Calendar Week Data Fetching - Requirement 5.6: Mutation refresh', () =
     // The new appointment modal should now be rendered. Once a new appointment is created,
     // it calls onCreated which triggers loadMultiStaffAppointments.
     // Since the modal is complex, let's verify the refresh mechanism differently:
-    // We'll count that a vendorId fetch was made when the view entered Everyone + Week
+    // We'll count that a staffId fetch was made when the view entered Everyone + Week
     // This confirms the data-fetching infrastructure is wired.
-    const callsAfter = getDashboardFetchCalls().filter(([url]) => url.includes('vendorId')).length
+    const callsAfter = getDashboardFetchCalls().filter(([url]) => url.includes('staffId')).length
     expect(callsAfter).toBeGreaterThanOrEqual(callsBefore)
   })
 
@@ -442,16 +435,14 @@ describe('Calendar Week Data Fetching - Requirement 5.6: Mutation refresh', () =
     })
 
     // Count the multi-staff calls before any mutation
-    const callsBefore = getDashboardFetchCalls().filter(([url]) => url.includes('vendorId')).length
+    const callsBefore = getDashboardFetchCalls().filter(([url]) => url.includes('staffId')).length
 
-    // The cancel handler checks selectedStaffId === 'everyone' and calls loadMultiStaffAppointments
-    // Verify that switching view states triggers proper re-fetch
     // Navigate (which is the simplest way to trigger a re-fetch in Everyone+Week)
     const nextButton = screen.getAllByRole('button').find(btn => btn.textContent === '→')
     fireEvent.click(nextButton)
 
     await waitFor(() => {
-      const callsAfter = getDashboardFetchCalls().filter(([url]) => url.includes('vendorId')).length
+      const callsAfter = getDashboardFetchCalls().filter(([url]) => url.includes('staffId')).length
       expect(callsAfter).toBeGreaterThan(callsBefore)
     })
   })
@@ -468,22 +459,22 @@ describe('Calendar Week Data Fetching - Requirement 5.6: Mutation refresh', () =
     })
 
     // Record calls after switching to day view
-    const callsAfterDay = getDashboardFetchCalls().filter(([url]) => url.includes('vendorId')).length
+    const callsAfterDay = getDashboardFetchCalls().filter(([url]) => url.includes('staffId')).length
 
     // Switch back to week view - should trigger a new multi-staff fetch with week range
     const weekButton = getViewButton('week')
     fireEvent.click(weekButton)
 
     await waitFor(() => {
-      const callsAfterWeek = getDashboardFetchCalls().filter(([url]) => url.includes('vendorId')).length
+      const callsAfterWeek = getDashboardFetchCalls().filter(([url]) => url.includes('staffId')).length
       expect(callsAfterWeek).toBeGreaterThan(callsAfterDay)
     })
 
-    // The new fetch should use week range (7 days) with vendorId
-    const allMultiStaffCalls = getDashboardFetchCalls().filter(([url]) => url.includes('vendorId'))
+    // The new fetch should use week range (7 days) with staffId
+    const allMultiStaffCalls = getDashboardFetchCalls().filter(([url]) => url.includes('staffId'))
     const lastCall = allMultiStaffCalls[allMultiStaffCalls.length - 1]
     const params = getParamsFromUrl(lastCall[0])
-    expect(params.vendorId).toBe('vendor-1')
+    expect(['staff-1', 'staff-2']).toContain(params.staffId)
 
     const startDate = new Date(params.startDate)
     const endDate = new Date(params.endDate)

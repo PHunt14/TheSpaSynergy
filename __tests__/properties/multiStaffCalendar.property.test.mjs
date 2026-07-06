@@ -177,8 +177,11 @@ describe('Feature: multi-staff-calendar, Property 2: Appointment grouping correc
         ({ staffList, appointments }) => {
           const grouped = groupAppointmentsByStaff(appointments, staffList)
 
-          // Map should have exactly as many keys as staff members
-          if (grouped.size !== staffList.length) return false
+          // Map should have at least as many keys as staff members
+          // It may also include '__unassigned__' if there are unrecognized staffIds
+          const hasUnassigned = grouped.has('__unassigned__')
+          const expectedSize = hasUnassigned ? staffList.length + 1 : staffList.length
+          if (grouped.size !== expectedSize) return false
 
           // Every staff visibleId should be a key
           for (const staff of staffList) {
@@ -202,12 +205,15 @@ describe('Feature: multi-staff-calendar, Property 2: Appointment grouping correc
           const grouped = groupAppointmentsByStaff(appointments, staffList)
           const staffIds = new Set(staffList.map(s => s.visibleId))
 
+          // Count non-cancelled appointments with valid staffId
           const expectedCount = appointments.filter(
             a => a.status !== 'cancelled' && staffIds.has(a.staffId)
           ).length
 
+          // Sum only staff buckets (exclude __unassigned__)
           let actualCount = 0
-          for (const [, bucket] of grouped) {
+          for (const [key, bucket] of grouped) {
+            if (key === '__unassigned__') continue
             actualCount += bucket.length
           }
 
