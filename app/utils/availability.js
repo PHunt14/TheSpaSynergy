@@ -346,3 +346,40 @@ function extractTimeFromDateTime(dateTime) {
   }
   return dateTime.split(' ')[1]
 }
+
+/**
+ * Checks if a staff member has a conflicting appointment at the given time.
+ * Shared conflict detection logic used by bundleStaffAssigner and sequentialAvailability.
+ *
+ * Respects:
+ * - Blocked time (reads duration from customer.isBlockedTime + customer.duration)
+ * - Customer-stored duration (enriched appointments)
+ * - Buffer time on both sides
+ *
+ * @param {string} staffId - Staff member to check
+ * @param {Array} appointments - Existing appointments to check against
+ * @param {string} time - HH:MM time string for the proposed slot
+ * @param {number} duration - Duration of the service being booked (fallback)
+ * @param {number} bufferMinutes - Buffer minutes to enforce
+ * @returns {boolean} True if a conflict exists
+ */
+export function hasAppointmentConflict(staffId, appointments, time, duration, bufferMinutes) {
+  const slotStart = timeToMinutes(time)
+  const slotEnd = slotStart + duration + bufferMinutes
+
+  return appointments.some(apt => {
+    if (apt.status === 'cancelled') return false
+    if (apt.staffId !== staffId) return false
+
+    const aptTime = extractTimeFromDateTime(apt.dateTime)
+    const aptStart = timeToMinutes(aptTime)
+    const customer = typeof apt.customer === 'string' ? JSON.parse(apt.customer) : apt.customer
+    // Use blocked time duration, or customer-stored duration (from enriched appointments), or fall back to service duration
+    const aptDuration = (customer?.isBlockedTime && customer?.duration)
+      ? customer.duration
+      : (customer?.duration || duration)
+    const aptEnd = aptStart + aptDuration + bufferMinutes
+
+    return slotStart < aptEnd && slotEnd > aptStart
+  })
+}

@@ -385,7 +385,7 @@ describe('Feature: multi-vendor-bundle-booking, Property 8: Multi-Day Schedule V
                     : apt.customer
                   const aptDuration = (customer?.isBlockedTime && customer?.duration)
                     ? customer.duration
-                    : service.duration
+                    : (customer?.duration || service.duration)
                   const aptEnd = aptStart + aptDuration + bufferMinutes
 
                   const serviceSlotStart = slotStart
@@ -484,7 +484,7 @@ describe('Feature: multi-vendor-bundle-booking, Property 8: Multi-Day Schedule V
                     : apt.customer
                   const aptDuration = (customer?.isBlockedTime && customer?.duration)
                     ? customer.duration
-                    : service.duration
+                    : (customer?.duration || service.duration)
                   const aptEnd = aptStart + aptDuration + bufferMinutes
 
                   const serviceSlotStart = slotStart

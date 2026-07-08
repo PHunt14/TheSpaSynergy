@@ -28,7 +28,10 @@ const client = generateServerClientUsingCookies<Schema>({
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { serviceIds, bundleId: existingBundleId, date, startTime, serviceOrder, customer, staffOverrides } = body;
+    const { serviceIds, bundleId: existingBundleId, date, startTime, serviceOrder, customer, staffOverrides, createdBy, confirmOverlap } = body;
+
+    // Vendor/provider bookings include createdBy — they can override conflicts
+    const isVendorBooking = !!createdBy;
 
     // --- Input validation ---
     if (!serviceIds || !Array.isArray(serviceIds) || serviceIds.length === 0) {
@@ -144,23 +147,81 @@ export async function POST(request: Request) {
           providersRequired: s.providersRequired || 1
         })),
         staffSchedulesByService,
-        appointments: existingAppointments,
+        appointments: isVendorBooking && confirmOverlap ? [] : existingAppointments,
         date,
         startTime,
         bufferMinutes
       });
     } catch (error: any) {
+      // Vendors get a warning they can override; customers get a hard block
+      if (isVendorBooking && !confirmOverlap) {
+        return Response.json({
+          warning: 'Scheduling conflict detected',
+          message: error.message || 'This bundle overlaps with existing appointments. Resubmit with confirmOverlap=true to save anyway.',
+        }, { status: 409 });
+      }
       return Response.json(
         { error: error.message || 'Selected time is no longer available' },
         { status: 409 }
       );
     }
 
-    // Apply staff overrides if provided
+    // Apply staff overrides if provided — re-validate conflicts for safety
+    // Vendors with confirmOverlap can bypass; customers always get hard-blocked
     if (staffOverrides && typeof staffOverrides === 'object') {
       for (const assignment of staffAssignments) {
         if (staffOverrides[assignment.serviceId]) {
-          assignment.staffId = staffOverrides[assignment.serviceId];
+          const overrideStaffId = staffOverrides[assignment.serviceId];
+
+          // Skip conflict check if vendor already confirmed the overlap
+          if (isVendorBooking && confirmOverlap) {
+            assignment.staffId = overrideStaffId;
+            continue;
+          }
+
+          // Verify the overridden staff doesn't have a conflict at this time
+          const serviceForOverride = orderedServices.find((s: any) => s.serviceId === assignment.serviceId);
+          const overrideStart = assignment.startTime;
+          const overrideDuration = serviceForOverride?.duration || 60;
+
+          const overrideStartMin = timeToMin(overrideStart);
+          const overrideEndMin = overrideStartMin + overrideDuration + bufferMinutes;
+
+          const hasOverrideConflict = existingAppointments.some((apt: any) => {
+            if (apt.status === 'cancelled') return false;
+            if (apt.staffId !== overrideStaffId) return false;
+
+            const aptTime = (apt.dateTime as string).includes('T')
+              ? (apt.dateTime as string).split('T')[1].substring(0, 5)
+              : '00:00';
+            const aptStartMin = timeToMin(aptTime);
+            const aptCustomer = typeof apt.customer === 'string'
+              ? (() => { try { return JSON.parse(apt.customer); } catch { return {}; } })()
+              : (apt.customer || {});
+            const aptDuration = (aptCustomer?.isBlockedTime && aptCustomer?.duration)
+              ? aptCustomer.duration
+              : overrideDuration;
+            const aptEndMin = aptStartMin + aptDuration + bufferMinutes;
+
+            return overrideStartMin < aptEndMin && overrideEndMin > aptStartMin;
+          });
+
+          if (hasOverrideConflict) {
+            // Vendors get a warning they can override; customers get hard-blocked
+            if (isVendorBooking) {
+              return Response.json({
+                warning: 'Scheduling conflict detected',
+                conflict: { staffId: overrideStaffId, serviceId: assignment.serviceId },
+                message: 'Selected provider has a scheduling conflict. Resubmit with confirmOverlap=true to save anyway.',
+              }, { status: 409 });
+            }
+            return Response.json(
+              { error: 'Selected provider is not available at this time. Please choose a different provider or time.' },
+              { status: 409 }
+            );
+          }
+
+          assignment.staffId = overrideStaffId;
         }
       }
     }
@@ -185,6 +246,7 @@ export async function POST(request: Request) {
         dateTime: serviceDateTime,
         customer: JSON.stringify(customer),
         status: 'pending-confirmation',
+        createdBy: createdBy || undefined,
         createdAt: new Date().toISOString(),
       } as any);
 
@@ -309,4 +371,10 @@ export async function POST(request: Request) {
     console.error('Error creating bundle booking:', error);
     return Response.json({ error: 'Failed to create bundle booking' }, { status: 500 });
   }
+}
+
+/** Converts "HH:MM" to minutes since midnight. */
+function timeToMin(timeStr: string): number {
+  const [h, m] = timeStr.split(':').map(Number);
+  return h * 60 + m;
 }
