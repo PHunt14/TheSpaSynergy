@@ -195,6 +195,24 @@ const schema = a.schema({
     .identifier(['noteId'])
     .secondaryIndexes((index) => [index('clientId').sortKeys(['createdAt'])])
     .authorization((allow) => [allow.publicApiKey()]),
+
+  SplitPaymentSession: a
+    .model({
+      sessionId: a.id().required(),
+      bundleId: a.string().required(),
+      totalAmountCents: a.integer().required(),
+      splitType: a.enum(['equal', 'custom']),
+      payerCount: a.integer().required(),
+      status: a.enum(['pending', 'partial', 'completed', 'expired', 'refunded', 'partially_refunded']),
+      payers: a.json().required(),
+      createdAt: a.string().required(),
+      expiresAt: a.string().required(),
+    })
+    .identifier(['sessionId'])
+    .secondaryIndexes((index) => [
+      index('bundleId')
+    ])
+    .authorization((allow) => [allow.publicApiKey()]),
 });
 
 export type Schema = ClientSchema<typeof schema>;
