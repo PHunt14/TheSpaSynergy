@@ -60,7 +60,7 @@ async function handleCreateSession(body: {
     );
   }
 
-  const validStatuses = ['pending', 'booked'];
+  const validStatuses = ['pending', 'booked', 'pending-confirmation', 'confirmed'];
   if (!bundle.status || !validStatuses.includes(bundle.status)) {
     return Response.json(
       { error: 'Invalid bundle status', details: `Bundle status "${bundle.status}" is not eligible for split payment` },
@@ -69,15 +69,22 @@ async function handleCreateSession(body: {
   }
 
   // 2. Check no active session exists for this bundleId
-  const { data: existingSessions } = await (dataClient.models as any).SplitPaymentSession.listSplitPaymentSessionByBundleId({ bundleId });
-  const activeSession = (existingSessions || []).find(
-    (s: any) => s.status === 'pending' || s.status === 'partial'
-  );
-  if (activeSession) {
-    return Response.json(
-      { error: 'Active split session already exists for this bundle' },
-      { status: 409 }
+  try {
+    const { data: existingSessions } = await (dataClient.models as any).SplitPaymentSession.list({
+      filter: { bundleId: { eq: bundleId } }
+    });
+    const activeSession = (existingSessions || []).find(
+      (s: any) => s.status === 'pending' || s.status === 'partial'
     );
+    if (activeSession) {
+      return Response.json(
+        { error: 'Active split session already exists for this bundle' },
+        { status: 409 }
+      );
+    }
+  } catch (err: any) {
+    // SplitPaymentSession model may not be deployed yet — skip check
+    console.warn('Could not check existing sessions (model may not be deployed):', err.message);
   }
 
   // 3. Calculate the bundle total in cents

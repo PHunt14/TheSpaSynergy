@@ -31,7 +31,7 @@ function BundlePaymentContent() {
   const [paymentMode, setPaymentMode] = useState(null) // null | 'full' | 'split'
   const [splitError, setSplitError] = useState(null)
 
-  const { card } = useSquarePayment(squareLocationId, paid)
+  const { card } = useSquarePayment(squareLocationId, paid || paymentMode !== 'full')
 
   useEffect(() => {
     Promise.all([

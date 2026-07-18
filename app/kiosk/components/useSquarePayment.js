@@ -37,10 +37,20 @@ export default function useSquarePayment(squareLocationId, disabled = false) {
       try {
         const appId = process.env.NEXT_PUBLIC_SQUARE_APPLICATION_ID
         if (!appId || !squareLocationId) return
+
+        // Wait for the DOM element to be available (React may not have painted yet)
+        let container = null
+        for (let i = 0; i < 10; i++) {
+          container = document.getElementById('card-container')
+          if (container) break
+          await new Promise(resolve => setTimeout(resolve, 150))
+        }
+        if (!container || !isMounted) return
+
         const payments = await window.Square.payments(appId, squareLocationId)
         const cardInstance = await payments.card()
         await cardInstance.attach('#card-container')
-        setCard(cardInstance)
+        if (isMounted) setCard(cardInstance)
       } catch (err) {
         console.error('Square init error:', err)
       }
