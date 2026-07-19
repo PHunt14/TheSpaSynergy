@@ -71,6 +71,14 @@ const mockSessionListByBundleId = jest.fn(async ({ bundleId }) => {
   return { data: sessions }
 })
 
+const mockSessionList = jest.fn(async ({ filter } = {}) => {
+  let sessions = Object.values(mockSessionDb)
+  if (filter?.bundleId?.eq) {
+    sessions = sessions.filter(s => s.bundleId === filter.bundleId.eq)
+  }
+  return { data: sessions }
+})
+
 const mockCreatePayment = jest.fn()
 const mockRefundPayment = jest.fn()
 
@@ -95,6 +103,7 @@ jest.unstable_mockModule('aws-amplify/data', () => ({
         get: mockSessionGet,
         create: mockSessionCreate,
         update: mockSessionUpdate,
+        list: mockSessionList,
         listSplitPaymentSessionByBundleId: mockSessionListByBundleId,
       },
     },

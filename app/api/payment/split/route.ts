@@ -69,22 +69,17 @@ async function handleCreateSession(body: {
   }
 
   // 2. Check no active session exists for this bundleId
-  try {
-    const { data: existingSessions } = await (dataClient.models as any).SplitPaymentSession.list({
-      filter: { bundleId: { eq: bundleId } }
-    });
-    const activeSession = (existingSessions || []).find(
-      (s: any) => s.status === 'pending' || s.status === 'partial'
+  const { data: existingSessions } = await (dataClient.models as any).SplitPaymentSession.list({
+    filter: { bundleId: { eq: bundleId } }
+  });
+  const activeSession = (existingSessions || []).find(
+    (s: any) => s.status === 'pending' || s.status === 'partial'
+  );
+  if (activeSession) {
+    return Response.json(
+      { error: 'Active split session already exists for this bundle' },
+      { status: 409 }
     );
-    if (activeSession) {
-      return Response.json(
-        { error: 'Active split session already exists for this bundle' },
-        { status: 409 }
-      );
-    }
-  } catch (err: any) {
-    // SplitPaymentSession model may not be deployed yet — skip check
-    console.warn('Could not check existing sessions (model may not be deployed):', err.message);
   }
 
   // 3. Calculate the bundle total in cents
