@@ -26,6 +26,9 @@ export default function DashboardHome() {
 
       if (role !== 'admin' && vendorId) {
         setSelectedVendorId(vendorId)
+      } else if (role === 'admin') {
+        // Admin doesn't need appointments on this page
+        setLoading(false)
       }
     } catch (error) {
       console.error('Error loading user:', error)
@@ -34,6 +37,7 @@ export default function DashboardHome() {
   }
 
   useEffect(() => {
+    if (userRole === 'admin') return
     if (userRole === 'admin') {
       fetch('/api/vendors').then(r => r.json()).then(d => {
         setVendors(d.vendors || [])
@@ -42,6 +46,7 @@ export default function DashboardHome() {
   }, [userRole])
 
   useEffect(() => {
+    if (userRole === 'admin') return
     if (userRole === 'admin' && selectedVendorId === 'all' && vendors.length > 0) {
       loadAllVendorAppointments()
     } else if (selectedVendorId && selectedVendorId !== 'all') {
@@ -74,6 +79,50 @@ export default function DashboardHome() {
         setLoading(false)
       })
       .catch(() => setLoading(false))
+  }
+
+  // Admin gets a simple welcome page
+  if (!loading && userRole === 'admin') {
+    return (
+      <div>
+        <h1>Welcome, Admin</h1>
+        <p style={{ color: 'var(--color-text-light)', marginBottom: '2rem', fontSize: '1.1rem' }}>
+          Use the sidebar to manage vendors, services, staff, and more.
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+          {[
+            { label: 'Calendar', icon: '📅', href: '/dashboard/calendar' },
+            { label: 'Services', icon: '💆', href: '/dashboard/services' },
+            { label: 'Packages', icon: '📦', href: '/dashboard/bundles' },
+            { label: 'Providers', icon: '👤', href: '/dashboard/providers' },
+            { label: 'Staff', icon: '👥', href: '/dashboard/staff' },
+            { label: 'Clients', icon: '🧑‍🤝‍🧑', href: '/dashboard/clients' },
+            { label: 'Settings', icon: '⚙️', href: '/dashboard/settings' },
+          ].map(item => (
+            <a
+              key={item.href}
+              href={item.href}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.75rem',
+                padding: '1.25rem',
+                background: 'var(--color-accent)',
+                borderRadius: '12px',
+                textDecoration: 'none',
+                color: 'var(--color-text)',
+                fontSize: '1rem',
+                fontWeight: '500',
+                transition: 'box-shadow 0.2s',
+              }}
+            >
+              <span style={{ fontSize: '1.5rem' }}>{item.icon}</span>
+              {item.label}
+            </a>
+          ))}
+        </div>
+      </div>
+    )
   }
 
   const now = new Date()
