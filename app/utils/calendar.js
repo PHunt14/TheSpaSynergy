@@ -412,29 +412,30 @@ export function getAggregateWorkingHours(staffList, date) {
   let maxEnd = null
 
   for (const staff of staffList) {
-    let schedule = staff.schedule
+    const hours = getStaffHoursForDate(staff, date)
+    if (hours.start === null || hours.end === null) continue
 
-    // Parse schedule JSON if it's a string
-    if (typeof schedule === 'string') {
-      try {
-        schedule = JSON.parse(schedule)
-      } catch {
-        // Invalid JSON — treat as no working hours for this staff
-        continue
-      }
-    }
-
-    const hours = getWorkingHoursForStaff(schedule, date)
-
-    if (hours.start !== null && hours.end !== null) {
-      if (minStart === null || hours.start < minStart) {
-        minStart = hours.start
-      }
-      if (maxEnd === null || hours.end > maxEnd) {
-        maxEnd = hours.end
-      }
-    }
+    minStart = minStart === null ? hours.start : Math.min(minStart, hours.start)
+    maxEnd = maxEnd === null ? hours.end : Math.max(maxEnd, hours.end)
   }
 
   return { start: minStart, end: maxEnd }
+}
+
+/**
+ * Parse a single staff member's schedule and return their hours for a given date.
+ * @param {Object} staff - Staff object with a `schedule` field (JSON string or object)
+ * @param {Date} date - The date to check
+ * @returns {{ start: number|null, end: number|null }}
+ */
+function getStaffHoursForDate(staff, date) {
+  let schedule = staff.schedule
+  if (typeof schedule === 'string') {
+    try {
+      schedule = JSON.parse(schedule)
+    } catch {
+      return { start: null, end: null }
+    }
+  }
+  return getWorkingHoursForStaff(schedule, date)
 }

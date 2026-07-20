@@ -11,6 +11,45 @@ const inputStyle = {
 }
 const labelStyle = { display: 'block', marginBottom: '0.5rem', fontWeight: '500' }
 
+function SquareStatusBanner({ status, connectedAt }) {
+  if (status === 'error') {
+    return (
+      <div style={{ padding: '1rem', background: '#f8d7da', border: '1px solid #f5c6cb', borderRadius: '8px', marginBottom: '1rem' }}>
+        <div style={{ fontWeight: '500', color: '#721c24', marginBottom: '0.5rem' }}>⚠ Square Connection Error</div>
+        <p style={{ fontSize: '0.85rem', color: '#721c24', margin: 0 }}>Your Square connection needs to be refreshed. Please reconnect.</p>
+      </div>
+    )
+  }
+  return (
+    <div style={{ padding: '1rem', background: '#d4edda', border: '1px solid #c3e6cb', borderRadius: '8px', marginBottom: '1rem' }}>
+      <div style={{ fontWeight: '500', color: '#155724', marginBottom: '0.5rem' }}>✓ Your Square Account Connected</div>
+      {connectedAt && (
+        <div style={{ fontSize: '0.85rem', color: '#155724' }}>
+          Connected on {new Date(connectedAt).toLocaleDateString()}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function BookingAvailabilityStatus({ bookingDisabledUntil }) {
+  if (bookingDisabledUntil && new Date(bookingDisabledUntil) > new Date()) {
+    return (
+      <div style={{ padding: '1rem', background: '#fff3cd', border: '1px solid #ffc107', borderRadius: '8px', marginBottom: '1.5rem' }}>
+        <div style={{ fontWeight: '500', color: '#856404', marginBottom: '0.5rem' }}>⏸ Online booking is paused</div>
+        <p style={{ fontSize: '0.9rem', color: '#856404', margin: 0 }}>
+          New clients cannot book your services online until <strong>{new Date(bookingDisabledUntil).toLocaleDateString()}</strong>.
+        </p>
+      </div>
+    )
+  }
+  return (
+    <div style={{ padding: '1rem', background: '#d4edda', border: '1px solid #c3e6cb', borderRadius: '8px', marginBottom: '1.5rem' }}>
+      <div style={{ fontWeight: '500', color: '#155724' }}>✓ Online booking is active</div>
+    </div>
+  )
+}
+
 export default function MySettings({ currentUser, showMessage }) {
   const [myStaffSchedule, setMyStaffSchedule] = useState(null)
   const [staffSquareConnected, setStaffSquareConnected] = useState(false)
@@ -186,18 +225,7 @@ export default function MySettings({ currentUser, showMessage }) {
         <div style={sectionStyle}>
           <h2 style={{ marginTop: 0, marginBottom: '1.5rem' }}>Booking Availability<Tooltip text="Pause online booking for your services. Clients won't be able to book you online until the date you set. Existing appointments are not affected." /></h2>
 
-          {bookingDisabledUntil && new Date(bookingDisabledUntil) > new Date() ? (
-            <div style={{ padding: '1rem', background: '#fff3cd', border: '1px solid #ffc107', borderRadius: '8px', marginBottom: '1.5rem' }}>
-              <div style={{ fontWeight: '500', color: '#856404', marginBottom: '0.5rem' }}>⏸ Online booking is paused</div>
-              <p style={{ fontSize: '0.9rem', color: '#856404', margin: 0 }}>
-                New clients cannot book your services online until <strong>{new Date(bookingDisabledUntil).toLocaleDateString()}</strong>.
-              </p>
-            </div>
-          ) : (
-            <div style={{ padding: '1rem', background: '#d4edda', border: '1px solid #c3e6cb', borderRadius: '8px', marginBottom: '1.5rem' }}>
-              <div style={{ fontWeight: '500', color: '#155724' }}>✓ Online booking is active</div>
-            </div>
-          )}
+          <BookingAvailabilityStatus bookingDisabledUntil={bookingDisabledUntil} />
 
           <div style={{ marginBottom: '1.5rem' }}>
             <label style={labelStyle}>Pause booking until</label>
@@ -266,23 +294,7 @@ export default function MySettings({ currentUser, showMessage }) {
 
           {staffSquareConnected ? (
             <div>
-              <div style={{ padding: '1rem', background: staffSquareStatus === 'error' ? '#f8d7da' : '#d4edda', border: `1px solid ${staffSquareStatus === 'error' ? '#f5c6cb' : '#c3e6cb'}`, borderRadius: '8px', marginBottom: '1rem' }}>
-                {staffSquareStatus === 'error' ? (
-                  <div>
-                    <div style={{ fontWeight: '500', color: '#721c24', marginBottom: '0.5rem' }}>⚠ Square Connection Error</div>
-                    <p style={{ fontSize: '0.85rem', color: '#721c24', margin: 0 }}>Your Square connection needs to be refreshed. Please reconnect.</p>
-                  </div>
-                ) : (
-                  <div>
-                    <div style={{ fontWeight: '500', color: '#155724', marginBottom: '0.5rem' }}>✓ Your Square Account Connected</div>
-                    {staffSquareConnectedAt && (
-                      <div style={{ fontSize: '0.85rem', color: '#155724' }}>
-                        Connected on {new Date(staffSquareConnectedAt).toLocaleDateString()}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+              <SquareStatusBanner status={staffSquareStatus} connectedAt={staffSquareConnectedAt} />
               <div style={{ display: 'flex', gap: '1rem' }}>
                 {staffSquareStatus === 'error' && (
                   <button onClick={handleConnectStaffSquare} className="cta">Reconnect Square</button>
