@@ -1,6 +1,5 @@
 'use client'
 
-import { useState } from 'react'
 import { centsToDollars } from '../../utils/splitCalculator'
 
 /**
@@ -12,10 +11,7 @@ import { centsToDollars } from '../../utils/splitCalculator'
  *   showPayButtons (boolean) – whether to show pay buttons (false on read-only view)
  */
 export default function SplitPaymentStatus({ session, onPayPayer, showPayButtons }) {
-  const [copied, setCopied] = useState(false)
-
   const isExpired = session.status === 'expired'
-  const shareableUrl = `/payment/split/${session.sessionId}`
 
   const statusLabel = {
     pending: 'Pending',
@@ -29,17 +25,6 @@ export default function SplitPaymentStatus({ session, onPayPayer, showPayButtons
     partial: '#ff9800',
     completed: '#4caf50',
     expired: '#c33',
-  }
-
-  const handleCopyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(window.location.origin + shareableUrl)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch {
-      // Fallback for environments without clipboard API
-      setCopied(false)
-    }
   }
 
   return (
@@ -152,38 +137,6 @@ export default function SplitPaymentStatus({ session, onPayPayer, showPayButtons
           })}
         </tbody>
       </table>
-
-      {/* Shareable URL */}
-      <div style={{
-        padding: '1rem', borderRadius: '8px', background: 'white',
-        border: '1px solid var(--color-border)', marginBottom: '1rem',
-      }}>
-        <p style={{ margin: '0 0 0.5rem 0', fontWeight: '500', fontSize: '0.9rem', color: 'var(--color-text-light)' }}>
-          Share this link with other payers:
-        </p>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <code style={{
-            flex: 1, padding: '0.5rem 0.75rem', borderRadius: '6px',
-            background: 'var(--color-accent)', border: '1px solid var(--color-border)',
-            fontSize: '0.85rem', wordBreak: 'break-all',
-          }}>
-            {shareableUrl}
-          </code>
-          <button
-            onClick={handleCopyLink}
-            aria-label="Copy shareable link"
-            style={{
-              padding: '0.5rem 0.75rem', borderRadius: '6px',
-              border: '1px solid var(--color-border)', background: 'white',
-              cursor: 'pointer', fontWeight: '500', fontSize: '0.85rem',
-              color: copied ? '#4caf50' : 'var(--color-primary)',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {copied ? 'Copied!' : 'Copy Link'}
-          </button>
-        </div>
-      </div>
     </div>
   )
 }
