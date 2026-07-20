@@ -1056,7 +1056,7 @@ export default function Services() {
         // Collect all categories for filter dropdown
         const allCategories = [...new Set(
           services.flatMap(s => s.categories || (s.category ? [s.category] : []))
-        )].sort()
+        )].sort((a, b) => a.localeCompare(b))
 
         return (
           <>
