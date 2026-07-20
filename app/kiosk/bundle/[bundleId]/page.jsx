@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { Suspense } from 'react'
 import Link from 'next/link'
 import { calculateBundlePaymentSplit } from '../../../utils/bundlePaymentSplit.js'
+import { dollarsToCents } from '../../../utils/splitCalculator'
 import TipSelection from '../../components/TipSelection'
 import useSquarePayment, { resolveSquareLocation } from '../../components/useSquarePayment'
 import KioskPaymentForm from '../../components/KioskPaymentForm'
@@ -12,9 +13,11 @@ import PaymentSuccess from '../../components/PaymentSuccess'
 import TotalDueDisplay from '../../components/TotalDueDisplay'
 import ServiceLineItems from '../../components/ServiceLineItems'
 import formatTime from '../../components/formatTime'
+import SplitPaymentConfig from '../../components/SplitPaymentConfig'
 
 function BundlePaymentContent() {
   const { bundleId } = useParams()
+  const router = useRouter()
 
   const [appointments, setAppointments] = useState([])
   const [bundle, setBundle] = useState(null)
@@ -25,8 +28,10 @@ function BundlePaymentContent() {
   const [error, setError] = useState(null)
   const [tipAmount, setTipAmount] = useState(0)
   const [squareLocationId, setSquareLocationId] = useState(null)
+  const [paymentMode, setPaymentMode] = useState(null) // null | 'full' | 'split'
+  const [splitError, setSplitError] = useState(null)
 
-  const { card } = useSquarePayment(squareLocationId, paid)
+  const { card } = useSquarePayment(squareLocationId, paid || paymentMode !== 'full')
 
   useEffect(() => {
     Promise.all([
@@ -110,6 +115,34 @@ function BundlePaymentContent() {
       console.error('Bundle payment error:', err)
     } finally {
       setPaying(false)
+    }
+  }
+
+  const handleSplitConfigured = async ({ splitType, payerCount, payerAmountsCents }) => {
+    setSplitError(null)
+    try {
+      const res = await fetch('/api/payment/split', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'createSession',
+          bundleId,
+          splitType,
+          payerCount,
+          payerAmountsCents,
+        }),
+      })
+      const data = await res.json()
+
+      if (!res.ok || data.error) {
+        setSplitError(data.error || 'Failed to create split payment session')
+        return
+      }
+
+      router.push(`/payment/split/${data.sessionId}`)
+    } catch (err) {
+      setSplitError('Failed to create split payment session — please try again')
+      console.error('Split session creation error:', err)
     }
   }
 
@@ -199,23 +232,89 @@ function BundlePaymentContent() {
         </div>
       </div>
 
-      {squareLocationId && (
-        <TipSelection
-          servicePrice={bundlePrice}
-          tipAmount={tipAmount}
-          onTipChange={setTipAmount}
-        />
+      {/* Payment Mode Selector */}
+      <fieldset style={{ border: 'none', padding: 0, margin: '0 0 1.5rem 0' }}>
+        <legend style={{ fontWeight: '600', marginBottom: '0.75rem', fontSize: '1rem' }}>How would you like to pay?</legend>
+        {(bundlePrice === 0 || appointments.length === 0) && (
+          <p role="alert" style={{ color: '#c33', fontSize: '0.85rem', marginBottom: '0.75rem' }}>
+            Payment cannot be processed for this bundle.
+          </p>
+        )}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+          <button
+            type="button"
+            onClick={() => { setPaymentMode('full'); setSplitError(null) }}
+            disabled={bundlePrice === 0 || appointments.length === 0}
+            aria-pressed={paymentMode === 'full'}
+            aria-label="Pay Full Amount"
+            style={{
+              padding: '1rem', borderRadius: '8px', cursor: (bundlePrice === 0 || appointments.length === 0) ? 'not-allowed' : 'pointer',
+              border: paymentMode === 'full' ? '2px solid var(--color-primary)' : '2px solid var(--color-border)',
+              background: paymentMode === 'full' ? 'var(--color-primary)' : 'white',
+              color: paymentMode === 'full' ? 'white' : 'var(--color-text)',
+              fontWeight: '500', fontSize: '0.95rem',
+              opacity: (bundlePrice === 0 || appointments.length === 0) ? 0.5 : 1,
+            }}
+          >
+            💳 Pay Full Amount
+          </button>
+          <button
+            type="button"
+            onClick={() => { setPaymentMode('split'); setSplitError(null) }}
+            disabled={bundlePrice === 0 || appointments.length === 0}
+            aria-pressed={paymentMode === 'split'}
+            aria-label="Split Payment"
+            style={{
+              padding: '1rem', borderRadius: '8px', cursor: (bundlePrice === 0 || appointments.length === 0) ? 'not-allowed' : 'pointer',
+              border: paymentMode === 'split' ? '2px solid var(--color-primary)' : '2px solid var(--color-border)',
+              background: paymentMode === 'split' ? 'var(--color-primary)' : 'white',
+              color: paymentMode === 'split' ? 'white' : 'var(--color-text)',
+              fontWeight: '500', fontSize: '0.95rem',
+              opacity: (bundlePrice === 0 || appointments.length === 0) ? 0.5 : 1,
+            }}
+          >
+            👥 Split Payment
+          </button>
+        </div>
+      </fieldset>
+
+      {/* Full Payment Flow */}
+      {paymentMode === 'full' && (
+        <>
+          {squareLocationId && (
+            <TipSelection
+              servicePrice={bundlePrice}
+              tipAmount={tipAmount}
+              onTipChange={setTipAmount}
+            />
+          )}
+
+          <TotalDueDisplay totalDue={totalDue} tipAmount={tipAmount} priceLabel="Package" priceAmount={bundlePrice} />
+
+          {!squareLocationId ? (
+            <div style={{ padding: '1.5rem', background: '#fff3cd', borderRadius: '8px', border: '1px solid #ffc107', textAlign: 'center' }}>
+              <strong>Card payment not available</strong>
+              <p style={{ margin: '0.5rem 0 0', fontSize: '0.9rem' }}>Vendors in this package have not connected Square.</p>
+            </div>
+          ) : (
+            <KioskPaymentForm totalDue={totalDue} paying={paying} card={card} error={error} onPay={handlePay} />
+          )}
+        </>
       )}
 
-      <TotalDueDisplay totalDue={totalDue} tipAmount={tipAmount} priceLabel="Package" priceAmount={bundlePrice} />
-
-      {!squareLocationId ? (
-        <div style={{ padding: '1.5rem', background: '#fff3cd', borderRadius: '8px', border: '1px solid #ffc107', textAlign: 'center' }}>
-          <strong>Card payment not available</strong>
-          <p style={{ margin: '0.5rem 0 0', fontSize: '0.9rem' }}>Vendors in this package have not connected Square.</p>
-        </div>
-      ) : (
-        <KioskPaymentForm totalDue={totalDue} paying={paying} card={card} error={error} onPay={handlePay} />
+      {/* Split Payment Flow */}
+      {paymentMode === 'split' && (
+        <>
+          <SplitPaymentConfig
+            totalAmountCents={dollarsToCents(bundlePrice)}
+            onConfigured={handleSplitConfigured}
+          />
+          {splitError && (
+            <p role="alert" style={{ color: '#c33', fontSize: '0.9rem', textAlign: 'center', marginTop: '0.5rem' }}>
+              {splitError}
+            </p>
+          )}
+        </>
       )}
     </div>
   )

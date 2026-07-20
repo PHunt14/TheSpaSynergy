@@ -18,6 +18,8 @@
     "typecheck": "tsc --noEmit",
     "sandbox": "npx ampx sandbox",
     "sandbox:delete": "npx ampx sandbox delete",
+    "db:sync": "node scripts/sync-prod-to-dev.mjs --prod-hash ioggmkvoizfdbjlunwydeowaim --dev-hash fijie4ecpbaghhganm4kvz2qkq",
+    "db:sync:dry": "node scripts/sync-prod-to-dev.mjs --dry-run --prod-hash ioggmkvoizfdbjlunwydeowaim --dev-hash fijie4ecpbaghhganm4kvz2qkq",
     "seed": "node scripts/seed-amplify.js",
     "seed:clear": "node scripts/clear-data.js"
   },
