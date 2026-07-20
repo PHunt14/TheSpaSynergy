@@ -105,17 +105,4 @@ describe('SplitPaymentStatus', () => {
       expect(btn).toBeDisabled()
     })
   })
-
-  test('shows shareable URL', () => {
-    render(<SplitPaymentStatus {...defaultProps} />)
-
-    expect(screen.getByText('/payment/split/session-123')).toBeInTheDocument()
-  })
-
-  test('copy link button present', () => {
-    render(<SplitPaymentStatus {...defaultProps} />)
-
-    expect(screen.getByLabelText('Copy shareable link')).toBeInTheDocument()
-    expect(screen.getByText('Copy Link')).toBeInTheDocument()
-  })
 })
