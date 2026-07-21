@@ -88,6 +88,10 @@ export async function POST(request: Request) {
 
     // --- Collect all unique staff IDs across all services ---
     const allStaffIds = new Set<string>();
+    const hasOpenStaff = orderedServices.some(
+      (s: any) => !s.allowedStaff || (s.allowedStaff as string[]).length === 0
+    );
+
     for (const service of orderedServices) {
       const allowedStaff = (service.allowedStaff as string[]) || [];
       for (const staffId of allowedStaff) {
@@ -95,27 +99,51 @@ export async function POST(request: Request) {
       }
     }
 
-    if (allStaffIds.size === 0) {
-      return Response.json({ error: 'No staff configured for the selected services' }, { status: 400 });
+    // --- Fetch staff schedules ---
+    // If any service has null/empty allowedStaff ("all staff eligible"), fetch all staff
+    let staffSchedules: any[];
+    if (hasOpenStaff) {
+      const { data: allStaff } = await client.models.StaffSchedule.list();
+      staffSchedules = (allStaff || []).filter((s: any) => s.isActive !== false);
+      staffSchedules.forEach((s: any) => allStaffIds.add(s.visibleId));
+    } else {
+      if (allStaffIds.size === 0) {
+        return Response.json({ error: 'No staff configured for the selected services' }, { status: 400 });
+      }
+      const staffPromises = Array.from(allStaffIds).map(staffId =>
+        client.models.StaffSchedule.get({ visibleId: staffId } as any)
+      );
+      const staffResults = await Promise.all(staffPromises);
+      staffSchedules = staffResults
+        .filter(result => !result.errors && result.data)
+        .map(result => result.data);
     }
 
-    // --- Fetch staff schedules ---
-    const staffPromises = Array.from(allStaffIds).map(staffId =>
-      client.models.StaffSchedule.get({ visibleId: staffId } as any)
-    );
-    const staffResults = await Promise.all(staffPromises);
+    // Exclude staff with active booking blackout
+    const now = new Date();
+    staffSchedules = staffSchedules.filter((s: any) => {
+      if (s.bookingDisabledUntil && new Date(s.bookingDisabledUntil) > now) return false;
+      return true;
+    });
 
-    const staffSchedules = staffResults
-      .filter(result => !result.errors && result.data)
-      .map(result => result.data);
+    if (staffSchedules.length === 0) {
+      return Response.json({ error: 'No staff available for the selected services' }, { status: 400 });
+    }
 
     // Build staffSchedulesByService map
     const staffSchedulesByService: Record<string, any[]> = {};
     for (const service of orderedServices) {
       const allowedStaff = (service.allowedStaff as string[]) || [];
-      staffSchedulesByService[service.serviceId] = staffSchedules.filter(
-        (staff: any) => allowedStaff.includes(staff.visibleId)
-      );
+      if (allowedStaff.length > 0) {
+        staffSchedulesByService[service.serviceId] = staffSchedules.filter(
+          (staff: any) => allowedStaff.includes(staff.visibleId)
+        );
+      } else {
+        // null/empty allowedStaff = all staff eligible (exclude resource calendars)
+        staffSchedulesByService[service.serviceId] = staffSchedules.filter(
+          (staff: any) => !staff.visibleId.startsWith('resource-')
+        );
+      }
     }
 
     // --- Fetch existing appointments for relevant staff on the date ---
@@ -228,6 +256,16 @@ export async function POST(request: Request) {
 
     // --- Generate bundleId ---
     const bundleId = existingBundleId || `bundle-${Date.now()}`;
+
+    // --- Final safety check: every assignment must have a valid staffId ---
+    const unassigned = staffAssignments.filter((a: any) => !a.staffId);
+    if (unassigned.length > 0) {
+      const serviceNames = unassigned.map((a: any) => a.serviceId).join(', ');
+      return Response.json(
+        { error: `Unable to assign a provider for: ${serviceNames}. Please choose a different time.` },
+        { status: 409 }
+      );
+    }
 
     // --- Create one appointment per service ---
     const appointmentIds: string[] = [];
