@@ -97,6 +97,13 @@ export default function Services() {
     }
   }
 
+  const handleStaffToggle = (staffId, checked) => {
+    const updated = checked
+      ? [...newService.allowedStaff, staffId]
+      : newService.allowedStaff.filter(id => id !== staffId)
+    setNewService({ ...newService, allowedStaff: updated })
+  }
+
   // Helper to check if user can perform an action
   const canCreate = true
   const canDelete = true
@@ -564,12 +571,7 @@ export default function Services() {
                   <input
                     type="checkbox"
                     checked={newService.allowedStaff.includes(s.visibleId)}
-                    onChange={(e) => {
-                      const updated = e.target.checked
-                        ? [...newService.allowedStaff, s.visibleId]
-                        : newService.allowedStaff.filter(id => id !== s.visibleId)
-                      setNewService({ ...newService, allowedStaff: updated })
-                    }}
+                    onChange={(e) => handleStaffToggle(s.visibleId, e.target.checked)}
                     style={{ width: '18px', height: '18px', cursor: 'pointer' }}
                   />
                   <span>{s.staffName || s.visibleId}</span>
@@ -1056,7 +1058,7 @@ export default function Services() {
         // Collect all categories for filter dropdown
         const allCategories = [...new Set(
           services.flatMap(s => s.categories || (s.category ? [s.category] : []))
-        )].sort()
+        )].sort((a, b) => a.localeCompare(b))
 
         return (
           <>

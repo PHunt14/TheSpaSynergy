@@ -61,43 +61,14 @@ export function findSlotsForOrder({ orderedServices, staffSchedulesByService, ap
   const requestedDate = new Date(date + 'T00:00:00')
   const dayOfWeek = DAY_NAMES[requestedDate.getDay()]
 
-  // Determine the scanning range: earliest possible start to latest possible end
-  // based on all staff working hours across all services
   const { earliestStart, latestEnd } = getScanRange(orderedServices, staffSchedulesByService, dayOfWeek, requestedDate)
   if (earliestStart === null || latestEnd === null) return []
 
   const totalDuration = calculateTotalBundleDuration(orderedServices, bufferMinutes)
   if (earliestStart + totalDuration > latestEnd) return []
 
-  const validSlots = []
-
-  // Scan in 30-minute increments
-  let currentMinutes = earliestStart
-  // Align to 30-minute boundary
-  if (currentMinutes % 30 !== 0) {
-    currentMinutes = Math.ceil(currentMinutes / 30) * 30
-  }
-
-  while (currentMinutes + totalDuration <= latestEnd) {
-    const schedule = calculateServiceSchedule(orderedServices, minutesToTime(currentMinutes), bufferMinutes)
-
-    // Check if every service in the schedule has at least providersRequired staff available
-    const isValid = validateScheduleSlot(schedule, orderedServices, staffSchedulesByService, appointments, dayOfWeek, requestedDate, bufferMinutes)
-
-    if (isValid) {
-      validSlots.push({
-        startTime: minutesToTime(currentMinutes),
-        schedule: schedule.map((entry, idx) => ({
-          ...entry,
-          staffId: null // Staff assignment happens at booking time, not availability check
-        }))
-      })
-    }
-
-    currentMinutes += 30
-  }
-
-  return validSlots
+  const startMinutes = earliestStart % 30 === 0 ? earliestStart : Math.ceil(earliestStart / 30) * 30
+  return scanForValidSlots(startMinutes, latestEnd, totalDuration, orderedServices, staffSchedulesByService, appointments, dayOfWeek, requestedDate, bufferMinutes)
 }
 
 /**
@@ -193,62 +164,87 @@ export function getSequentialBundleSlots({
 // ─── Internal Helpers ────────────────────────────────────────────────────────
 
 /**
+ * Scans time slots in 30-minute increments and collects valid ones.
+ */
+function scanForValidSlots(startMinutes, latestEnd, totalDuration, orderedServices, staffSchedulesByService, appointments, dayOfWeek, requestedDate, bufferMinutes) {
+  const validSlots = []
+  let currentMinutes = startMinutes
+
+  while (currentMinutes + totalDuration <= latestEnd) {
+    const schedule = calculateServiceSchedule(orderedServices, minutesToTime(currentMinutes), bufferMinutes)
+    const isValid = validateScheduleSlot(schedule, orderedServices, staffSchedulesByService, appointments, dayOfWeek, requestedDate, bufferMinutes)
+
+    if (isValid) {
+      validSlots.push({
+        startTime: minutesToTime(currentMinutes),
+        schedule: schedule.map((entry) => ({ ...entry, staffId: null }))
+      })
+    }
+
+    currentMinutes += 30
+  }
+
+  return validSlots
+}
+
+/**
  * Finds multi-day slots by distributing services across consecutive days.
  */
 function findMultiDaySlots(orderedServices, staffSchedulesByService, appointments, startDate, bufferMinutes, maxDays) {
   const slots = []
-
-  // Try distributing services across days: 1 service per day up to maxDays
   const distributions = getMultiDayDistributions(orderedServices, maxDays)
 
   for (const distribution of distributions) {
-    const daySlots = []
-    let allDaysValid = true
-
-    for (let dayOffset = 0; dayOffset < distribution.length; dayOffset++) {
-      const dayServices = distribution[dayOffset]
-      if (dayServices.length === 0) continue
-
-      const dayDate = addDays(startDate, dayOffset)
-      const slotsForDay = findSlotsForOrder({
-        orderedServices: dayServices,
-        staffSchedulesByService,
-        appointments,
-        date: dayDate,
-        bufferMinutes
-      })
-
-      if (slotsForDay.length === 0) {
-        allDaysValid = false
-        break
-      }
-
-      daySlots.push({ dayOffset, date: dayDate, slots: slotsForDay })
-    }
-
-    if (allDaysValid && daySlots.length > 0) {
-      // Use the first available slot from each day to build a multi-day schedule
-      const firstSlotPerDay = daySlots.map(ds => ds.slots[0])
-      const combinedSchedule = []
-
-      for (let i = 0; i < daySlots.length; i++) {
-        const daySchedule = firstSlotPerDay[i].schedule
-        for (const entry of daySchedule) {
-          combinedSchedule.push({
-            ...entry,
-            day: daySlots[i].dayOffset
-          })
-        }
-      }
-
-      slots.push({
-        startTime: firstSlotPerDay[0].startTime,
-        schedule: combinedSchedule
-      })
+    const daySlots = findDaySlotsForDistribution(distribution, staffSchedulesByService, appointments, startDate, bufferMinutes)
+    if (daySlots) {
+      slots.push(buildMultiDaySlot(daySlots))
     }
   }
 
   return slots
+}
+
+/**
+ * Attempts to find valid slots for each day in a distribution.
+ * Returns null if any day has no available slots.
+ */
+function findDaySlotsForDistribution(distribution, staffSchedulesByService, appointments, startDate, bufferMinutes) {
+  const daySlots = []
+
+  for (let dayOffset = 0; dayOffset < distribution.length; dayOffset++) {
+    const dayServices = distribution[dayOffset]
+    if (dayServices.length === 0) continue
+
+    const dayDate = addDays(startDate, dayOffset)
+    const slotsForDay = findSlotsForOrder({
+      orderedServices: dayServices,
+      staffSchedulesByService,
+      appointments,
+      date: dayDate,
+      bufferMinutes
+    })
+
+    if (slotsForDay.length === 0) return null
+    daySlots.push({ dayOffset, date: dayDate, slots: slotsForDay })
+  }
+
+  return daySlots.length > 0 ? daySlots : null
+}
+
+/**
+ * Builds a combined multi-day slot from per-day slot results.
+ */
+function buildMultiDaySlot(daySlots) {
+  const firstSlotPerDay = daySlots.map(ds => ds.slots[0])
+  const combinedSchedule = []
+
+  for (let i = 0; i < daySlots.length; i++) {
+    for (const entry of firstSlotPerDay[i].schedule) {
+      combinedSchedule.push({ ...entry, day: daySlots[i].dayOffset })
+    }
+  }
+
+  return { startTime: firstSlotPerDay[0].startTime, schedule: combinedSchedule }
 }
 
 /**
@@ -378,10 +374,8 @@ function getScanRange(orderedServices, staffSchedulesByService, dayOfWeek, reque
       if (!hours) continue
 
       hasAnyHours = true
-      const startMin = timeToMinutes(hours.start)
-      const endMin = timeToMinutes(hours.end)
-      if (startMin < earliestStart) earliestStart = startMin
-      if (endMin > latestEnd) latestEnd = endMin
+      earliestStart = Math.min(earliestStart, timeToMinutes(hours.start))
+      latestEnd = Math.max(latestEnd, timeToMinutes(hours.end))
     }
   }
 

@@ -4,6 +4,12 @@ import { useMemo } from 'react'
 import { groupAppointmentsByStaff, orderStaffColumns, generateTimeSlots } from '../../utils/calendar'
 import StaffColumn from './StaffColumn'
 
+function formatSlotLabel(hour, minute) {
+  const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour
+  const period = hour < 12 ? 'AM' : 'PM'
+  return `${displayHour}:${minute === 0 ? '00' : '30'} ${period}`
+}
+
 /**
  * MultiStaffView — Top-level component for the "Everyone" multi-staff day view.
  *
@@ -109,9 +115,7 @@ export default function MultiStaffView({
                 : '1px dashed rgba(0,0,0,0.06)',
             }}
           >
-            {slot.minute === 0
-              ? `${slot.hour === 0 ? 12 : slot.hour > 12 ? slot.hour - 12 : slot.hour}:00 ${slot.hour < 12 ? 'AM' : 'PM'}`
-              : `${slot.hour === 0 ? 12 : slot.hour > 12 ? slot.hour - 12 : slot.hour}:30 ${slot.hour < 12 ? 'AM' : 'PM'}`}
+            {formatSlotLabel(slot.hour, slot.minute)}
           </div>
         ))}
       </div>

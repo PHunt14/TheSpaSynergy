@@ -104,6 +104,22 @@ export default function BundlesManagement() {
     }
   }
 
+  const handleDayToggle = (day, checked) => {
+    setNewBundle(prev => ({
+      ...prev,
+      allowedDays: checked ? [...prev.allowedDays, day] : prev.allowedDays.filter(d => d !== day)
+    }))
+  }
+
+  const handleServiceToggle = (serviceId, checked) => {
+    setNewBundle(prev => ({
+      ...prev,
+      selectedServices: checked
+        ? [...prev.selectedServices, serviceId]
+        : prev.selectedServices.filter(id => id !== serviceId)
+    }))
+  }
+
   const handleSaveBundle = async (e) => {
     e.preventDefault()
     
@@ -609,12 +625,7 @@ export default function BundlesManagement() {
                       {ALL_DAYS.map(day => (
                         <label key={day} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', textTransform: 'capitalize' }}>
                           <input type="checkbox" checked={newBundle.allowedDays.includes(day)}
-                            onChange={(e) => {
-                              setNewBundle(prev => ({
-                                ...prev,
-                                allowedDays: e.target.checked ? [...prev.allowedDays, day] : prev.allowedDays.filter(d => d !== day)
-                              }))
-                            }}
+                            onChange={(e) => handleDayToggle(day, e.target.checked)}
                             style={{ width: '18px', height: '18px' }} />
                           {day}
                         </label>
@@ -652,14 +663,7 @@ export default function BundlesManagement() {
                           vendor={vendor}
                           services={services}
                           selectedServices={newBundle.selectedServices}
-                          onToggle={(serviceId, checked) => {
-                            setNewBundle(prev => ({
-                              ...prev,
-                              selectedServices: checked
-                                ? [...prev.selectedServices, serviceId]
-                                : prev.selectedServices.filter(id => id !== serviceId)
-                            }))
-                          }}
+                          onToggle={(serviceId, checked) => handleServiceToggle(serviceId, checked)}
                         />
                       ))}
                     </div>

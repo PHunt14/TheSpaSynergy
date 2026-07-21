@@ -23,8 +23,20 @@ export async function GET(request: Request) {
   }
 
   const serviceIds = serviceIdsParam.split(',');
+  const bundleId = searchParams.get('bundleId');
 
   try {
+    // --- Enforce bundle allowedDays constraint (server-side) ---
+    if (bundleId) {
+      const { data: bundleRecord } = await client.models.Bundle.get({ bundleId } as any);
+      if (bundleRecord?.allowedDays && (bundleRecord.allowedDays as string[]).length > 0) {
+        const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        const requestedDay = DAY_NAMES[new Date(date + 'T00:00:00').getDay()];
+        if (!(bundleRecord.allowedDays as string[]).includes(requestedDay)) {
+          return Response.json({ availableSlots: [], disallowedDay: true });
+        }
+      }
+    }
     // Fetch all services
     const servicePromises = serviceIds.map(id => client.models.Service.get({ serviceId: id }));
     const serviceResults = await Promise.all(servicePromises);
@@ -89,8 +101,10 @@ export async function GET(request: Request) {
       if (allowed.length > 0) {
         staffSchedulesByService[service.serviceId] = staffSchedules.filter(s => allowed.includes(s.visibleId));
       } else {
-        // null allowedStaff = all staff eligible
-        staffSchedulesByService[service.serviceId] = staffSchedules;
+        // null allowedStaff = all staff eligible (exclude resource calendars)
+        staffSchedulesByService[service.serviceId] = staffSchedules.filter(
+          (s: any) => !s.visibleId.startsWith('resource-')
+        );
       }
     }
 
