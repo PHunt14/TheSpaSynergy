@@ -70,7 +70,6 @@ export function findSlotsForOrder({ orderedServices, staffSchedulesByService, ap
   const startMinutes = earliestStart % 30 === 0 ? earliestStart : Math.ceil(earliestStart / 30) * 30
   return scanForValidSlots(startMinutes, latestEnd, totalDuration, orderedServices, staffSchedulesByService, appointments, dayOfWeek, requestedDate, bufferMinutes)
 }
-}
 
 /**
  * Computes available start times for a sequential bundle of services.
