@@ -71,6 +71,21 @@ export async function POST(request: Request) {
       return Response.json(blackoutResponseFields(blackout), { status: 403 });
     }
 
+    // --- Enforce bundle allowedDays constraint (server-side) ---
+    if (existingBundleId) {
+      const { data: bundleRecord } = await client.models.Bundle.get({ bundleId: existingBundleId } as any);
+      if (bundleRecord?.allowedDays && (bundleRecord.allowedDays as string[]).length > 0) {
+        const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        const requestedDay = DAY_NAMES[new Date(date + 'T00:00:00').getDay()];
+        if (!(bundleRecord.allowedDays as string[]).includes(requestedDay)) {
+          return Response.json(
+            { error: `This package is only available on: ${(bundleRecord.allowedDays as string[]).join(', ')}` },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
     // --- Determine service order ---
     const orderedServiceIds = serviceOrder && serviceOrder.length > 0 ? serviceOrder : serviceIds;
     const orderedServices = orderedServiceIds.map((id: string) =>

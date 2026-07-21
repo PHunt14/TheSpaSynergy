@@ -111,7 +111,7 @@ function BundleTimeContent() {
 
     // Use bundle-availability for multi-service, single-service availability otherwise
     const url = serviceIds.length > 1
-      ? `/api/bundle-availability?serviceIds=${serviceIds.join(',')}&date=${dateStr}`
+      ? `/api/bundle-availability?serviceIds=${serviceIds.join(',')}&date=${dateStr}${bundleId ? `&bundleId=${bundleId}` : ''}`
       : `/api/availability?serviceId=${serviceIds[0]}&date=${dateStr}`
 
     fetch(url)
