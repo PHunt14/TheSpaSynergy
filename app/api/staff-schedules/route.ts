@@ -1,44 +1,7 @@
-import { generateServerClientUsingCookies } from '@aws-amplify/adapter-nextjs/data';
-import { cookies } from 'next/headers';
-import type { Schema } from '../../../amplify/data/resource';
-import config from '../../../amplify_outputs.json' with { type: 'json' };
+import { client, getCurrentUser } from '@/lib/auth';
 import { randomUUID } from 'crypto';
-import { fetchAuthSession } from 'aws-amplify/auth/server';
-import { Amplify } from 'aws-amplify';
-import { createServerRunner } from '@aws-amplify/adapter-nextjs';
-
-Amplify.configure(config, { ssr: true });
-
-const { runWithAmplifyServerContext } = createServerRunner({ config });
-
-function getClient() {
-  return generateServerClientUsingCookies<Schema>({
-    config,
-    cookies,
-  });
-}
-
-const getCurrentUser = async () => {
-  try {
-    return await runWithAmplifyServerContext({
-      nextServerContext: { cookies },
-      operation: async (contextSpec) => {
-        const session = await fetchAuthSession(contextSpec);
-        const idToken = session.tokens?.idToken;
-        if (!idToken) return null;
-        return {
-          role: idToken.payload['custom:role'] as string || 'staff',
-          vendorId: idToken.payload['custom:vendorId'] as string
-        };
-      }
-    });
-  } catch {
-    return null;
-  }
-};
 
 export async function GET(request: Request) {
-  const client = getClient();
   const { searchParams } = new URL(request.url);
   const vendorId = searchParams.get('vendorId');
   const visibleId = searchParams.get('visibleId');
@@ -93,7 +56,6 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const client = getClient();
   try {
     const currentUser = await getCurrentUser();
     if (!currentUser) return Response.json({ error: 'Unauthorized' }, { status: 401 });
@@ -156,7 +118,6 @@ function buildScheduleUpdateData(visibleId: string, body: any): any {
 }
 
 export async function PATCH(request: Request) {
-  const client = getClient();
   try {
     const currentUser = await getCurrentUser();
     if (!currentUser) return Response.json({ error: 'Unauthorized' }, { status: 401 });
@@ -203,7 +164,6 @@ export async function PATCH(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const client = getClient();
   try {
     const currentUser = await getCurrentUser();
     if (!currentUser) return Response.json({ error: 'Unauthorized' }, { status: 401 });

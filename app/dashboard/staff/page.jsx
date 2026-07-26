@@ -57,7 +57,7 @@ export default function Staff() {
     try {
       const [session, vendorRes, staffRes] = await Promise.all([
         fetchAuthSession(),
-        fetch('/api/vendors').then(r => r.json()),
+        fetch('/api/providers').then(r => r.json()),
         fetch('/api/staff').then(r => r.json())
       ])
       const vendorId = session.tokens?.idToken?.payload['custom:vendorId']
@@ -70,7 +70,7 @@ export default function Staff() {
       setCurrentUserVendorId(vendorId)
       setCurrentUserEmail(email)
 
-      const list = vendorRes.vendors || []
+      const list = vendorRes.providers || vendorRes.vendors || []
       setVendors(list)
       setUsers(staffRes.users || [])
       setLoadingUsers(false)
@@ -83,6 +83,7 @@ export default function Staff() {
     } catch (error) {
       console.error('Error initializing staff:', error)
       setLoadingUsers(false)
+      setLoadingSchedules(false)
     }
   }
 
