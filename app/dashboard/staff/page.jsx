@@ -39,6 +39,8 @@ export default function Staff() {
   const [scheduleForm, setScheduleForm] = useState({ staffName: '', staffEmail: '', vendorId: '', schedule: emptySchedule(), autoAssignDays: [], smsAlertsEnabled: false, smsAlertPhone: '', emailAlertsEnabled: false })
   const [savingSchedule, setSavingSchedule] = useState(false)
 
+  const canManageSchedules = currentUserRole === 'admin' || currentUserRole === 'vendor' || currentUserRole === 'owner'
+
   useEffect(() => {
     initStaff()
   }, [])
@@ -60,8 +62,9 @@ export default function Staff() {
       ])
       const vendorId = session.tokens?.idToken?.payload['custom:vendorId']
       const rawRole = session.tokens?.idToken?.payload['custom:role'] || 'vendor'
-      // Map legacy roles to the two-role model
-      const role = rawRole === 'admin' ? 'admin' : 'staff'
+      // Map legacy roles to the two-role model for user management,
+      // but preserve vendor/owner for schedule management access
+      const role = rawRole === 'admin' ? 'admin' : (rawRole === 'owner' ? 'owner' : 'vendor')
       const email = session.tokens?.idToken?.payload['email']
       setCurrentUserRole(role)
       setCurrentUserVendorId(vendorId)
@@ -72,7 +75,7 @@ export default function Staff() {
       setUsers(staffRes.users || [])
       setLoadingUsers(false)
 
-      if (role === 'vendor' && vendorId) {
+      if ((role === 'vendor' || role === 'owner') && vendorId) {
         setSelectedVendor(vendorId)
       } else if (!selectedVendor && list.length > 0) {
         setSelectedVendor(vendorId || list[0].vendorId)
@@ -413,7 +416,7 @@ export default function Staff() {
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
           <h2>Staff Schedules</h2>
-          {editingSchedule === null && currentUserRole === 'admin' && (
+          {editingSchedule === null && canManageSchedules && (
             <button onClick={startNewSchedule} className="cta" style={{ marginTop: 0 }}>+ Add Staff Schedule</button>
           )}
         </div>
@@ -605,10 +608,10 @@ export default function Staff() {
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      {currentUserRole === 'admin' && (
+                      {canManageSchedules && (
                         <button onClick={() => startEditSchedule(s)} style={btnStyle('#2196F3')}>Edit</button>
                       )}
-                      {currentUserRole === 'admin' && (
+                      {canManageSchedules && (
                         <button onClick={() => deleteSchedule(s.visibleId, s.staffName)} style={btnStyle('#F44336')}>Delete</button>
                       )}
                     </div>
