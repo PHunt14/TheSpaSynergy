@@ -88,6 +88,7 @@ function MultiPaymentContent() {
         const services = appointments.map(apt => ({
           price: apt.service?.price || 0,
           vendorId: apt.vendorId,
+          staffId: apt.staffId || undefined,
           houseFeeEnabled: apt.service?.houseFeeEnabled || false,
           houseFeeAmount: apt.service?.houseFeeAmount || 0,
         }))
@@ -96,6 +97,13 @@ function MultiPaymentContent() {
           discountAmount: 0,
           houseVendorId: houseVendor?.vendorId || '',
         })
+        // Enrich bundlePayments with staffId where we can resolve it
+        const enrichedPayments = split.bundlePayments.map(bp => {
+          if (bp.isHouseFee) return bp
+          // Find the appointment that matches this vendor to get staffId
+          const matchingApt = appointments.find(a => a.vendorId === bp.vendorId)
+          return { ...bp, staffId: matchingApt?.staffId || undefined }
+        })
         payRes = await fetch('/api/payment', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -103,7 +111,7 @@ function MultiPaymentContent() {
             sourceId: tokenResult.token,
             amount: totalPrice,
             tipAmount: tipAmount > 0 ? tipAmount : undefined,
-            bundlePayments: split.bundlePayments,
+            bundlePayments: enrichedPayments,
           })
         })
       }

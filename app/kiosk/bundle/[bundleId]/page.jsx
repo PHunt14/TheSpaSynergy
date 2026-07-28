@@ -90,6 +90,13 @@ function BundlePaymentContent() {
         houseVendorId: houseVendor?.vendorId || '',
       })
 
+      // Enrich bundlePayments with staffId for staff-level credential resolution
+      const enrichedPayments = split.bundlePayments.map(bp => {
+        if (bp.isHouseFee) return bp
+        const matchingApt = appointments.find(a => a.vendorId === bp.vendorId)
+        return { ...bp, staffId: matchingApt?.staffId || undefined }
+      })
+
       const payRes = await fetch('/api/payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -97,7 +104,7 @@ function BundlePaymentContent() {
           sourceId: tokenResult.token,
           amount: bundlePrice,
           tipAmount: tipAmount > 0 ? tipAmount : undefined,
-          bundlePayments: split.bundlePayments,
+          bundlePayments: enrichedPayments,
           bundleId,
         })
       })

@@ -45,7 +45,9 @@ const arbService = (allowedStaff, providersRequired) => fc.record({
   providersRequired: fc.constant(providersRequired),
   allowedStaff: fc.constant(allowedStaff),
   price: fc.integer({ min: 50, max: 500 }),
-  paymentSplitRules: fc.constant({ type: 'equal', houseFeeEnabled: true, houseFeeAmount: 20 }),
+  houseFeeEnabled: fc.constant(true),
+  houseFeeAmount: fc.constant(20),
+  paymentSplitRules: fc.constant({ type: 'equal' }),
 })
 
 // Generate a valid scenario: N staff all available on Monday at a given time
@@ -372,7 +374,9 @@ describe('Feature: couples-multi-provider-booking, Property 12: Payment Split Co
           const service = {
             price,
             providersRequired,
-            paymentSplitRules: { type: 'equal', houseFeeEnabled: true, houseFeeAmount: actualHouseFee },
+            houseFeeEnabled: true,
+            houseFeeAmount: actualHouseFee,
+            paymentSplitRules: { type: 'equal' },
           }
 
           const assignedStaff = Array.from({ length: providersRequired }, (_, i) => ({

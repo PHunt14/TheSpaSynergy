@@ -134,7 +134,46 @@ function KioskContent() {
           {/* Customer groups */}
           {Object.entries(customerGroups).map(([customerName, custApts]) => {
             if (custApts.length === 1) {
-              return <AppointmentCard key={custApts[0].appointmentId} apt={custApts[0]} />
+              const apt = custApts[0]
+              // Multi-provider group appointment gets a special card
+              if (apt.isGroupPayment) {
+                return (
+                  <Link
+                    key={apt.appointmentId}
+                    href={`/kiosk/${apt.appointmentId}`}
+                    style={{
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      padding: '1.5rem', background: 'linear-gradient(135deg, #e8f4fd, #f0f8ff)', borderRadius: '12px',
+                      border: '2px solid var(--color-primary)', textDecoration: 'none', color: 'inherit',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--color-primary)', textTransform: 'uppercase', marginBottom: '0.25rem' }}>
+                        👥 {apt.groupSize} providers
+                      </div>
+                      <div style={{ fontSize: '1.1rem', fontWeight: '600', marginBottom: '0.25rem' }}>
+                        {apt.customer?.name || 'Walk-in'}
+                      </div>
+                      <div style={{ color: 'var(--color-text-light)', fontSize: '0.9rem' }}>
+                        {apt.service?.name} · {apt.service?.duration} min
+                      </div>
+                      <div style={{ color: 'var(--color-primary)', fontSize: '0.8rem', marginTop: '0.25rem' }}>
+                        {apt.groupStaff?.map(s => s.staffName || s.vendorName).join(', ')}
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '1.25rem', fontWeight: '700', color: 'var(--color-primary)' }}>
+                        ${apt.service?.price?.toFixed(2) || '0.00'}
+                      </div>
+                      <div style={{ color: 'var(--color-text-light)', fontSize: '0.85rem' }}>
+                        {formatTime(apt.dateTime)}
+                      </div>
+                    </div>
+                  </Link>
+                )
+              }
+              return <AppointmentCard key={apt.appointmentId} apt={apt} />
             }
 
             const totalPrice = custApts.reduce((sum, apt) => sum + (apt.service?.price || 0), 0)

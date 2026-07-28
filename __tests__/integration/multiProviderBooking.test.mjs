@@ -25,7 +25,9 @@ const couplesService = {
   price: 200,
   providersRequired: 2,
   allowedStaff: ['staff-alice', 'staff-bob', 'staff-carol'],
-  paymentSplitRules: { type: 'equal', houseFeeEnabled: true, houseFeeAmount: 40 },
+  houseFeeEnabled: true,
+  houseFeeAmount: 40,
+  paymentSplitRules: { type: 'equal' },
 }
 
 const staffSchedules = [
@@ -204,7 +206,9 @@ describe('Multi-Provider Booking Flow Integration', () => {
   test('payment split with percentage rules', () => {
     const percentageService = {
       ...couplesService,
-      paymentSplitRules: { type: 'percentage', houseFeeEnabled: true, houseFeeAmount: 30, percentages: [60, 40] },
+      houseFeeEnabled: true,
+      houseFeeAmount: 30,
+      paymentSplitRules: { type: 'percentage', percentages: [60, 40] },
     }
 
     const assigned = [

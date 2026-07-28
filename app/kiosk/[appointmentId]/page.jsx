@@ -66,17 +66,45 @@ function PaymentContent() {
         return
       }
 
-      const payRes = await fetch('/api/payment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sourceId: tokenResult.token,
-          amount: appointment.service.price,
-          tipAmount: tipAmount > 0 ? tipAmount : undefined,
-          vendorId: appointment.vendorId,
-          staffId: appointment.staffId || undefined,
+      let payRes
+
+      // Multi-provider group payment (e.g., couples head bath)
+      if (appointment.isGroupPayment && appointment.groupId) {
+        payRes = await fetch('/api/payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sourceId: tokenResult.token,
+            amount: appointment.service.price,
+            tipAmount: tipAmount > 0 ? tipAmount : undefined,
+            multiProvider: true,
+            paymentSplit: {
+              serviceId: appointment.serviceId,
+              assignedStaff: appointment.groupStaff.map(s => ({
+                staffId: s.staffId,
+                vendorId: s.vendorId,
+                staffName: s.staffName,
+              })),
+              groupId: appointment.groupId,
+            },
+          })
         })
-      })
+      } else {
+        // Single provider payment
+        payRes = await fetch('/api/payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sourceId: tokenResult.token,
+            amount: appointment.service.price,
+            tipAmount: tipAmount > 0 ? tipAmount : undefined,
+            vendorId: appointment.vendorId,
+            staffId: appointment.staffId || undefined,
+            serviceIds: [appointment.serviceId],
+          })
+        })
+      }
+
       const payData = await payRes.json()
 
       if (!payData.success) {
@@ -85,18 +113,28 @@ function PaymentContent() {
         return
       }
 
-      await fetch('/api/appointments', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          appointmentId,
-          paymentId: payData.paymentId,
-          paymentStatus: 'paid',
-          paymentAmount: appointment.service.price,
-          tipAmount: tipAmount > 0 ? tipAmount : undefined,
-          status: 'confirmed',
+      // For group payments, all appointments are already marked paid by the API.
+      // For single payments, update the appointment record.
+      if (!appointment.isGroupPayment) {
+        await fetch('/api/appointments', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            appointmentId,
+            paymentId: payData.paymentId,
+            paymentStatus: 'paid',
+            paymentAmount: appointment.service.price,
+            tipAmount: tipAmount > 0 ? tipAmount : undefined,
+            status: 'confirmed',
+            paymentRaw: JSON.stringify({
+              houseFee: payData.housePaymentId ? { paymentId: payData.housePaymentId, amount: payData.houseFeeAmount } : null,
+              staffPayments: [{ staffId: appointment.staffId, paymentId: payData.paymentId, amount: payData.staffAmount || appointment.service.price }],
+              tipAmount: tipAmount || 0,
+              processedAt: new Date().toISOString(),
+            }),
+          })
         })
-      })
+      }
 
       setPaid(true)
     } catch (err) {
@@ -145,11 +183,23 @@ function PaymentContent() {
           <span>{appointment.service?.name} ({appointment.service?.duration} min)</span>
           <span style={{ fontWeight: '600' }}>${appointment.service?.price?.toFixed(2)}</span>
         </div>
+        {appointment.isGroupPayment && (
+          <div style={{ background: '#f0f8ff', borderRadius: '8px', padding: '0.75rem', margin: '0.75rem 0', border: '1px solid #cce5ff' }}>
+            <div style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--color-primary)', marginBottom: '0.5rem' }}>
+              👥 Multi-provider service ({appointment.groupSize} staff)
+            </div>
+            {appointment.groupStaff?.map((s, i) => (
+              <div key={i} style={{ fontSize: '0.85rem', color: 'var(--color-text-light)' }}>
+                {s.staffName || s.staffId} — {s.vendorName}
+              </div>
+            ))}
+          </div>
+        )}
         <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: '0.75rem', marginTop: '0.75rem' }}>
           <p style={{ margin: '0.25rem 0' }}><strong>Customer:</strong> {appointment.customer?.name}</p>
           <p style={{ margin: '0.25rem 0' }}><strong>Time:</strong> {formatTime(appointment.dateTime)}</p>
           <p style={{ margin: '0.25rem 0' }}><strong>Vendor:</strong> {appointment.vendorName}</p>
-          {appointment.staffName && <p style={{ margin: '0.25rem 0' }}><strong>With:</strong> {appointment.staffName}</p>}
+          {appointment.staffName && !appointment.isGroupPayment && <p style={{ margin: '0.25rem 0' }}><strong>With:</strong> {appointment.staffName}</p>}
         </div>
       </div>
 
