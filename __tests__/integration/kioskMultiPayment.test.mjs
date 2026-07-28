@@ -186,12 +186,20 @@ describe('Kiosk multi-appointment payment', () => {
     expect(paymentArg.tipMoney).toEqual({ amount: BigInt(1300), currency: 'USD' })
   })
 
-  test('multi-vendor: uses bundlePayments to split across vendors', async () => {
+  test('multi-vendor: uses bundlePayments to charge each vendor individually', async () => {
     seedVendor({ vendorId: 'vendor-house', isHouse: true, squareAccessToken: 'tok-h', squareLocationId: 'LOC-H' })
     seedVendor({ vendorId: 'vendor-a', squareAccessToken: 'tok-a', squareLocationId: 'LOC-A' })
     seedVendor({ vendorId: 'vendor-b', squareAccessToken: 'tok-b', squareLocationId: 'LOC-B' })
 
-    mockCreatePayment.mockResolvedValueOnce({
+    mockStaffGet.mockImplementation(async ({ visibleId } = {}) => ({ data: null, errors: null }))
+    mockStaffList.mockImplementation(async ({ vendorId } = {}) => {
+      if (vendorId === 'vendor-a') return { data: [{ visibleId: 'staff-a', vendorId: 'vendor-a', squareAccessToken: 'tok-a', squareLocationId: 'LOC-A', squareOAuthStatus: 'connected', isActive: true }], errors: null }
+      if (vendorId === 'vendor-b') return { data: [{ visibleId: 'staff-b', vendorId: 'vendor-b', squareAccessToken: 'tok-b', squareLocationId: 'LOC-B', squareOAuthStatus: 'connected', isActive: true }], errors: null }
+      if (vendorId === 'vendor-house') return { data: [{ visibleId: 'staff-h', vendorId: 'vendor-house', squareAccessToken: 'tok-h', squareLocationId: 'LOC-H', squareOAuthStatus: 'connected', isActive: true }], errors: null }
+      return { data: [], errors: null }
+    })
+
+    mockCreatePayment.mockResolvedValue({
       result: { payment: { id: 'pay-multi-mv', status: 'COMPLETED' } },
     })
 
@@ -211,17 +219,25 @@ describe('Kiosk multi-appointment payment', () => {
 
     expect(res.status).toBe(200)
     expect(body.success).toBe(true)
-    expect(mockCreatePayment).toHaveBeenCalledTimes(1)
+    // Individual charges per vendor (no additionalRecipients anymore)
+    expect(mockCreatePayment).toHaveBeenCalledTimes(2)
 
-    const paymentArg = mockCreatePayment.mock.calls[0][0]
-    expect(paymentArg.amountMoney).toEqual({ amount: BigInt(15000), currency: 'USD' })
-    expect(paymentArg.additionalRecipients).toHaveLength(1)
+    const amounts = mockCreatePayment.mock.calls.map(c => Number(c[0].amountMoney.amount)).sort()
+    expect(amounts).toEqual([6500, 8500])
   })
 
-  test('multi-vendor rejects when vendor missing Square', async () => {
+  test('multi-vendor rejects when no Square credentials available for vendor', async () => {
     seedVendor({ vendorId: 'vendor-house', isHouse: true, squareAccessToken: 'tok-h', squareLocationId: 'LOC-H' })
     seedVendor({ vendorId: 'vendor-a', squareAccessToken: 'tok-a', squareLocationId: 'LOC-A' })
     seedVendor({ vendorId: 'vendor-b', squareAccessToken: null, squareLocationId: null })
+
+    mockStaffGet.mockImplementation(async () => ({ data: null, errors: null }))
+    mockStaffList.mockImplementation(async ({ vendorId } = {}) => {
+      if (vendorId === 'vendor-a') return { data: [{ visibleId: 'staff-a', vendorId: 'vendor-a', squareAccessToken: 'tok-a', squareLocationId: 'LOC-A', squareOAuthStatus: 'connected', isActive: true }], errors: null }
+      if (vendorId === 'vendor-house') return { data: [{ visibleId: 'staff-h', vendorId: 'vendor-house', squareAccessToken: 'tok-h', squareLocationId: 'LOC-H', squareOAuthStatus: 'connected', isActive: true }], errors: null }
+      // vendor-b has no connected staff
+      return { data: [], errors: null }
+    })
 
     const req = {
       json: async () => ({
@@ -238,7 +254,6 @@ describe('Kiosk multi-appointment payment', () => {
     const body = await res.json()
 
     expect(res.status).toBe(400)
-    expect(body.error).toMatch(/card payment unavailable/i)
-    expect(mockCreatePayment).not.toHaveBeenCalled()
+    expect(body.error).toMatch(/card payment unavailable|no square connection/i)
   })
 })

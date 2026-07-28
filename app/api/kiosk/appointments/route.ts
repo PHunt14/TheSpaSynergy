@@ -38,9 +38,19 @@ export async function GET(request: Request) {
       apt.status !== 'cancelled' && !apt.paymentId && apt.paymentStatus !== 'paid'
     );
 
-    // If requesting a single appointment, filter to just that one
+    // If requesting a single appointment, filter to just that one.
+    // If it's part of a group, include all group members so the UI has full context.
     if (appointmentId) {
-      unpaid = unpaid.filter(apt => apt.appointmentId === appointmentId);
+      const target = unpaid.find(apt => apt.appointmentId === appointmentId);
+      if (target && (target as any).groupId) {
+        // Fetch all group members (including already-paid ones for display)
+        const groupId = (target as any).groupId;
+        unpaid = allAppointments.flat().filter(apt =>
+          apt.status !== 'cancelled' && (apt as any).groupId === groupId
+        );
+      } else {
+        unpaid = unpaid.filter(apt => apt.appointmentId === appointmentId);
+      }
     }
 
     // If requesting by bundleId, filter to all appointments in that bundle (paid or not)
@@ -74,6 +84,7 @@ export async function GET(request: Request) {
           serviceId: apt.serviceId,
           staffId: apt.staffId,
           bundleId: (apt as any).bundleId || null,
+          groupId: (apt as any).groupId || null,
           dateTime: apt.dateTime,
           status: apt.status,
           customer: { name: (customer as any)?.name || 'Walk-in' },
@@ -85,7 +96,41 @@ export async function GET(request: Request) {
 
     enriched.sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
 
-    return Response.json({ appointments: enriched });
+    // Collapse groupId-linked appointments into a single payable entry.
+    // Multi-provider services (e.g., couples head bath) create multiple calendar
+    // appointments sharing a groupId but only ONE payment should be collected.
+    const groupMap = new Map<string, typeof enriched>();
+    const ungrouped: typeof enriched = [];
+
+    enriched.forEach(apt => {
+      const gid = (apt as any).groupId;
+      if (gid) {
+        if (!groupMap.has(gid)) groupMap.set(gid, []);
+        groupMap.get(gid)!.push(apt);
+      } else {
+        ungrouped.push(apt);
+      }
+    });
+
+    const finalAppointments: any[] = [...ungrouped];
+
+    groupMap.forEach((groupApts, groupId) => {
+      // Expose the first appointment as the "payable" representative,
+      // enriched with group metadata so the UI knows it's a multi-provider service.
+      const primary = groupApts[0];
+      finalAppointments.push({
+        ...primary,
+        groupId,
+        isGroupPayment: true,
+        groupSize: groupApts.length,
+        groupStaff: groupApts.map(a => ({ staffId: a.staffId, staffName: a.staffName, vendorId: a.vendorId, vendorName: a.vendorName })),
+        groupAppointmentIds: groupApts.map(a => a.appointmentId),
+      });
+    });
+
+    finalAppointments.sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
+
+    return Response.json({ appointments: finalAppointments });
   } catch (error) {
     console.error('Kiosk appointments error:', error);
     return Response.json({ error: 'Failed to fetch appointments' }, { status: 500 });

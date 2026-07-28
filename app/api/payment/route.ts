@@ -540,10 +540,38 @@ async function processMultiProviderPayment(sourceId: string, totalAmount: number
   const dataClient = generateClient<Schema>();
 
   // paymentSplit contains: { serviceId, assignedStaff, groupId }
+  // assignedStaff: [{ staffId, vendorId, staffName }]
   const { serviceId, assignedStaff, groupId } = paymentSplit;
 
   if (!serviceId || !assignedStaff || !groupId) {
     return Response.json({ error: 'Missing multi-provider payment details' }, { status: 400 });
+  }
+
+  // Validate assignedStaff is an array with expected shape
+  if (!Array.isArray(assignedStaff) || assignedStaff.length === 0) {
+    return Response.json({ error: 'Invalid assignedStaff: must be a non-empty array' }, { status: 400 });
+  }
+  if (!assignedStaff.every((s: any) => s.staffId && typeof s.staffId === 'string')) {
+    return Response.json({ error: 'Invalid assignedStaff: each entry must have a staffId' }, { status: 400 });
+  }
+
+  // Verify the groupId exists and the assignedStaff matches actual appointments in the group
+  const { data: actualGroupApts } = await dataClient.models.Appointment.list({
+    filter: { groupId: { eq: groupId } },
+  });
+  if (!actualGroupApts || actualGroupApts.length === 0) {
+    return Response.json({ error: 'Group not found', details: `No appointments with groupId ${groupId}` }, { status: 404 });
+  }
+  const actualStaffIds = actualGroupApts.map((a: any) => a.staffId).filter(Boolean).sort();
+  const providedStaffIds = assignedStaff.map((s: any) => s.staffId).sort();
+  if (JSON.stringify(actualStaffIds) !== JSON.stringify(providedStaffIds)) {
+    return Response.json({ error: 'Staff assignment mismatch', details: 'Provided staff does not match appointments in this group' }, { status: 400 });
+  }
+
+  // Prevent double-charging: reject if any appointment in the group is already paid
+  const alreadyPaid = actualGroupApts.find((a: any) => a.paymentId || a.paymentStatus === 'paid');
+  if (alreadyPaid) {
+    return Response.json({ error: 'Group already paid', details: 'One or more appointments in this group have already been paid' }, { status: 409 });
   }
 
   // Fetch the service to get price and paymentSplitRules
@@ -552,7 +580,16 @@ async function processMultiProviderPayment(sourceId: string, totalAmount: number
     return Response.json({ error: 'Service not found' }, { status: 404 });
   }
 
-  // Get house vendor
+  // Validate the client-provided amount matches the service price (prevent amount manipulation)
+  const servicePrice = service.price as number;
+  if (Math.abs(totalAmount - servicePrice) > 0.01) {
+    return Response.json({
+      error: 'Amount mismatch',
+      details: `Client sent $${totalAmount} but service price is $${servicePrice}`,
+    }, { status: 400 });
+  }
+
+  // Get house vendor (for house fee routing)
   const { data: vendors } = await dataClient.models.Vendor.list();
   const houseVendor = (vendors || []).find((v: any) => v.isHouse);
 
@@ -567,57 +604,174 @@ async function processMultiProviderPayment(sourceId: string, totalAmount: number
     houseVendorId: houseVendor.vendorId,
   });
 
-  // Check that all vendors in the split have Square credentials
-  const vendorIds = [...new Set(split.providerShares.map((s: any) => s.vendorId))];
-  const vendorChecks = await Promise.all(
-    vendorIds.map(async (vid) => {
-      const { data: vendor } = await dataClient.models.Vendor.get({ vendorId: vid });
-      return { vendorId: vid, vendor };
-    })
-  );
+  // Resolve Square credentials for each staff member (staff-level, not vendor-level)
+  const staffCredentials: { staffId: string; vendorId: string; creds: { accessToken: string; locationId: string }; amount: number }[] = [];
 
-  const missingCredentials = vendorChecks.filter(
-    ({ vendor }) => !vendor?.squareAccessToken || !vendor?.squareLocationId
-  );
+  for (const share of split.providerShares) {
+    const { data: staff } = await dataClient.models.StaffSchedule.get({ visibleId: share.staffId });
+    if (!staff) {
+      return Response.json({
+        error: 'Staff member not found',
+        details: `No staff record for ${share.staffId}`,
+      }, { status: 404 });
+    }
 
-  if (missingCredentials.length > 0) {
-    return Response.json({
-      error: 'Card payment unavailable',
-      details: 'One or more providers have not connected Square. Please pay in person.',
-      vendors: missingCredentials.map(v => v.vendorId),
-    }, { status: 400 });
+    // Resolve credentials: staff's own Square first, then fallback to vendor
+    const staffCreds = await ensureFreshCredentials(
+      dataClient,
+      { accessToken: staff.squareAccessToken || '', locationId: staff.squareLocationId || '' },
+      staff.squareAccessToken && staff.squareLocationId && staff.squareOAuthStatus !== 'error' ? share.staffId : null,
+      share.vendorId
+    );
+
+    if (staffCreds.error || !staffCreds.accessToken || !staffCreds.locationId) {
+      // Staff doesn't have credentials — try vendor fallback
+      const { data: vendor } = await dataClient.models.Vendor.get({ vendorId: share.vendorId });
+      if (vendor?.squareAccessToken && vendor?.squareLocationId) {
+        staffCredentials.push({
+          staffId: share.staffId,
+          vendorId: share.vendorId,
+          creds: { accessToken: vendor.squareAccessToken, locationId: vendor.squareLocationId },
+          amount: share.amount,
+        });
+      } else {
+        return Response.json({
+          error: 'Card payment unavailable',
+          details: `Staff member "${staff.staffName || share.staffId}" has not connected Square. Please pay in person.`,
+        }, { status: 400 });
+      }
+    } else {
+      staffCredentials.push({
+        staffId: share.staffId,
+        vendorId: share.vendorId,
+        creds: { accessToken: staffCreds.accessToken, locationId: staffCreds.locationId },
+        amount: share.amount,
+      });
+    }
   }
 
-  // Build bundlePayments array from provider shares for processBundlePayment
-  const bundlePayments: any[] = [];
+  // Resolve house credentials for house fee
+  let housePaymentId: string | undefined;
+  const squareEnvironment = process.env.NEXT_PUBLIC_SQUARE_ENVIRONMENT === 'production'
+    ? Environment.Production
+    : Environment.Sandbox;
 
-  // Add house fee as a payment to the house vendor
   if (split.houseFee > 0) {
-    bundlePayments.push({
-      vendorId: houseVendor.vendorId,
-      amount: split.houseFee,
-      isHouseFee: true,
+    // Find house staff (any connected staff on the house vendor)
+    const { data: houseStaffList } = await (dataClient.models as any).StaffSchedule.listStaffScheduleByVendorId({ vendorId: houseVendor.vendorId });
+    const houseStaff = (houseStaffList || []).find((s: any) =>
+      s.isActive !== false && s.squareAccessToken && s.squareLocationId && s.squareOAuthStatus === 'connected'
+    );
+
+    const houseCreds = houseStaff
+      ? { accessToken: houseStaff.squareAccessToken, locationId: houseStaff.squareLocationId }
+      : houseVendor.squareAccessToken && houseVendor.squareLocationId
+        ? { accessToken: houseVendor.squareAccessToken, locationId: houseVendor.squareLocationId }
+        : null;
+
+    if (!houseCreds) {
+      return Response.json({
+        error: 'Card payment unavailable',
+        details: 'House account has not connected Square.',
+      }, { status: 400 });
+    }
+
+    // Refresh house credentials if needed
+    const freshHouseCreds = await ensureFreshCredentials(
+      dataClient,
+      houseCreds,
+      houseStaff?.visibleId || null,
+      houseVendor.vendorId
+    );
+    if (freshHouseCreds.error) {
+      return Response.json({ error: freshHouseCreds.error, details: freshHouseCreds.details }, { status: 400 });
+    }
+
+    // Charge house fee
+    const houseClient = new Client({
+      accessToken: freshHouseCreds.accessToken,
+      environment: squareEnvironment,
     });
+
+    try {
+      const { result: houseResult } = await houseClient.paymentsApi.createPayment({
+        sourceId,
+        idempotencyKey: randomUUID(),
+        amountMoney: {
+          amount: BigInt(Math.round(split.houseFee * 100)),
+          currency: 'USD',
+        },
+        locationId: freshHouseCreds.locationId,
+      });
+      housePaymentId = houseResult.payment?.id;
+    } catch (error: any) {
+      console.error('Square API error (multi-provider house fee):', JSON.stringify(error, null, 2));
+      const details = error?.errors?.[0]?.detail || error?.message || 'Unknown Square error';
+      return Response.json({
+        error: 'Payment processing failed',
+        details: `House fee payment failed: ${details}`,
+        paymentCompleted: false,
+      }, { status: 500 });
+    }
   }
 
-  // Add each provider's share
-  split.providerShares.forEach(({ vendorId, amount }: any) => {
-    bundlePayments.push({
-      vendorId,
-      amount,
-      isHouseFee: false,
+  // Charge each staff member's portion individually
+  const staffPaymentResults: { staffId: string; paymentId: string; amount: number }[] = [];
+
+  for (const entry of staffCredentials) {
+    const staffClient = new Client({
+      accessToken: entry.creds.accessToken,
+      environment: squareEnvironment,
     });
-  });
 
-  // Process via existing bundle payment infrastructure
-  const paymentResult = await processBundlePayment(sourceId, totalAmount, bundlePayments, tipAmount);
-  const paymentResponse = await paymentResult.json();
+    try {
+      const paymentRequest: any = {
+        sourceId,
+        idempotencyKey: randomUUID(),
+        amountMoney: {
+          amount: BigInt(Math.round(entry.amount * 100)),
+          currency: 'USD',
+        },
+        locationId: entry.creds.locationId,
+      };
 
-  if (!paymentResponse.success) {
-    return Response.json(paymentResponse, { status: 500 });
+      // Tip split equally among staff (goes to last staff if odd cents)
+      if (tipAmount > 0) {
+        const tipPerStaff = Math.floor((tipAmount / staffCredentials.length) * 100) / 100;
+        const isLast = entry === staffCredentials[staffCredentials.length - 1];
+        const thisTip = isLast
+          ? tipAmount - tipPerStaff * (staffCredentials.length - 1)
+          : tipPerStaff;
+        if (thisTip > 0) {
+          paymentRequest.tipMoney = {
+            amount: BigInt(Math.round(thisTip * 100)),
+            currency: 'USD',
+          };
+        }
+      }
+
+      const { result } = await staffClient.paymentsApi.createPayment(paymentRequest);
+      staffPaymentResults.push({
+        staffId: entry.staffId,
+        paymentId: result.payment?.id || '',
+        amount: entry.amount,
+      });
+    } catch (error: any) {
+      console.error(`Square API error (multi-provider staff ${entry.staffId}):`, JSON.stringify(error, null, 2));
+      const details = error?.errors?.[0]?.detail || error?.message || 'Unknown Square error';
+      return Response.json({
+        error: 'Payment processing failed',
+        details: `Payment to staff "${entry.staffId}" failed: ${details}. ${housePaymentId ? `House fee was already charged (ID: ${housePaymentId}).` : ''} ${staffPaymentResults.length > 0 ? `${staffPaymentResults.length} other staff payments succeeded.` : ''} Manual reconciliation may be required.`,
+        paymentCompleted: false,
+        housePaymentId,
+        completedStaffPayments: staffPaymentResults,
+      }, { status: 500 });
+    }
   }
 
-  // Record payment split details on each appointment in the group
+  // All charges successful — record payment details on each appointment in the group
+  const primaryPaymentId = staffPaymentResults[0]?.paymentId || housePaymentId || '';
+
   const { data: groupAppointments } = await dataClient.models.Appointment.list({
     filter: { groupId: { eq: groupId } },
   });
@@ -626,15 +780,15 @@ async function processMultiProviderPayment(sourceId: string, totalAmount: number
     await Promise.all(
       groupAppointments.map(async (appointment: any) => {
         // Find this appointment's share from the split
-        const share = split.providerShares.find(
-          (s: any) => s.staffId === appointment.staffId
+        const staffPayment = staffPaymentResults.find(
+          (sp) => sp.staffId === appointment.staffId
         );
-        const paymentAmount = share ? share.amount : 0;
+        const paymentAmount = staffPayment ? staffPayment.amount : split.houseFee;
 
         await dataClient.models.Appointment.update({
           appointmentId: appointment.appointmentId,
-          paymentId: paymentResponse.paymentId,
-          paymentStatus: paymentResponse.status,
+          paymentId: staffPayment?.paymentId || primaryPaymentId,
+          paymentStatus: 'paid',
           paymentAmount,
         } as any);
       })
@@ -643,8 +797,10 @@ async function processMultiProviderPayment(sourceId: string, totalAmount: number
 
   return Response.json({
     success: true,
-    paymentId: paymentResponse.paymentId,
-    status: paymentResponse.status,
+    paymentId: primaryPaymentId,
+    housePaymentId,
+    staffPayments: staffPaymentResults,
+    status: 'COMPLETED',
     splitDetails: split,
     groupId,
     tipAmount: tipAmount || 0,
@@ -726,128 +882,163 @@ async function processBundlePayment(sourceId: string, totalAmount: number, bundl
     return Response.json({ error: 'House vendor not configured' }, { status: 500 });
   }
 
-  // Consolidate payments by vendor (combine house fees and vendor portions)
-  const vendorPaymentMap = new Map<string, number>();
+  // Consolidate payments by staffId when available, otherwise by vendorId.
+  // Each entry in bundlePayments can have: { vendorId, staffId?, amount, isHouseFee? }
+  const paymentEntries: { vendorId: string; staffId?: string; amount: number; isHouseFee: boolean }[] = [];
   
-  bundlePayments.forEach(({ vendorId, amount }: any) => {
-    if (vendorPaymentMap.has(vendorId)) {
-      vendorPaymentMap.set(vendorId, vendorPaymentMap.get(vendorId)! + amount);
+  bundlePayments.forEach(({ vendorId, staffId, amount, isHouseFee }: any) => {
+    const key = isHouseFee ? '__house__' : (staffId || vendorId);
+    const existing = paymentEntries.find(e => 
+      isHouseFee ? e.isHouseFee : (!e.isHouseFee && (e.staffId || e.vendorId) === key)
+    );
+    if (existing) {
+      existing.amount += amount;
     } else {
-      vendorPaymentMap.set(vendorId, amount);
+      paymentEntries.push({ vendorId, staffId, amount, isHouseFee: !!isHouseFee });
     }
   });
 
-  const consolidatedPayments = Array.from(vendorPaymentMap.entries()).map(([vendorId, amount]) => ({
-    vendorId,
-    amount
-  }));
+  const squareEnvironment = process.env.NEXT_PUBLIC_SQUARE_ENVIRONMENT === 'production'
+    ? Environment.Production
+    : Environment.Sandbox;
 
-  // Validate all non-house vendors are connected to Square (access token AND location id)
-  const vendorChecks = await Promise.all(
-    consolidatedPayments
-      .filter(p => p.vendorId !== houseVendor.vendorId)
-      .map(async ({ vendorId }) => {
-        const { data: vendor } = await dataClient.models.Vendor.get({ vendorId });
-        return { vendorId, vendor };
-      })
-  );
+  const completedPayments: { vendorId: string; staffId?: string; paymentId: string; amount: number; isHouseFee: boolean }[] = [];
 
-  const missingVendors = vendorChecks.filter(
-    ({ vendor }) => !vendor?.squareAccessToken || !vendor?.squareLocationId
-  );
-  if (missingVendors.length > 0) {
-    return Response.json({
-      error: 'Card payment unavailable',
-      details: 'One or more vendors have not connected Square. Please pay in person.',
-      vendors: missingVendors.map(v => v.vendorId)
-    }, { status: 400 });
-  }
+  // Process house fee first
+  const houseEntry = paymentEntries.find(e => e.isHouseFee);
+  if (houseEntry && houseEntry.amount > 0) {
+    // Resolve house credentials (staff on house vendor, or vendor-level)
+    const { data: houseStaffList } = await (dataClient.models as any).StaffSchedule.listStaffScheduleByVendorId({ vendorId: houseVendor.vendorId });
+    const houseStaff = (houseStaffList || []).find((s: any) =>
+      s.isActive !== false && s.squareAccessToken && s.squareLocationId && s.squareOAuthStatus === 'connected'
+    );
 
-  // Determine primary recipient (house or first vendor)
-  const housePayment = consolidatedPayments.find(p => p.vendorId === houseVendor.vendorId);
-  const otherPayments = consolidatedPayments.filter(p => p.vendorId !== houseVendor.vendorId);
+    const houseCreds = houseStaff
+      ? { accessToken: houseStaff.squareAccessToken, locationId: houseStaff.squareLocationId }
+      : houseVendor.squareAccessToken && houseVendor.squareLocationId
+        ? { accessToken: houseVendor.squareAccessToken, locationId: houseVendor.squareLocationId }
+        : null;
 
-  let primaryVendor: any, primaryAmount: number, additionalRecipients: any[];
-
-  if (housePayment) {
-    // House gets paid first (uses platform credentials)
-    primaryVendor = houseVendor;
-    primaryAmount = housePayment.amount;
-    
-    // Other vendors as additional recipients
-    additionalRecipients = otherPayments.map(({ vendorId, amount }) => {
-      const vendor = vendorChecks.find(v => v.vendorId === vendorId)?.vendor;
-      return {
-        locationId: vendor?.squareLocationId,
-        amountMoney: {
-          amount: BigInt(Math.round(amount * 100)),
-          currency: 'USD'
-        },
-        description: 'Bundle service payment'
-      };
-    });
-  } else {
-    // No house fee - use first vendor as primary
-    primaryVendor = vendorChecks[0]?.vendor;
-    primaryAmount = otherPayments[0]?.amount || 0;
-    
-    additionalRecipients = otherPayments.slice(1).map(({ vendorId, amount }) => {
-      const vendor = vendorChecks.find(v => v.vendorId === vendorId)?.vendor;
-      return {
-        locationId: vendor?.squareLocationId,
-        amountMoney: {
-          amount: BigInt(Math.round(amount * 100)),
-          currency: 'USD'
-        },
-        description: 'Bundle service payment'
-      };
-    });
-  }
-
-  const client = new Client({
-    accessToken: primaryVendor?.squareAccessToken || process.env.SQUARE_ACCESS_TOKEN,
-    environment: process.env.NEXT_PUBLIC_SQUARE_ENVIRONMENT === 'production' 
-      ? Environment.Production 
-      : Environment.Sandbox
-  });
-
-  try {
-    const paymentRequest: any = {
-      sourceId,
-      idempotencyKey: randomUUID(),
-      amountMoney: {
-        amount: BigInt(Math.round(totalAmount * 100)),
-        currency: 'USD'
-      },
-      locationId: primaryVendor?.squareLocationId,
-      additionalRecipients: additionalRecipients.length > 0 ? additionalRecipients : undefined
-    };
-
-    // Include tip as a separate field so Square tracks it independently
-    if (tipAmount > 0) {
-      paymentRequest.tipMoney = {
-        amount: BigInt(Math.round(tipAmount * 100)),
-        currency: 'USD'
-      };
+    if (!houseCreds) {
+      return Response.json({
+        error: 'Card payment unavailable',
+        details: 'House account has not connected Square.',
+      }, { status: 400 });
     }
 
-    const { result } = await client.paymentsApi.createPayment(paymentRequest);
+    const freshHouseCreds = await ensureFreshCredentials(dataClient, houseCreds, houseStaff?.visibleId || null, houseVendor.vendorId);
+    if (freshHouseCreds.error) {
+      return Response.json({ error: freshHouseCreds.error, details: freshHouseCreds.details }, { status: 400 });
+    }
 
-    return Response.json({
-      success: true,
-      paymentId: result.payment?.id,
-      status: result.payment?.status,
-      splitPayments: consolidatedPayments,
-      tipAmount: tipAmount || 0,
-    });
-  } catch (error: any) {
-    // Square API error — don't mark as paid (Req 6.5)
-    console.error('Square API error (bundle):', JSON.stringify(error, null, 2));
-    const details = error?.errors?.[0]?.detail || error?.message || 'Unknown Square error';
-    return Response.json({
-      error: 'Payment processing failed',
-      details,
-      paymentCompleted: false,
-    }, { status: 500 });
+    const houseClient = new Client({ accessToken: freshHouseCreds.accessToken, environment: squareEnvironment });
+    try {
+      const { result } = await houseClient.paymentsApi.createPayment({
+        sourceId,
+        idempotencyKey: randomUUID(),
+        amountMoney: { amount: BigInt(Math.round(houseEntry.amount * 100)), currency: 'USD' },
+        locationId: freshHouseCreds.locationId,
+      });
+      completedPayments.push({
+        vendorId: houseVendor.vendorId,
+        paymentId: result.payment?.id || '',
+        amount: houseEntry.amount,
+        isHouseFee: true,
+      });
+    } catch (error: any) {
+      console.error('Square API error (bundle house fee):', JSON.stringify(error, null, 2));
+      const details = error?.errors?.[0]?.detail || error?.message || 'Unknown Square error';
+      return Response.json({ error: 'Payment processing failed', details: `House fee failed: ${details}`, paymentCompleted: false }, { status: 500 });
+    }
   }
+
+  // Process each non-house payment — resolve staff-level credentials
+  const staffEntries = paymentEntries.filter(e => !e.isHouseFee);
+
+  for (const entry of staffEntries) {
+    let creds: { accessToken: string; locationId: string } | null = null;
+
+    // Try staff credentials first
+    if (entry.staffId) {
+      const { data: staff } = await dataClient.models.StaffSchedule.get({ visibleId: entry.staffId });
+      if (staff?.squareAccessToken && staff?.squareLocationId && staff?.squareOAuthStatus !== 'error') {
+        const fresh = await ensureFreshCredentials(dataClient, { accessToken: staff.squareAccessToken, locationId: staff.squareLocationId }, entry.staffId, entry.vendorId);
+        if (!fresh.error) creds = fresh;
+      }
+    }
+
+    // Fall back to any connected staff on the vendor
+    if (!creds) {
+      const { data: vendorStaffList } = await (dataClient.models as any).StaffSchedule.listStaffScheduleByVendorId({ vendorId: entry.vendorId });
+      const connectedStaff = (vendorStaffList || []).find((s: any) =>
+        s.isActive !== false && s.squareAccessToken && s.squareLocationId && s.squareOAuthStatus === 'connected'
+      );
+      if (connectedStaff) {
+        const fresh = await ensureFreshCredentials(dataClient, { accessToken: connectedStaff.squareAccessToken, locationId: connectedStaff.squareLocationId }, connectedStaff.visibleId, entry.vendorId);
+        if (!fresh.error) creds = fresh;
+      }
+    }
+
+    // Last resort: vendor-level credentials
+    if (!creds) {
+      const { data: vendor } = await dataClient.models.Vendor.get({ vendorId: entry.vendorId });
+      if (vendor?.squareAccessToken && vendor?.squareLocationId) {
+        creds = { accessToken: vendor.squareAccessToken, locationId: vendor.squareLocationId };
+      }
+    }
+
+    if (!creds) {
+      return Response.json({
+        error: 'Card payment unavailable',
+        details: `No Square connection found for vendor "${entry.vendorId}". Please pay in person.`,
+        completedPayments,
+      }, { status: 400 });
+    }
+
+    const staffClient = new Client({ accessToken: creds.accessToken, environment: squareEnvironment });
+    try {
+      const paymentRequest: any = {
+        sourceId,
+        idempotencyKey: randomUUID(),
+        amountMoney: { amount: BigInt(Math.round(entry.amount * 100)), currency: 'USD' },
+        locationId: creds.locationId,
+      };
+
+      // Tip distributed among non-house recipients
+      if (tipAmount > 0 && staffEntries.length > 0) {
+        const tipPerEntry = Math.floor((tipAmount / staffEntries.length) * 100) / 100;
+        const isLast = entry === staffEntries[staffEntries.length - 1];
+        const thisTip = isLast ? tipAmount - tipPerEntry * (staffEntries.length - 1) : tipPerEntry;
+        if (thisTip > 0) {
+          paymentRequest.tipMoney = { amount: BigInt(Math.round(thisTip * 100)), currency: 'USD' };
+        }
+      }
+
+      const { result } = await staffClient.paymentsApi.createPayment(paymentRequest);
+      completedPayments.push({
+        vendorId: entry.vendorId,
+        staffId: entry.staffId,
+        paymentId: result.payment?.id || '',
+        amount: entry.amount,
+        isHouseFee: false,
+      });
+    } catch (error: any) {
+      console.error(`Square API error (bundle vendor ${entry.vendorId}):`, JSON.stringify(error, null, 2));
+      const details = error?.errors?.[0]?.detail || error?.message || 'Unknown Square error';
+      return Response.json({
+        error: 'Payment processing failed',
+        details: `Payment to "${entry.vendorId}" failed: ${details}. ${completedPayments.length > 0 ? `${completedPayments.length} payment(s) already processed. Manual reconciliation may be required.` : ''}`,
+        paymentCompleted: false,
+        completedPayments,
+      }, { status: 500 });
+    }
+  }
+
+  return Response.json({
+    success: true,
+    paymentId: completedPayments[0]?.paymentId || '',
+    status: 'COMPLETED',
+    splitPayments: completedPayments,
+    tipAmount: tipAmount || 0,
+  });
 }
