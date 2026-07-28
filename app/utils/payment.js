@@ -78,19 +78,22 @@ export function calculateVendorNet(price, houseFeeEnabled, houseFeeAmount) {
  *   - "equal" (default): remainder after house fee is split equally among providers.
  *   - "percentage": remainder is split according to the percentages array.
  *
+ * House fee comes from the service's standard `houseFeeEnabled` / `houseFeeAmount` fields
+ * (same as single-provider services — the house fee is a property of the service, not the split).
+ *
  * @param {Object} params
- * @param {Object} params.service - Service object with price, paymentSplitRules, providersRequired
+ * @param {Object} params.service - Service object with price, houseFeeEnabled, houseFeeAmount, paymentSplitRules
  * @param {Array}  params.assignedStaff - Array of { staffId, vendorId, staffName }
  * @param {string} params.houseVendorId - The vendor ID of the house
  * @returns {{ total: number, houseFee: number, providerShares: Array<{ vendorId: string, staffId: string, amount: number }> }}
  */
 export function calculateMultiProviderSplit({ service, assignedStaff, houseVendorId }) {
-  const { price, paymentSplitRules } = service;
+  const { price, paymentSplitRules, houseFeeEnabled, houseFeeAmount } = service;
   const rules = paymentSplitRules || {};
 
-  const houseFeeEnabled = rules.houseFeeEnabled === true;
-  const houseFeeAmount = houseFeeEnabled ? (rules.houseFeeAmount || 0) : 0;
-  const remainder = price - houseFeeAmount;
+  // House fee comes from the service's standard fields (single source of truth)
+  const effectiveHouseFee = (houseFeeEnabled && houseFeeAmount > 0) ? houseFeeAmount : 0;
+  const remainder = price - effectiveHouseFee;
 
   const splitType = rules.type || 'equal';
   let providerShares;
@@ -117,7 +120,7 @@ export function calculateMultiProviderSplit({ service, assignedStaff, houseVendo
 
   return {
     total: price,
-    houseFee: houseFeeAmount,
+    houseFee: effectiveHouseFee,
     providerShares,
   };
 }

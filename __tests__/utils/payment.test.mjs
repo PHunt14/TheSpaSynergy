@@ -178,7 +178,9 @@ describe('calculateMultiProviderSplit', () => {
     const service = {
       price: 200,
       providersRequired: 2,
-      paymentSplitRules: { type: 'equal', houseFeeEnabled: true, houseFeeAmount: 40 },
+      houseFeeEnabled: true,
+      houseFeeAmount: 40,
+      paymentSplitRules: { type: 'equal' },
     }
     const result = calculateMultiProviderSplit({
       service,
@@ -198,7 +200,9 @@ describe('calculateMultiProviderSplit', () => {
     const service = {
       price: 200,
       providersRequired: 2,
-      paymentSplitRules: { type: 'equal', houseFeeEnabled: false },
+      houseFeeEnabled: false,
+      houseFeeAmount: 0,
+      paymentSplitRules: { type: 'equal' },
     }
     const result = calculateMultiProviderSplit({
       service,
@@ -215,7 +219,9 @@ describe('calculateMultiProviderSplit', () => {
     const service = {
       price: 300,
       providersRequired: 2,
-      paymentSplitRules: { type: 'percentage', houseFeeEnabled: true, houseFeeAmount: 60, percentages: [60, 40] },
+      houseFeeEnabled: true,
+      houseFeeAmount: 60,
+      paymentSplitRules: { type: 'percentage', percentages: [60, 40] },
     }
     const result = calculateMultiProviderSplit({
       service,
@@ -233,7 +239,9 @@ describe('calculateMultiProviderSplit', () => {
     const service = {
       price: 250,
       providersRequired: 2,
-      paymentSplitRules: { type: 'equal', houseFeeEnabled: true, houseFeeAmount: 50 },
+      houseFeeEnabled: true,
+      houseFeeAmount: 50,
+      paymentSplitRules: { type: 'equal' },
     }
     const result = calculateMultiProviderSplit({
       service,
