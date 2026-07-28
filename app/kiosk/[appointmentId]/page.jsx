@@ -126,6 +126,12 @@ function PaymentContent() {
             paymentAmount: appointment.service.price,
             tipAmount: tipAmount > 0 ? tipAmount : undefined,
             status: 'confirmed',
+            paymentRaw: JSON.stringify({
+              houseFee: payData.housePaymentId ? { paymentId: payData.housePaymentId, amount: payData.houseFeeAmount } : null,
+              staffPayments: [{ staffId: appointment.staffId, paymentId: payData.paymentId, amount: payData.staffAmount || appointment.service.price }],
+              tipAmount: tipAmount || 0,
+              processedAt: new Date().toISOString(),
+            }),
           })
         })
       }

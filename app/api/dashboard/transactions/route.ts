@@ -37,7 +37,7 @@ const getCurrentUser = async () => {
  * GET /api/dashboard/transactions
  *
  * Returns all appointments (with payment details) for a date range.
- * Accessible to admin/owner roles. Vendor role sees only their own vendor's data.
+ * Accessible to all authenticated dashboard users. Vendor/owner roles see only their own vendor's data.
  *
  * Query params:
  *   - startDate (required): ISO date string for range start (e.g., "2026-07-28T00:00")
@@ -68,11 +68,8 @@ export async function GET(request: Request) {
     const activeVendors = (vendors || []).filter(v => v.isActive !== false);
     const vendorMap = new Map(activeVendors.map(v => [v.vendorId, v.name]));
 
-    // Determine which vendors to query based on user role
+    // Determine which vendors to query — all authenticated users see all vendors
     let vendorsToQuery = activeVendors;
-    if (currentUser.role === 'vendor' || currentUser.role === 'owner') {
-      vendorsToQuery = activeVendors.filter(v => v.vendorId === currentUser.vendorId);
-    }
 
     // Fetch appointments across all relevant vendors for the date range
     const allAppointments: any[] = [];
@@ -127,6 +124,10 @@ export async function GET(request: Request) {
     ]);
 
     // Enrich appointments
+    // For grouped appointments (multi-provider), each appointment represents one provider's share,
+    // NOT the full service price. The service price applies to the group as a whole.
+    const groupIds = [...new Set(filtered.map((a: any) => a.groupId).filter(Boolean))];
+
     const enriched = filtered.map((apt: any) => {
       const service = serviceMap[apt.serviceId] || null;
       const staff = staffMap[apt.staffId] || null;
@@ -135,13 +136,38 @@ export async function GET(request: Request) {
         try { customer = JSON.parse(customer); } catch {}
       }
 
+      // Determine the display amount for this appointment:
+      // - If it has a paymentAmount recorded, use that (it's the actual share charged)
+      // - If it's part of a group, calculate from service split rules
+      // - Otherwise show the service price
+      const isGrouped = !!apt.groupId;
+      const groupSize = isGrouped
+        ? filtered.filter((a: any) => a.groupId === apt.groupId).length
+        : 1;
+      const servicePrice = service?.price || 0;
+      const houseFeeEnabled = service?.houseFeeEnabled || false;
+      const houseFeeAmount = (houseFeeEnabled && service?.houseFeeAmount > 0) ? service.houseFeeAmount : 0;
+      
+      // For grouped appointments, provider share = (price - houseFee) / groupSize
+      const providerShare = isGrouped ? (servicePrice - houseFeeAmount) / groupSize : servicePrice;
+      const displayAmount = apt.paymentAmount ?? providerShare;
+
+      // Parse paymentRaw if available for full payment breakdown
+      let paymentRaw = null;
+      if (apt.paymentRaw) {
+        try { paymentRaw = typeof apt.paymentRaw === 'string' ? JSON.parse(apt.paymentRaw) : apt.paymentRaw; } catch {}
+      }
+
       return {
         appointmentId: apt.appointmentId,
         vendorId: apt.vendorId,
         vendorName: vendorMap.get(apt.vendorId) || 'Unknown',
         serviceId: apt.serviceId,
         serviceName: service?.name || 'Unknown Service',
-        servicePrice: service?.price || 0,
+        servicePrice,
+        houseFeeAmount,
+        providerShare,
+        displayAmount,
         staffId: apt.staffId,
         staffName: staff?.staffName || null,
         groupId: apt.groupId || null,
@@ -152,6 +178,7 @@ export async function GET(request: Request) {
         paymentId: apt.paymentId || null,
         paymentStatus: apt.paymentStatus || null,
         paymentAmount: apt.paymentAmount || null,
+        paymentRaw,
         createdAt: apt.createdAt,
         updatedAt: apt.updatedAt,
       };
@@ -160,17 +187,43 @@ export async function GET(request: Request) {
     // Sort by dateTime
     enriched.sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
 
-    // Summary stats
-    const totalAppointments = enriched.length;
-    const paidCount = enriched.filter(a => a.paymentId || a.paymentStatus === 'paid').length;
-    const unpaidCount = totalAppointments - paidCount;
-    const totalRevenue = enriched
-      .filter(a => a.paymentId || a.paymentStatus === 'paid')
-      .reduce((sum, a) => sum + (a.paymentAmount || a.servicePrice || 0), 0);
+    // Summary stats — avoid double-counting grouped appointments.
+    // For groups: count as 1 transaction, use service price once (not per-appointment).
+    const seenGroupIds = new Set<string>();
+    let totalTransactions = 0;
+    let paidCount = 0;
+    let unpaidCount = 0;
+    let totalRevenue = 0;
+
+    for (const apt of enriched) {
+      if (apt.groupId) {
+        if (seenGroupIds.has(apt.groupId)) continue; // already counted this group
+        seenGroupIds.add(apt.groupId);
+        const groupMembers = enriched.filter(a => a.groupId === apt.groupId);
+        const groupPaid = groupMembers.some(m => m.paymentId || m.paymentStatus === 'paid');
+        totalTransactions++;
+        if (groupPaid) {
+          paidCount++;
+          // Revenue = sum of actual paymentAmounts if available, else service price
+          const groupRevenue = groupMembers.reduce((sum, m) => sum + (m.paymentAmount || 0), 0);
+          totalRevenue += groupRevenue > 0 ? groupRevenue : apt.servicePrice;
+        } else {
+          unpaidCount++;
+        }
+      } else {
+        totalTransactions++;
+        if (apt.paymentId || apt.paymentStatus === 'paid') {
+          paidCount++;
+          totalRevenue += apt.paymentAmount || apt.servicePrice || 0;
+        } else {
+          unpaidCount++;
+        }
+      }
+    }
 
     return Response.json({
       transactions: enriched,
-      summary: { totalAppointments, paidCount, unpaidCount, totalRevenue },
+      summary: { totalAppointments: totalTransactions, paidCount, unpaidCount, totalRevenue },
     });
   } catch (error) {
     console.error('Transactions API error:', error);

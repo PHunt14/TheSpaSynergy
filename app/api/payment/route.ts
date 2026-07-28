@@ -536,6 +536,108 @@ async function ensureFreshCredentials(
 }
 
 
+/**
+ * Resolves Square credentials for the house vendor.
+ * Tries connected staff on the house vendor first, then the vendor-level credentials.
+ * Returns null if no credentials are available.
+ */
+async function resolveHouseSquareCredentials(
+  dataClient: any,
+  houseVendor: any
+): Promise<{ accessToken: string; locationId: string; staffId?: string } | null> {
+  const { data: houseStaffList } = await (dataClient.models as any).StaffSchedule.listStaffScheduleByVendorId({ vendorId: houseVendor.vendorId });
+  const houseStaff = (houseStaffList || []).find((s: any) =>
+    s.isActive !== false && s.squareAccessToken && s.squareLocationId && s.squareOAuthStatus === 'connected'
+  );
+
+  if (houseStaff) {
+    const fresh = await ensureFreshCredentials(dataClient, { accessToken: houseStaff.squareAccessToken, locationId: houseStaff.squareLocationId }, houseStaff.visibleId, houseVendor.vendorId);
+    if (!fresh.error && fresh.accessToken && fresh.locationId) {
+      return { accessToken: fresh.accessToken, locationId: fresh.locationId, staffId: houseStaff.visibleId };
+    }
+  }
+
+  if (houseVendor.squareAccessToken && houseVendor.squareLocationId) {
+    return { accessToken: houseVendor.squareAccessToken, locationId: houseVendor.squareLocationId };
+  }
+
+  return null;
+}
+
+/**
+ * Resolves Square credentials for a staff member, falling back to any connected staff on
+ * the vendor, then vendor-level credentials.
+ * Returns null if no credentials are available.
+ */
+async function resolveStaffSquareCredentials(
+  dataClient: any,
+  staffId: string | undefined,
+  vendorId: string
+): Promise<{ accessToken: string; locationId: string } | null> {
+  // Try the specific staff member first
+  if (staffId) {
+    const { data: staff } = await dataClient.models.StaffSchedule.get({ visibleId: staffId });
+    if (staff?.squareAccessToken && staff?.squareLocationId && staff?.squareOAuthStatus !== 'error') {
+      const fresh = await ensureFreshCredentials(dataClient, { accessToken: staff.squareAccessToken, locationId: staff.squareLocationId }, staffId, vendorId);
+      if (!fresh.error && fresh.accessToken && fresh.locationId) {
+        return { accessToken: fresh.accessToken, locationId: fresh.locationId };
+      }
+    }
+  }
+
+  // Fall back to any connected staff on the vendor
+  const { data: vendorStaffList } = await (dataClient.models as any).StaffSchedule.listStaffScheduleByVendorId({ vendorId });
+  const connectedStaff = (vendorStaffList || []).find((s: any) =>
+    s.isActive !== false && s.squareAccessToken && s.squareLocationId && s.squareOAuthStatus === 'connected'
+  );
+  if (connectedStaff) {
+    const fresh = await ensureFreshCredentials(dataClient, { accessToken: connectedStaff.squareAccessToken, locationId: connectedStaff.squareLocationId }, connectedStaff.visibleId, vendorId);
+    if (!fresh.error && fresh.accessToken && fresh.locationId) {
+      return { accessToken: fresh.accessToken, locationId: fresh.locationId };
+    }
+  }
+
+  // Last resort: vendor-level credentials
+  const { data: vendor } = await dataClient.models.Vendor.get({ vendorId });
+  if (vendor?.squareAccessToken && vendor?.squareLocationId) {
+    return { accessToken: vendor.squareAccessToken, locationId: vendor.squareLocationId };
+  }
+
+  return null;
+}
+
+/**
+ * Charges a Square account and returns the payment ID.
+ * Throws on failure.
+ */
+async function chargeSquare(
+  creds: { accessToken: string; locationId: string },
+  sourceId: string,
+  amountDollars: number,
+  tipDollars: number = 0
+): Promise<string> {
+  const squareEnvironment = process.env.NEXT_PUBLIC_SQUARE_ENVIRONMENT === 'production'
+    ? Environment.Production
+    : Environment.Sandbox;
+
+  const client = new Client({ accessToken: creds.accessToken, environment: squareEnvironment });
+
+  const paymentRequest: any = {
+    sourceId,
+    idempotencyKey: randomUUID(),
+    amountMoney: { amount: BigInt(Math.round(amountDollars * 100)), currency: 'USD' },
+    locationId: creds.locationId,
+  };
+
+  if (tipDollars > 0) {
+    paymentRequest.tipMoney = { amount: BigInt(Math.round(tipDollars * 100)), currency: 'USD' };
+  }
+
+  const { result } = await client.paymentsApi.createPayment(paymentRequest);
+  return result.payment?.id || '';
+}
+
+
 async function processMultiProviderPayment(sourceId: string, totalAmount: number, paymentSplit: any, tipAmount: number = 0) {
   const dataClient = generateClient<Schema>();
 
@@ -562,8 +664,8 @@ async function processMultiProviderPayment(sourceId: string, totalAmount: number
   if (!actualGroupApts || actualGroupApts.length === 0) {
     return Response.json({ error: 'Group not found', details: `No appointments with groupId ${groupId}` }, { status: 404 });
   }
-  const actualStaffIds = actualGroupApts.map((a: any) => a.staffId).filter(Boolean).sort();
-  const providedStaffIds = assignedStaff.map((s: any) => s.staffId).sort();
+  const actualStaffIds = actualGroupApts.map((a: any) => a.staffId).filter(Boolean).sort((a, b) => a.localeCompare(b));
+  const providedStaffIds = assignedStaff.map((s: any) => s.staffId).sort((a, b) => a.localeCompare(b));
   if (JSON.stringify(actualStaffIds) !== JSON.stringify(providedStaffIds)) {
     return Response.json({ error: 'Staff assignment mismatch', details: 'Provided staff does not match appointments in this group' }, { status: 400 });
   }
@@ -772,6 +874,15 @@ async function processMultiProviderPayment(sourceId: string, totalAmount: number
   // All charges successful — record payment details on each appointment in the group
   const primaryPaymentId = staffPaymentResults[0]?.paymentId || housePaymentId || '';
 
+  // Build the full payment breakdown for audit/tracking
+  const paymentRaw = {
+    houseFee: split.houseFee > 0 ? { paymentId: housePaymentId, amount: split.houseFee } : null,
+    staffPayments: staffPaymentResults.map(sp => ({ staffId: sp.staffId, paymentId: sp.paymentId, amount: sp.amount })),
+    totalCharged: split.houseFee + staffPaymentResults.reduce((sum, sp) => sum + sp.amount, 0),
+    tipAmount: tipAmount || 0,
+    processedAt: new Date().toISOString(),
+  };
+
   const { data: groupAppointments } = await dataClient.models.Appointment.list({
     filter: { groupId: { eq: groupId } },
   });
@@ -790,6 +901,7 @@ async function processMultiProviderPayment(sourceId: string, totalAmount: number
           paymentId: staffPayment?.paymentId || primaryPaymentId,
           paymentStatus: 'paid',
           paymentAmount,
+          paymentRaw: JSON.stringify(paymentRaw),
         } as any);
       })
     );
