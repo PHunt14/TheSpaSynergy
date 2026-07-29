@@ -66,10 +66,26 @@ export async function sendEmail(to: string, subject: string, htmlBody: string) {
 }
 
 export function formatDateTime(dateTime: string): string {
-  // Stored times are Eastern local (no timezone suffix) — append offset to prevent UTC interpretation
-  const dt = dateTime.includes('Z') || dateTime.includes('+') || dateTime.includes('-', 10)
-    ? dateTime
-    : dateTime + '-04:00' // Eastern Daylight Time offset
+  // Stored times are Eastern local (no timezone suffix).
+  // Dynamically determine EDT vs EST based on the actual date to avoid hardcoded offset errors.
+  if (dateTime.includes('Z') || dateTime.includes('+') || dateTime.includes('-', 10)) {
+    // Already has timezone info — format directly
+    return new Date(dateTime).toLocaleString('en-US', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+      hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York',
+    })
+  }
+
+  // No timezone suffix — treat as Eastern local time.
+  // Use a temporary date to determine whether the date falls in EDT or EST,
+  // then append the correct offset.
+  const tempDate = new Date(dateTime + 'Z') // parse as UTC temporarily
+  // Format in New York to get the offset indicator
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', timeZoneName: 'short' }).formatToParts(tempDate)
+  const tzAbbr = parts.find(p => p.type === 'timeZoneName')?.value || ''
+  const offset = tzAbbr.includes('DT') || tzAbbr === 'EDT' ? '-04:00' : '-05:00'
+
+  const dt = dateTime + offset
   return new Date(dt).toLocaleString('en-US', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
     hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York',

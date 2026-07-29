@@ -50,7 +50,7 @@ function BundleConfirmContent() {
   const [submitError, setSubmitError] = useState(null)
 
   // Customer form
-  const [formData, setFormData] = useState({ name: '', email: '', phone: '', smsOptIn: false })
+  const [formData, setFormData] = useState({ firstName: '', lastName: '', email: '', phone: '', smsOptIn: false })
 
   // Staff overrides: serviceId → staffId
   const [staffOverrides, setStaffOverrides] = useState({})
@@ -218,8 +218,12 @@ function BundleConfirmContent() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (submitting) return
-    if (!formData.name || !formData.email || !formData.phone) {
-      setSubmitError('Please fill in your contact information.')
+    if (!formData.firstName || !formData.lastName) {
+      setSubmitError('Please enter your first and last name.')
+      return
+    }
+    if (!formData.email && !formData.phone) {
+      setSubmitError('Please provide at least an email or phone number.')
       return
     }
 
@@ -257,7 +261,7 @@ function BundleConfirmContent() {
           date,
           startTime: time,
           serviceOrder: serviceIds,
-          customer: formData,
+          customer: { name: `${formData.firstName} ${formData.lastName}`.trim(), email: formData.email, phone: formData.phone, smsOptIn: formData.smsOptIn },
           staffOverrides: overridesToSend
         })
       })
@@ -549,30 +553,46 @@ function CustomerForm({ formData, setFormData }) {
   return (
     <section>
       <h2>Your Information</h2>
-      <div style={{ marginBottom: '1rem' }}>
-        <label style={{ display: 'block', marginBottom: '0.4rem' }}>Full Name *</label>
-        <input
-          type="text" required value={formData.name}
-          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-          style={inputStyle}
-        />
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+        <div>
+          <label style={{ display: 'block', marginBottom: '0.4rem' }}>First Name *</label>
+          <input
+            type="text" required value={formData.firstName}
+            onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+            style={inputStyle}
+          />
+        </div>
+        <div>
+          <label style={{ display: 'block', marginBottom: '0.4rem' }}>Last Name *</label>
+          <input
+            type="text" required value={formData.lastName}
+            onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+            style={inputStyle}
+          />
+        </div>
       </div>
       <div style={{ marginBottom: '1rem' }}>
-        <label style={{ display: 'block', marginBottom: '0.4rem' }}>Email *</label>
+        <label style={{ display: 'block', marginBottom: '0.4rem' }}>Email {!formData.phone ? '*' : ''}</label>
         <input
-          type="email" required value={formData.email}
+          type="email" value={formData.email}
+          required={!formData.phone}
           onChange={(e) => setFormData({ ...formData, email: e.target.value })}
           style={inputStyle}
         />
       </div>
       <div style={{ marginBottom: '1rem' }}>
-        <label style={{ display: 'block', marginBottom: '0.4rem' }}>Phone *</label>
+        <label style={{ display: 'block', marginBottom: '0.4rem' }}>Phone {!formData.email ? '*' : ''}</label>
         <input
-          type="tel" required value={formData.phone}
+          type="tel" value={formData.phone}
+          required={!formData.email}
           onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
           style={inputStyle}
         />
+        {!formData.email && !formData.phone && (
+          <p style={{ fontSize: '0.8rem', color: '#d32f2f', margin: '0.25rem 0 0' }}>Please provide at least an email or phone number</p>
+        )}
       </div>
+      {formData.phone && (
       <div style={{ marginBottom: '1rem' }}>
         <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', cursor: 'pointer' }}>
           <input
@@ -588,6 +608,7 @@ function CustomerForm({ formData, setFormData }) {
           </span>
         </label>
       </div>
+      )}
     </section>
   )
 }

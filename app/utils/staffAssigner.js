@@ -114,7 +114,11 @@ function hasConflict(staffId, appointments, time, duration, bufferMinutes) {
     const aptTime = extractTimeFromDateTime(apt.dateTime)
     const aptStart = timeToMinutes(aptTime)
     const customer = typeof apt.customer === 'string' ? JSON.parse(apt.customer) : apt.customer
-    const aptDuration = (customer?.isBlockedTime && customer?.duration) ? customer.duration : duration
+    // Use the existing appointment's actual duration: blocked time duration, customer-stored
+    // duration (from enriched/manual/bundle appointments), or fall back to new service duration
+    const aptDuration = (customer?.isBlockedTime && customer?.duration)
+      ? customer.duration
+      : (customer?.duration || duration)
     const aptEnd = aptStart + aptDuration + bufferMinutes
 
     return slotStart < aptEnd && slotEnd > aptStart

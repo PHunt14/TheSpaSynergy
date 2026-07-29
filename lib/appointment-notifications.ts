@@ -163,74 +163,6 @@ export async function sendStaffBookingNotification(appointment: any) {
   await Promise.all(notifications);
 }
 
-export async function sendBookingNotifications(appointment: any) {
-  const details = await resolveAppointmentDetails(appointment);
-  const customer = parseCustomer(appointment);
-  const withName = details.staffName ? details.staffName.split(' ')[0] : '';
-  const formattedDateTime = formatDateTime(appointment.dateTime);
-  const notifications: Promise<void>[] = [];
-
-  // Customer SMS
-  if (customer?.phone && customer?.smsOptIn) {
-    const withLine = withName ? `\nWith: ${withName}` : '';
-    const msg = `Your appointment with ${details.vendorName} has been booked!\n\nService: ${details.serviceName}${withLine}\nDate/Time: ${formattedDateTime}\n\nThe Spa Synergy\nReply STOP to opt out`;
-    notifications.push(sendSms(customer.phone, msg).catch(err => console.error('Customer SMS failed:', err)) as Promise<void>);
-  }
-
-  // Customer email
-  if (customer?.email || process.env.EMAIL_TEST_ADDRESS) {
-    const [serviceRes] = await Promise.all([client.models.Service.get({ serviceId: appointment.serviceId })]);
-    const { sendCustomerBookingEmail } = await import('@/lib/email');
-    notifications.push(sendCustomerBookingEmail({
-      to: customer.email || 'customer@placeholder.com',
-      serviceName: details.serviceName,
-      vendorName: details.vendorName,
-      dateTime: appointment.dateTime,
-      duration: serviceRes.data?.duration || 0,
-      price: serviceRes.data?.price || 0,
-      withName,
-    }).catch(err => console.error('Customer email failed:', err)));
-  }
-
-  // Vendor SMS (via send-sms endpoint)
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-  notifications.push(
-    fetch(`${appUrl}/api/send-sms`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ appointmentId: appointment.appointmentId, vendorId: appointment.vendorId })
-    }).then(() => {}).catch(err => console.error('Vendor SMS failed:', err))
-  );
-
-  // Vendor email
-  if (details.vendorEmail || process.env.EMAIL_TEST_ADDRESS) {
-    const { sendVendorBookingEmail } = await import('@/lib/email');
-    notifications.push(sendVendorBookingEmail({
-      to: details.vendorEmail || 'vendor@placeholder.com',
-      customerName: customer?.name, customerPhone: customer?.phone || '',
-      customerEmail: customer?.email || '', serviceName: details.serviceName, dateTime: appointment.dateTime,
-    }).catch(err => console.error('Vendor email failed:', err)));
-  }
-
-  // Staff notifications
-  const staffRecord = await resolveStaffForAppointment(appointment.vendorId, appointment.staffId, appointment.dateTime);
-  if (staffRecord) {
-    if (staffRecord.smsAlertsEnabled && staffRecord.smsAlertPhone) {
-      const staffMsg = `New Booking Alert!\n\nService: ${details.serviceName}\nCustomer: ${customer?.name}\nPhone: ${customer?.phone}\nDate/Time: ${formattedDateTime}\n\nThe Spa Synergy\nReply STOP to opt out`;
-      notifications.push(sendSms(staffRecord.smsAlertPhone, staffMsg).catch(err => console.error('Staff SMS failed:', err)) as Promise<void>);
-    }
-    if (staffRecord.emailAlertsEnabled && staffRecord.staffEmail) {
-      const { sendVendorBookingEmail } = await import('@/lib/email');
-      notifications.push(sendVendorBookingEmail({
-        to: staffRecord.staffEmail, customerName: customer?.name, customerPhone: customer?.phone || '',
-        customerEmail: customer?.email || '', serviceName: details.serviceName, dateTime: appointment.dateTime,
-      }).catch(err => console.error('Staff email failed:', err)));
-    }
-  }
-
-  await Promise.all(notifications);
-}
-
 function pushNotifications(
   notifications: Promise<void>[],
   params: NotificationParams,
@@ -268,8 +200,19 @@ export async function sendAppointmentNotifications(params: NotificationParams) {
 
   const formattedDateTime = dateTimeDisplay
     ? (() => {
-        const dt = dateTimeDisplay.includes('Z') || dateTimeDisplay.includes('+') || dateTimeDisplay.includes('-', 10)
-          ? dateTimeDisplay : dateTimeDisplay + '-04:00'
+        // Dynamically determine EDT vs EST based on the actual date
+        if (dateTimeDisplay.includes('Z') || dateTimeDisplay.includes('+') || dateTimeDisplay.includes('-', 10)) {
+          return new Date(dateTimeDisplay).toLocaleString('en-US', {
+            month: 'short', day: 'numeric', year: 'numeric',
+            hour: 'numeric', minute: '2-digit', hour12: true,
+            timeZone: 'America/New_York'
+          })
+        }
+        const tempDate = new Date(dateTimeDisplay + 'Z')
+        const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', timeZoneName: 'short' }).formatToParts(tempDate)
+        const tzAbbr = parts.find(p => p.type === 'timeZoneName')?.value || ''
+        const offset = tzAbbr.includes('DT') || tzAbbr === 'EDT' ? '-04:00' : '-05:00'
+        const dt = dateTimeDisplay + offset
         return new Date(dt).toLocaleString('en-US', {
           month: 'short', day: 'numeric', year: 'numeric',
           hour: 'numeric', minute: '2-digit', hour12: true,
