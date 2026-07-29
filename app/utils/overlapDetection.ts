@@ -203,3 +203,89 @@ export function detectConflict(
 
   return null;
 }
+
+/**
+ * High-level overlap check that queries appointments from the DB client and runs detectConflict.
+ * Used by confirm, reschedule, and other routes that need to verify a staff member's slot is free.
+ *
+ * @param amplifyClient - Amplify data client
+ * @param staffId - Staff visibleId to check
+ * @param dateTime - Proposed dateTime for the appointment
+ * @param durationMinutes - Duration of the appointment in minutes
+ * @param excludeAppointmentId - Optional appointment to exclude (e.g. the one being rescheduled)
+ * @param options.onlyConfirmed - If true, only check against confirmed appointments (used by confirm route)
+ * @param options.isVendorBooking - If true, treats as vendor booking (can be overridden)
+ * @returns ConflictResult or null
+ */
+export async function checkStaffConflict(
+  amplifyClient: any,
+  staffId: string,
+  dateTime: string,
+  durationMinutes: number,
+  excludeAppointmentId?: string,
+  options: { onlyConfirmed?: boolean; isVendorBooking?: boolean } = {}
+): Promise<ConflictResult | null> {
+  const date = extractDateFromDateTime(dateTime);
+
+  const { data: staffSchedule } = await amplifyClient.models.StaffSchedule.get({ visibleId: staffId });
+  if (!staffSchedule?.vendorId) return null;
+
+  const { data: vendor } = await amplifyClient.models.Vendor.get({ vendorId: staffSchedule.vendorId });
+  const bufferMinutes = (vendor?.bufferMinutes as number) ?? 15;
+
+  const { data: existingApts } = await amplifyClient.models.Appointment.listAppointmentByVendorIdAndDateTime({
+    vendorId: staffSchedule.vendorId,
+    dateTime: { beginsWith: date },
+  } as any);
+
+  if (!existingApts || existingApts.length === 0) return null;
+
+  // Optionally filter to only confirmed appointments
+  const appointments = options.onlyConfirmed
+    ? existingApts.filter((a: any) => a.status === 'confirmed')
+    : existingApts;
+
+  if (appointments.length === 0) return null;
+
+  // Build service duration map
+  const serviceIds = [...new Set(appointments.map((a: any) => a.serviceId).filter(Boolean))];
+  const serviceDurationMap: Record<string, number> = {};
+  await Promise.all(serviceIds.map(async (sid: string) => {
+    if (sid === 'blocked' || sid === 'manual') return;
+    const { data: svc } = await amplifyClient.models.Service.get({ serviceId: sid });
+    if (svc?.duration) serviceDurationMap[sid] = svc.duration as number;
+  }));
+
+  return detectConflict(
+    staffId,
+    dateTime,
+    durationMinutes,
+    bufferMinutes,
+    appointments,
+    serviceDurationMap,
+    excludeAppointmentId,
+    options.isVendorBooking || false
+  );
+}
+
+/**
+ * Resolves the effective duration of an appointment from its stored data.
+ * Checks customer JSON first, then falls back to service lookup.
+ */
+export async function resolveAppointmentDuration(
+  amplifyClient: any,
+  appointment: { serviceId?: string; customer?: any }
+): Promise<number> {
+  const customer = typeof appointment.customer === 'string'
+    ? (() => { try { return JSON.parse(appointment.customer); } catch { return {}; } })()
+    : (appointment.customer || {});
+
+  if (customer.duration) return customer.duration;
+
+  if (appointment.serviceId && appointment.serviceId !== 'blocked' && appointment.serviceId !== 'manual') {
+    const { data: svc } = await amplifyClient.models.Service.get({ serviceId: appointment.serviceId });
+    if (svc?.duration) return svc.duration as number;
+  }
+
+  return 60;
+}
