@@ -9,10 +9,23 @@ const emailWrapper = (content: string) => `
     <p style="color: #666; font-size: 12px; margin-top: 30px;">The Spa Synergy<br>Fort Ritchie, MD</p>
   </div>`;
 
-const formatDT = (dt: string) => new Date(dt).toLocaleString('en-US', {
-  weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-  hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York',
-});
+const formatDT = (dt: string) => {
+  // Dynamically determine EDT vs EST based on the actual date
+  if (dt.includes('Z') || dt.includes('+') || dt.includes('-', 10)) {
+    return new Date(dt).toLocaleString('en-US', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+      hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York',
+    });
+  }
+  const tempDate = new Date(dt + 'Z');
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', timeZoneName: 'short' }).formatToParts(tempDate);
+  const tzAbbr = parts.find(p => p.type === 'timeZoneName')?.value || '';
+  const offset = tzAbbr.includes('DT') || tzAbbr === 'EDT' ? '-04:00' : '-05:00';
+  return new Date(dt + offset).toLocaleString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+    hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York',
+  });
+};
 
 interface ManualApptContext {
   serviceName: string;
@@ -135,12 +148,13 @@ export async function POST(request: Request) {
     }
 
     // Overlap detection (Req 4.6): check before saving if a staffId is specified
+    let svcDuration = duration || 60;
+    if (serviceId && serviceId !== 'manual') {
+      const { data: svcData } = await client.models.Service.get({ serviceId });
+      if (svcData?.duration) svcDuration = svcData.duration as number;
+    }
+
     if (staffId && !confirmOverlap) {
-      let svcDuration = duration || 60;
-      if (serviceId && serviceId !== 'manual') {
-        const { data: svcData } = await client.models.Service.get({ serviceId });
-        if (svcData?.duration) svcDuration = svcData.duration as number;
-      }
       const overlap = await detectManualOverlap(staffId, dateTime, svcDuration, undefined);
       if (overlap) {
         return Response.json({
@@ -164,7 +178,7 @@ export async function POST(request: Request) {
 
         const { errors: createErrors } = await client.models.Appointment.create({
           appointmentId: aptId, vendorId: staffVendorId, serviceId: serviceId || 'manual', staffId: sid, groupId, dateTime,
-          customer: JSON.stringify({ name: customerName || 'Manual Entry', phone: customerPhone || '', email: customerEmail || '', notes: notes || '', isManual: true }),
+          customer: JSON.stringify({ name: customerName || 'Manual Entry', phone: customerPhone || '', email: customerEmail || '', notes: notes || '', isManual: true, duration: svcDuration }),
           status: 'confirmed', createdBy: createdBy || undefined, createdAt: new Date().toISOString(),
         } as any);
 
@@ -194,7 +208,7 @@ export async function POST(request: Request) {
 
     const { errors } = await client.models.Appointment.create({
       appointmentId, vendorId, serviceId: serviceId || 'manual', staffId: staffId || undefined, dateTime,
-      customer: JSON.stringify({ name: customerName || 'Manual Entry', phone: customerPhone || '', email: customerEmail || '', notes: notes || '', isManual: true }),
+      customer: JSON.stringify({ name: customerName || 'Manual Entry', phone: customerPhone || '', email: customerEmail || '', notes: notes || '', isManual: true, duration: svcDuration }),
       status: 'confirmed', createdBy: createdBy || undefined, createdAt: new Date().toISOString(),
     } as any);
 

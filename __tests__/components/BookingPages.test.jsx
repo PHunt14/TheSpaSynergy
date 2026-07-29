@@ -176,7 +176,8 @@ describe('Confirm Page (/booking/confirm)', () => {
   test('renders customer form fields', async () => {
     render(<ConfirmPage />)
     await waitFor(() => {
-      expect(screen.getByText('Full Name *')).toBeInTheDocument()
+      expect(screen.getByText('First Name *')).toBeInTheDocument()
+      expect(screen.getByText('Last Name *')).toBeInTheDocument()
       expect(screen.getByText('Email *')).toBeInTheDocument()
       expect(screen.getByText('Phone *')).toBeInTheDocument()
     })

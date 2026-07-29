@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { assignBundleStaff } from '../../../utils/bundleStaffAssigner.js';
 import { calculateBundlePrice, validateBundleServices } from '../../../utils/bundleDiscount.js';
 import { checkBookingBlackout, blackoutResponseFields } from '../../../utils/bookingBlackout';
+import { getCurrentUser } from '@/lib/auth';
 
 const client = generateServerClientUsingCookies<Schema>({
   config,
@@ -28,7 +29,12 @@ const client = generateServerClientUsingCookies<Schema>({
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { serviceIds, bundleId: existingBundleId, date, startTime, serviceOrder, customer, staffOverrides, createdBy, confirmOverlap } = body;
+    const { serviceIds, bundleId: existingBundleId, date, startTime, serviceOrder, customer, staffOverrides, createdBy: rawCreatedBy, confirmOverlap: rawConfirmOverlap } = body;
+
+    // Security: Only authenticated vendor/admin users can set createdBy or confirmOverlap.
+    const user = await getCurrentUser();
+    const createdBy = user ? rawCreatedBy : undefined;
+    const confirmOverlap = user ? rawConfirmOverlap : false;
 
     // Vendor/provider bookings include createdBy — they can override conflicts
     const isVendorBooking = !!createdBy;
@@ -289,6 +295,8 @@ export async function POST(request: Request) {
     for (const assignment of staffAssignments) {
       const appointmentId = randomUUID();
       const serviceDateTime = `${date}T${assignment.startTime}`;
+      const serviceForAssignment = orderedServices.find((s: any) => s.serviceId === assignment.serviceId);
+      const assignmentDuration = serviceForAssignment?.duration || 60;
 
       const { errors } = await client.models.Appointment.create({
         appointmentId,
@@ -297,7 +305,7 @@ export async function POST(request: Request) {
         staffId: assignment.staffId,
         bundleId,
         dateTime: serviceDateTime,
-        customer: JSON.stringify(customer),
+        customer: JSON.stringify({ ...customer, duration: assignmentDuration }),
         status: 'pending-confirmation',
         createdBy: createdBy || undefined,
         createdAt: new Date().toISOString(),

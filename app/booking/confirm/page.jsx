@@ -72,7 +72,7 @@ function ConfirmPageContent() {
   const scheduleParam = params.get('schedule')
   const bundleSchedule = scheduleParam ? JSON.parse(decodeURIComponent(scheduleParam)) : null
 
-  const [formData, setFormData] = useState({ name: '', email: '', phone: '', smsOptIn: false, notes: '' })
+  const [formData, setFormData] = useState({ firstName: '', lastName: '', email: '', phone: '', smsOptIn: false, notes: '' })
   const [loading, setLoading] = useState(false)
   const [card, setCard] = useState(null)
   const [applePay, setApplePay] = useState(null)
@@ -263,8 +263,11 @@ function ConfirmPageContent() {
    * 3. Updates appointments with payment info
    * 4. Navigates to success page
    */
+  const getCustomerData = () => ({ name: `${formData.firstName} ${formData.lastName}`.trim(), email: formData.email, phone: formData.phone, smsOptIn: formData.smsOptIn, notes: formData.notes })
+
   const handleAnyAvailablePayment = async (token) => {
     const dateTimeISO = buildDateTimeISO()
+    const customerData = getCustomerData()
     const isResource = allServiceDetails.every(s => s.resourceType === 'sauna' || s.resourceType === 'room')
     const status = isResource ? 'confirmed' : 'pending-confirmation'
 
@@ -278,7 +281,7 @@ function ConfirmPageContent() {
             serviceId: svc.serviceId,
             bundleId: bundleId || undefined,
             dateTime: dateTimeISO,
-            customer: formData,
+            customer: customerData,
             status,
             ...(people ? { people } : {}),
             ...(svcQty > 1 ? { quantity: svcQty, quantityMode } : {})
@@ -333,6 +336,7 @@ function ConfirmPageContent() {
 
   const createAppointments = async (paymentId, pMethod, assignedStaffIdOverride) => {
     const dateTimeISO = buildDateTimeISO()
+    const customerData = getCustomerData()
     const isResource = allServiceDetails.every(s => s.resourceType === 'sauna' || s.resourceType === 'room')
     const status = isResource ? 'confirmed' : 'pending-confirmation'
     const isSauna = allServiceDetails.every(s => s.resourceType === 'sauna')
@@ -347,7 +351,7 @@ function ConfirmPageContent() {
           vendorId: allServiceDetails[0]?.vendorId || vendor,
           serviceId: allServiceDetails[0]?.serviceId || service,
           dateTime: dateTimeISO,
-          customer: formData,
+          customer: customerData,
           status,
           multiProvider: true,
           providersRequired: allServiceDetails[0]?.providersRequired || 2,
@@ -395,7 +399,7 @@ function ConfirmPageContent() {
             staffId: svc.resourceType === 'sauna' ? 'resource-sauna' : (effectiveStaffId || undefined),
             bundleId: bundleId || undefined,
             dateTime: svcDateTime,
-            customer: formData,
+            customer: customerData,
             status,
             paymentId,
             ...(paymentId ? { paymentStatus: 'paid', paymentAmount: totalPrice } : {}),
@@ -420,7 +424,7 @@ function ConfirmPageContent() {
           status: 'pending-confirmation',
           vendorConfirmations: confirmations,
           appointmentIds,
-          customer: formData,
+          customer: customerData,
           dateTime: dateTimeISO
         })
       })
@@ -453,8 +457,8 @@ function ConfirmPageContent() {
   }
 
   const handleWalletPay = (type) => async () => {
-    if (!formData.name || !formData.email || !formData.phone) {
-      alert('Please fill in your contact information first')
+    if (!formData.firstName || !formData.lastName || (!formData.email && !formData.phone)) {
+      alert('Please fill in your name and at least one contact method (email or phone)')
       return
     }
     setLoading(true)
@@ -483,6 +487,8 @@ function ConfirmPageContent() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (allServiceDetails.length === 0) return
+    if (!formData.firstName || !formData.lastName) { alert('Please enter your first and last name'); return }
+    if (!formData.email && !formData.phone) { alert('Please provide at least an email or phone number'); return }
     setLoading(true)
 
     try {
@@ -572,27 +578,41 @@ function ConfirmPageContent() {
       )}
 
       <form onSubmit={handleSubmit} style={{ marginTop: '2rem' }}>
-        <div style={{ marginBottom: '1rem' }}>
-          <label style={{ display: 'block', marginBottom: '0.5rem' }}>Full Name *</label>
-          <input type="text" required value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+          <div>
+            <label style={{ display: 'block', marginBottom: '0.5rem' }}>First Name *</label>
+            <input type="text" required value={formData.firstName}
+              onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+              style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />
+          </div>
+          <div>
+            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Last Name *</label>
+            <input type="text" required value={formData.lastName}
+              onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+              style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />
+          </div>
         </div>
 
         <div style={{ marginBottom: '1rem' }}>
-          <label style={{ display: 'block', marginBottom: '0.5rem' }}>Email *</label>
-          <input type="email" required value={formData.email}
+          <label style={{ display: 'block', marginBottom: '0.5rem' }}>Email {!formData.phone ? '*' : ''}</label>
+          <input type="email" value={formData.email}
+            required={!formData.phone}
             onChange={(e) => setFormData({ ...formData, email: e.target.value })}
             style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />
         </div>
 
         <div style={{ marginBottom: '1rem' }}>
-          <label style={{ display: 'block', marginBottom: '0.5rem' }}>Phone *</label>
-          <input type="tel" required value={formData.phone}
+          <label style={{ display: 'block', marginBottom: '0.5rem' }}>Phone {!formData.email ? '*' : ''}</label>
+          <input type="tel" value={formData.phone}
+            required={!formData.email}
             onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
             style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />
+          {!formData.email && !formData.phone && (
+            <p style={{ fontSize: '0.8rem', color: '#d32f2f', margin: '0.25rem 0 0' }}>Please provide at least an email or phone number</p>
+          )}
         </div>
 
+        {formData.phone && (
         <div style={{ marginBottom: '1rem' }}>
           <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', cursor: 'pointer' }}>
             <input type="checkbox" checked={formData.smsOptIn}
@@ -603,6 +623,7 @@ function ConfirmPageContent() {
             </span>
           </label>
         </div>
+        )}
 
         <div style={{ marginBottom: '1rem' }}>
           <label style={{ display: 'block', marginBottom: '0.5rem' }}>Notes (optional)</label>

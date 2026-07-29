@@ -6,6 +6,7 @@ import { randomUUID } from 'crypto';
 import { resolveAppointmentDetails, sendAppointmentNotifications, sendStaffBookingNotification } from '@/lib/appointment-notifications';
 import { assignStaff } from '@/app/utils/staffAssigner.js';
 import { detectConflict, extractDateFromDateTime } from '@/app/utils/overlapDetection';
+import { getCurrentUser } from '@/lib/auth';
 
 const client = generateServerClientUsingCookies<Schema>({
   config,
@@ -107,11 +108,17 @@ export async function PATCH(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { serviceId, bundleId, dateTime, customer, status, paymentId, paymentStatus, paymentAmount, staffId, createdBy, confirmOverlap } = body;
+    const { serviceId, bundleId, dateTime, customer, status, paymentId, paymentStatus, paymentAmount, staffId, createdBy: rawCreatedBy, confirmOverlap: rawConfirmOverlap } = body;
 
     if (!serviceId || !dateTime || !customer) {
       return Response.json({ error: 'Missing required fields' }, { status: 400 });
     }
+
+    // Security: Only authenticated vendor/admin users can set createdBy or confirmOverlap.
+    // This prevents malicious clients from sending createdBy to bypass double-booking protection.
+    const user = await getCurrentUser();
+    const createdBy = user ? rawCreatedBy : undefined;
+    const confirmOverlap = user ? rawConfirmOverlap : false;
 
     // Customer bookings NEVER allow overlap override — only vendor/admin via manual route can do so
     // The confirmOverlap flag is only respected for the PATCH endpoint (which is admin-only via calendar UI)
@@ -362,6 +369,35 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Failed to create appointment' }, { status: 500 });
     }
 
+    // --- Post-write race condition guard (Req 4.6) ---
+    // Re-check for conflicts after writing to catch concurrent bookings that slipped through
+    if (assignedStaffId && isCustomerBooking) {
+      try {
+        const { data: staffSchedule } = await client.models.StaffSchedule.get({ visibleId: assignedStaffId });
+        if (staffSchedule?.vendorId) {
+          const postWriteResult = await client.models.Appointment.listAppointmentByVendorIdAndDateTime({
+            vendorId: staffSchedule.vendorId,
+            dateTime: { beginsWith: bookingDate },
+          } as any);
+          const postWriteApts = ((postWriteResult as any).data || []).filter(
+            (a: any) => a.status !== 'cancelled' && a.staffId === assignedStaffId && a.appointmentId !== appointmentId
+          );
+
+          for (const apt of postWriteApts) {
+            const aptCustomer = typeof apt.customer === 'string' ? (() => { try { return JSON.parse(apt.customer); } catch { return {}; } })() : (apt.customer || {});
+            const aptDuration: number = aptCustomer?.duration || duration;
+            if (slotsOverlap(apt.dateTime, aptDuration, bufferMins, bufferMins)) {
+              // Conflict detected after write — roll back our appointment
+              await client.models.Appointment.update({ appointmentId, status: 'cancelled' } as any);
+              return Response.json({ error: 'This time slot is no longer available' }, { status: 409 });
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Post-write conflict check failed (non-fatal):', e);
+      }
+    }
+
     // Auto-populate client catalog
     try {
       const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
@@ -539,7 +575,7 @@ async function handleMultiProviderBooking(body: any, amplifyClient: any) {
       staffId: staff.staffId,
       groupId,
       dateTime,
-      customer: JSON.stringify(customer),
+      customer: JSON.stringify({ ...customer, duration: service.duration || 60 }),
       status: status || 'pending-confirmation',
       createdAt: new Date().toISOString(),
     } as any);
@@ -585,6 +621,49 @@ async function handleMultiProviderBooking(body: any, amplifyClient: any) {
     const aptId = appointmentIds[assignedStaffMembers.indexOf(staff)];
     sendStaffBookingNotification({ appointmentId: aptId, vendorId: staff.vendorId, serviceId, staffId: staff.staffId, dateTime, customer })
       .catch(e => console.error('Staff notification failed for appointment:', aptId, e));
+  }
+
+  // --- Post-write race condition guard for multi-provider bookings ---
+  try {
+    const bookingDate = dateTime.includes('T') ? dateTime.split('T')[0] : dateTime.split(' ')[0];
+    const bookingTime = dateTime.includes('T') ? dateTime.split('T')[1].substring(0, 5) : '00:00';
+    const [bh, bm] = bookingTime.split(':').map(Number);
+    const slotStart = bh * 60 + bm;
+    const slotEnd = slotStart + (service.duration || 60);
+    const bufferMins = service.bufferMinutes ?? 15;
+
+    for (const staff of assignedStaffMembers) {
+      const { data: staffSch } = await amplifyClient.models.StaffSchedule.get({ visibleId: staff.staffId });
+      if (!staffSch?.vendorId) continue;
+
+      const postWriteResult = await amplifyClient.models.Appointment.listAppointmentByVendorIdAndDateTime({
+        vendorId: staffSch.vendorId,
+        dateTime: { beginsWith: bookingDate },
+      } as any);
+      const postWriteApts = ((postWriteResult as any).data || []).filter(
+        (a: any) => a.status !== 'cancelled' && a.staffId === staff.staffId && !appointmentIds.includes(a.appointmentId)
+      );
+
+      for (const apt of postWriteApts) {
+        const aptCustomer = typeof apt.customer === 'string' ? (() => { try { return JSON.parse(apt.customer); } catch { return {}; } })() : (apt.customer || {});
+        const aptDuration: number = aptCustomer?.duration || (service.duration || 60);
+        const aptTime = (apt.dateTime as string).includes('T') ? (apt.dateTime as string).split('T')[1].substring(0, 5) : '00:00';
+        const [ah, am] = aptTime.split(':').map(Number);
+        const aptStart = ah * 60 + am;
+        const aptEnd = aptStart + aptDuration + bufferMins;
+        const newEnd = slotEnd + bufferMins;
+
+        if (slotStart < aptEnd && newEnd > aptStart) {
+          // Conflict detected — roll back all appointments in this group
+          for (const id of appointmentIds) {
+            await amplifyClient.models.Appointment.update({ appointmentId: id, status: 'cancelled' } as any).catch(() => {});
+          }
+          return Response.json({ error: 'This time slot is no longer available' }, { status: 409 });
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Multi-provider post-write conflict check failed (non-fatal):', e);
   }
 
   return Response.json({ success: true, appointmentIds, groupId });
@@ -670,7 +749,7 @@ async function handleQuantityBooking(body: any, amplifyClient: any) {
         staffId: staff.staffId,
         groupId,
         dateTime,
-        customer: JSON.stringify(customer),
+        customer: JSON.stringify({ ...customer, duration: duration }),
         status: status || 'pending-confirmation',
         paymentId,
         paymentStatus: paymentStatus || undefined,
@@ -725,7 +804,7 @@ async function handleQuantityBooking(body: any, amplifyClient: any) {
         staffId: assignedStaffId || undefined,
         groupId,
         dateTime: slotDateTime,
-        customer: JSON.stringify(customer),
+        customer: JSON.stringify({ ...customer, duration: duration }),
         status: status || 'pending-confirmation',
         paymentId,
         paymentStatus: paymentStatus || undefined,

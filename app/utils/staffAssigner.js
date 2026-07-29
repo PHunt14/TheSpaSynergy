@@ -1,4 +1,4 @@
-import { DAY_NAMES, getRecurrenceHours } from './availability.js'
+import { DAY_NAMES, getRecurrenceHours, hasAppointmentConflict } from './availability.js'
 
 /**
  * Automatically assigns the required number of staff members for a multi-provider service.
@@ -104,21 +104,7 @@ function isWorkingAtTime(staff, dayOfWeek, requestedDate, time, duration) {
  * Checks if a staff member has a conflicting appointment at the given time.
  */
 function hasConflict(staffId, appointments, time, duration, bufferMinutes) {
-  const slotStart = timeToMinutes(time)
-  const slotEnd = slotStart + duration + bufferMinutes
-
-  return appointments.some(apt => {
-    if (apt.status === 'cancelled') return false
-    if (apt.staffId !== staffId) return false
-
-    const aptTime = extractTimeFromDateTime(apt.dateTime)
-    const aptStart = timeToMinutes(aptTime)
-    const customer = typeof apt.customer === 'string' ? JSON.parse(apt.customer) : apt.customer
-    const aptDuration = (customer?.isBlockedTime && customer?.duration) ? customer.duration : duration
-    const aptEnd = aptStart + aptDuration + bufferMinutes
-
-    return slotStart < aptEnd && slotEnd > aptStart
-  })
+  return hasAppointmentConflict(staffId, appointments, time, duration, bufferMinutes)
 }
 
 /**
@@ -127,15 +113,4 @@ function hasConflict(staffId, appointments, time, duration, bufferMinutes) {
 function timeToMinutes(timeStr) {
   const [h, m] = timeStr.split(':').map(Number)
   return h * 60 + m
-}
-
-/**
- * Extracts the time portion (HH:MM) from a dateTime string.
- * Handles both "2024-01-15T09:00" and "2024-01-15 09:00" formats.
- */
-function extractTimeFromDateTime(dateTime) {
-  if (dateTime.includes('T')) {
-    return dateTime.split('T')[1].substring(0, 5)
-  }
-  return dateTime.split(' ')[1]
 }
