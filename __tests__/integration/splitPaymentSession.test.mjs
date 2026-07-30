@@ -845,7 +845,7 @@ describe('POST /api/payment/split', () => {
       expect(body.error).toMatch(/Active split session already exists/i)
     })
 
-    test('returns 400 when neither bundleId nor groupId provided', async () => {
+    test('returns 400 when neither bundleId nor groupId nor appointmentId provided', async () => {
       const req = createRequest({
         action: 'createSession',
         splitType: 'equal',
@@ -856,7 +856,7 @@ describe('POST /api/payment/split', () => {
       const body = await res.json()
 
       expect(res.status).toBe(400)
-      expect(body.error).toMatch(/bundleId or groupId/i)
+      expect(body.error).toMatch(/bundleId.*groupId.*appointmentId/i)
     })
   })
 
