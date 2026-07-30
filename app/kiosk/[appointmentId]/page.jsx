@@ -152,16 +152,24 @@ function PaymentContent() {
   const handleSplitConfigured = async ({ splitType, payerCount, payerAmountsCents }) => {
     setSplitError(null)
     try {
+      // Determine which identifier to send: groupId for multi-provider, appointmentId for single
+      const sessionBody = {
+        action: 'createSession',
+        splitType,
+        payerCount,
+        payerAmountsCents,
+      }
+
+      if (appointment.isGroupPayment && appointment.groupId) {
+        sessionBody.groupId = appointment.groupId
+      } else {
+        sessionBody.appointmentId = appointmentId
+      }
+
       const res = await fetch('/api/payment/split', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'createSession',
-          groupId: appointment.groupId,
-          splitType,
-          payerCount,
-          payerAmountsCents,
-        }),
+        body: JSON.stringify(sessionBody),
       })
       const data = await res.json()
 
@@ -178,7 +186,8 @@ function PaymentContent() {
   }
 
   // Determine if this service supports customer split payment
-  const canSplitPay = appointment?.isGroupPayment && appointment?.groupId
+  // Allow split for group (multi-provider) appointments OR any single-service appointment
+  const canSplitPay = appointment && appointment.service?.price > 0
 
   if (loading) return <p>Loading...</p>
 
@@ -249,7 +258,7 @@ function PaymentContent() {
 
       <TotalDueDisplay totalDue={totalDue} tipAmount={tipAmount} priceLabel="Service" priceAmount={appointment.service?.price || 0} />
 
-      {/* Payment Mode Selector for group (multi-provider) services */}
+      {/* Payment Mode Selector */}
       {canSplitPay && !paymentMode && (
         <fieldset style={{ border: 'none', padding: 0, margin: '0 0 1.5rem 0' }}>
           <legend style={{ fontWeight: '600', marginBottom: '0.75rem', fontSize: '1rem' }}>How would you like to pay?</legend>

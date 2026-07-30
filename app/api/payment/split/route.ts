@@ -41,27 +41,29 @@ async function handleCreateSession(body: {
   action: string;
   bundleId?: string;
   groupId?: string;
+  appointmentId?: string;
   splitType: 'equal' | 'custom';
   payerCount: number;
   payerAmountsCents?: number[];
 }) {
-  const { bundleId, groupId, splitType, payerCount, payerAmountsCents } = body;
+  const { bundleId, groupId, appointmentId, splitType, payerCount, payerAmountsCents } = body;
 
   if (!splitType || !payerCount) {
     return Response.json({ error: 'Missing required fields' }, { status: 400 });
   }
 
-  if (!bundleId && !groupId) {
-    return Response.json({ error: 'Either bundleId or groupId is required' }, { status: 400 });
+  if (!bundleId && !groupId && !appointmentId) {
+    return Response.json({ error: 'One of bundleId, groupId, or appointmentId is required' }, { status: 400 });
   }
 
   const dataClient = generateClient<Schema>();
 
-  // Determine total price and validate based on whether this is a bundle or group split
+  // Determine total price and validate based on whether this is a bundle, group, or single-appointment split
   let totalCents: number;
   let services: any[] = [];
   let bundleSplit: any = null;
   let isGroupSplit = false;
+  let isSingleAppointmentSplit = false;
   let groupAppointments: any[] = [];
 
   if (bundleId) {
@@ -167,6 +169,46 @@ async function handleCreateSession(body: {
     }
 
     totalCents = dollarsToCents(service.price);
+  } else if (appointmentId) {
+    // --- SINGLE APPOINTMENT SPLIT ---
+    isSingleAppointmentSplit = true;
+
+    // Fetch the appointment
+    const { data: apt } = await dataClient.models.Appointment.get({ appointmentId });
+    if (!apt) {
+      return Response.json(
+        { error: 'Appointment not found', details: `No appointment with id ${appointmentId}` },
+        { status: 404 }
+      );
+    }
+
+    // Validate not already paid
+    if ((apt as any).paymentStatus === 'paid' || (apt as any).paymentId) {
+      return Response.json(
+        { error: 'Appointment already paid', details: 'This appointment has already been paid' },
+        { status: 400 }
+      );
+    }
+
+    // Check no active session exists for this appointmentId
+    const { data: allSessions } = await (dataClient.models as any).SplitPaymentSession.list();
+    const activeSession = (allSessions || []).find(
+      (s: any) => s.appointmentId === appointmentId && (s.status === 'pending' || s.status === 'partial')
+    );
+    if (activeSession) {
+      return Response.json(
+        { error: 'Active split session already exists for this appointment' },
+        { status: 409 }
+      );
+    }
+
+    // Get the service price
+    const { data: service } = await dataClient.models.Service.get({ serviceId: (apt as any).serviceId });
+    if (!service) {
+      return Response.json({ error: 'Service not found' }, { status: 400 });
+    }
+
+    totalCents = dollarsToCents(service.price);
   }
 
   // Calculate payer amounts
@@ -235,6 +277,7 @@ async function handleCreateSession(body: {
     sessionId,
     bundleId: bundleId || null,
     groupId: groupId || null,
+    appointmentId: appointmentId || null,
     totalAmountCents: totalCents,
     splitType,
     payerCount,
@@ -414,8 +457,54 @@ async function handlePayPayer(body: {
       session.payerCount,
       allPayerShares
     );
+  } else if (session.appointmentId) {
+    // --- SINGLE APPOINTMENT SPLIT PAYMENT ---
+    // For single-service splits, the allocation is straightforward:
+    // house fee (if applicable) goes to house vendor, remainder to service vendor.
+    const { data: apt } = await dataClient.models.Appointment.get({ appointmentId: session.appointmentId });
+    if (!apt) {
+      return Response.json({ error: 'Appointment not found' }, { status: 500 });
+    }
+
+    const { data: service } = await dataClient.models.Service.get({ serviceId: (apt as any).serviceId });
+    if (!service) {
+      return Response.json({ error: 'Service not found' }, { status: 500 });
+    }
+
+    // Build simple vendor allocation: house fee + vendor share
+    const bundlePayments: any[] = [];
+    const houseFee = (service as any).houseFeeEnabled && (service as any).houseFeeAmount > 0
+      ? (service as any).houseFeeAmount
+      : 0;
+
+    if (houseFee > 0) {
+      bundlePayments.push({
+        vendorId: houseVendor.vendorId,
+        amount: houseFee,
+        isHouseFee: true,
+      });
+    }
+
+    const vendorShare = service.price - houseFee;
+    if (vendorShare > 0) {
+      bundlePayments.push({
+        vendorId: (apt as any).vendorId,
+        amount: vendorShare,
+        isHouseFee: false,
+      });
+    }
+
+    const allPayerShares = payers.map((p: any) => p.amountCents);
+    scaledAllocations = scaleVendorAllocations(
+      bundlePayments,
+      payer.amountCents,
+      session.totalAmountCents,
+      payerIndex,
+      session.payerCount,
+      allPayerShares
+    );
   } else {
-    return Response.json({ error: 'Session has no bundleId or groupId' }, { status: 500 });
+    return Response.json({ error: 'Session has no bundleId, groupId, or appointmentId' }, { status: 500 });
   }
 
   // 9. Build Square payment request
@@ -519,6 +608,11 @@ async function handlePayPayer(body: {
             })
           );
         }
+      } else if (session.appointmentId) {
+        await dataClient.models.Appointment.update({
+          appointmentId: session.appointmentId,
+          paymentStatus: appointmentPaymentStatus,
+        } as any);
       }
     } catch (updateError: any) {
       console.error(
@@ -582,6 +676,7 @@ async function handleGetSession(body: { action: string; sessionId: string }) {
     sessionId: session.sessionId,
     bundleId: session.bundleId || null,
     groupId: session.groupId || null,
+    appointmentId: session.appointmentId || null,
     totalAmountCents: session.totalAmountCents,
     splitType: session.splitType,
     payerCount: session.payerCount,

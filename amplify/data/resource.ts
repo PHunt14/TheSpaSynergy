@@ -201,6 +201,7 @@ const schema = a.schema({
       sessionId: a.id().required(),
       bundleId: a.string(),
       groupId: a.string(),
+      appointmentId: a.string(),
       totalAmountCents: a.integer().required(),
       splitType: a.enum(['equal', 'custom']),
       payerCount: a.integer().required(),
