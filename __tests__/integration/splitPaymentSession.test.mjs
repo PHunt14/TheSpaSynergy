@@ -41,7 +41,10 @@ const mockVendorList = jest.fn(async () => ({
 const mockAppointmentList = jest.fn(async ({ filter } = {}) => {
   const all = Object.values(mockAppointmentDb)
   const bundleEq = filter?.bundleId?.eq
-  const filtered = bundleEq ? all.filter(a => a.bundleId === bundleEq) : all
+  const groupEq = filter?.groupId?.eq
+  let filtered = all
+  if (bundleEq) filtered = filtered.filter(a => a.bundleId === bundleEq)
+  if (groupEq) filtered = filtered.filter(a => a.groupId === groupEq)
   return { data: filtered }
 })
 
@@ -75,6 +78,9 @@ const mockSessionList = jest.fn(async ({ filter } = {}) => {
   let sessions = Object.values(mockSessionDb)
   if (filter?.bundleId?.eq) {
     sessions = sessions.filter(s => s.bundleId === filter.bundleId.eq)
+  }
+  if (filter?.groupId?.eq) {
+    sessions = sessions.filter(s => s.groupId === filter.groupId.eq)
   }
   return { data: sessions }
 })
@@ -173,7 +179,8 @@ function seedAppointment(a) {
 function seedSession(s) {
   const session = {
     sessionId: s.sessionId,
-    bundleId: s.bundleId,
+    bundleId: s.bundleId || null,
+    groupId: s.groupId || null,
     totalAmountCents: s.totalAmountCents ?? 10000,
     splitType: s.splitType ?? 'equal',
     payerCount: s.payerCount ?? 2,
@@ -212,6 +219,39 @@ function seedStandardBundle() {
   seedService({ serviceId: 'svc-1', vendorId: 'vendor-a', price: 100, houseFeeEnabled: false })
   seedBundle({ bundleId: 'bundle-1', price: 100, status: 'pending', serviceIds: ['svc-1'] })
   seedAppointment({ appointmentId: 'apt-1', bundleId: 'bundle-1', serviceId: 'svc-1', vendorId: 'vendor-a' })
+}
+
+function seedStandardGroup() {
+  seedVendor({ vendorId: 'house-vendor', isHouse: true, squareAccessToken: 'house-tok', squareLocationId: 'LOC-HOUSE' })
+  seedVendor({ vendorId: 'vendor-a', squareAccessToken: 'a-tok', squareLocationId: 'LOC-A' })
+  seedVendor({ vendorId: 'vendor-b', squareAccessToken: 'b-tok', squareLocationId: 'LOC-B' })
+  seedService({
+    serviceId: 'svc-couple',
+    vendorId: 'vendor-a',
+    price: 230,
+    houseFeeEnabled: false,
+    houseFeeAmount: 0,
+    providersRequired: 2,
+    paymentSplitRules: { type: 'equal' },
+  })
+  seedAppointment({
+    appointmentId: 'apt-g1',
+    groupId: 'group-1',
+    serviceId: 'svc-couple',
+    vendorId: 'vendor-a',
+    staffId: 'staff-1',
+    paymentStatus: null,
+    paymentId: null,
+  })
+  seedAppointment({
+    appointmentId: 'apt-g2',
+    groupId: 'group-1',
+    serviceId: 'svc-couple',
+    vendorId: 'vendor-b',
+    staffId: 'staff-2',
+    paymentStatus: null,
+    paymentId: null,
+  })
 }
 
 // ── Tests ────────────────────────────────────────────────────
@@ -322,7 +362,7 @@ describe('POST /api/payment/split', () => {
       const body = await res.json()
 
       expect(res.status).toBe(400)
-      expect(body.error).toMatch(/do not sum to bundle total/i)
+      expect(body.error).toMatch(/do not sum to/i)
     })
   })
 
@@ -515,9 +555,9 @@ describe('POST /api/payment/split', () => {
         expect.objectContaining({ sessionId: 'session-1', status: 'completed' })
       )
 
-      // Appointments should be updated with COMPLETED payment status
+      // Appointments should be updated with paid payment status
       expect(mockAppointmentUpdate).toHaveBeenCalledWith(
-        expect.objectContaining({ appointmentId: 'apt-1', paymentStatus: 'COMPLETED' })
+        expect.objectContaining({ appointmentId: 'apt-1', paymentStatus: 'paid' })
       )
     })
   })
@@ -723,6 +763,176 @@ describe('POST /api/payment/split', () => {
 
       expect(res.status).toBe(400)
       expect(body.error).toMatch(/Invalid action/i)
+    })
+  })
+
+  // ── Group (Service) Split ──────────────────────────────────
+
+  describe('createSession - group split', () => {
+    test('creates session for valid group with equal split', async () => {
+      seedStandardGroup()
+
+      const req = createRequest({
+        action: 'createSession',
+        groupId: 'group-1',
+        splitType: 'equal',
+        payerCount: 2,
+      })
+
+      const res = await handler.POST(req)
+      const body = await res.json()
+
+      expect(res.status).toBe(200)
+      expect(body.sessionId).toBeDefined()
+      expect(body.payers).toHaveLength(2)
+      // $230 = 23000 cents, split equally = 11500 each
+      expect(body.payers[0].amountCents).toBe(11500)
+      expect(body.payers[1].amountCents).toBe(11500)
+    })
+
+    test('returns 404 when group not found', async () => {
+      seedVendor({ vendorId: 'house-vendor', isHouse: true })
+
+      const req = createRequest({
+        action: 'createSession',
+        groupId: 'nonexistent-group',
+        splitType: 'equal',
+        payerCount: 2,
+      })
+
+      const res = await handler.POST(req)
+      const body = await res.json()
+
+      expect(res.status).toBe(404)
+      expect(body.error).toMatch(/Group not found/i)
+    })
+
+    test('returns 400 when group already paid', async () => {
+      seedStandardGroup()
+      // Mark one appointment as paid
+      mockAppointmentDb['apt-g1'].paymentStatus = 'paid'
+      mockAppointmentDb['apt-g1'].paymentId = 'sq-existing'
+
+      const req = createRequest({
+        action: 'createSession',
+        groupId: 'group-1',
+        splitType: 'equal',
+        payerCount: 2,
+      })
+
+      const res = await handler.POST(req)
+      const body = await res.json()
+
+      expect(res.status).toBe(400)
+      expect(body.error).toMatch(/already paid/i)
+    })
+
+    test('returns 409 when active session already exists for group', async () => {
+      seedStandardGroup()
+      seedSession({ sessionId: 'existing-session', groupId: 'group-1', status: 'pending' })
+
+      const req = createRequest({
+        action: 'createSession',
+        groupId: 'group-1',
+        splitType: 'equal',
+        payerCount: 2,
+      })
+
+      const res = await handler.POST(req)
+      const body = await res.json()
+
+      expect(res.status).toBe(409)
+      expect(body.error).toMatch(/Active split session already exists/i)
+    })
+
+    test('returns 400 when neither bundleId nor groupId provided', async () => {
+      const req = createRequest({
+        action: 'createSession',
+        splitType: 'equal',
+        payerCount: 2,
+      })
+
+      const res = await handler.POST(req)
+      const body = await res.json()
+
+      expect(res.status).toBe(400)
+      expect(body.error).toMatch(/bundleId or groupId/i)
+    })
+  })
+
+  describe('payPayer - group split', () => {
+    test('successful charge for group session marks payer as paid', async () => {
+      seedStandardGroup()
+      seedSession({
+        sessionId: 'session-g1',
+        groupId: 'group-1',
+        totalAmountCents: 23000,
+        payerCount: 2,
+        payers: JSON.stringify([
+          { payerIndex: 0, label: 'Person 1', amountCents: 11500, status: 'pending', squarePaymentId: null, paidAt: null },
+          { payerIndex: 1, label: 'Person 2', amountCents: 11500, status: 'pending', squarePaymentId: null, paidAt: null },
+        ]),
+      })
+
+      mockCreatePayment.mockResolvedValueOnce({
+        result: { payment: { id: 'sq-pay-g1', status: 'COMPLETED' } },
+      })
+
+      const req = createRequest({
+        action: 'payPayer',
+        sessionId: 'session-g1',
+        payerIndex: 0,
+        sourceId: 'cnon:card-nonce',
+      })
+
+      const res = await handler.POST(req)
+      const body = await res.json()
+
+      expect(res.status).toBe(200)
+      expect(body.success).toBe(true)
+      expect(body.squarePaymentId).toBe('sq-pay-g1')
+      expect(body.sessionStatus).toBe('partial')
+    })
+
+    test('all payers paid in group session marks appointments as paid', async () => {
+      seedStandardGroup()
+      seedSession({
+        sessionId: 'session-g1',
+        groupId: 'group-1',
+        totalAmountCents: 23000,
+        payerCount: 2,
+        status: 'partial',
+        payers: JSON.stringify([
+          { payerIndex: 0, label: 'Person 1', amountCents: 11500, status: 'paid', squarePaymentId: 'sq-g1', paidAt: new Date().toISOString() },
+          { payerIndex: 1, label: 'Person 2', amountCents: 11500, status: 'pending', squarePaymentId: null, paidAt: null },
+        ]),
+      })
+
+      mockCreatePayment.mockResolvedValueOnce({
+        result: { payment: { id: 'sq-pay-g2', status: 'COMPLETED' } },
+      })
+
+      const req = createRequest({
+        action: 'payPayer',
+        sessionId: 'session-g1',
+        payerIndex: 1,
+        sourceId: 'cnon:card-nonce',
+      })
+
+      const res = await handler.POST(req)
+      const body = await res.json()
+
+      expect(res.status).toBe(200)
+      expect(body.success).toBe(true)
+      expect(body.sessionStatus).toBe('completed')
+
+      // Both group appointments should be updated
+      expect(mockAppointmentUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({ appointmentId: 'apt-g1', paymentStatus: 'paid' })
+      )
+      expect(mockAppointmentUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({ appointmentId: 'apt-g2', paymentStatus: 'paid' })
+      )
     })
   })
 })

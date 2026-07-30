@@ -199,7 +199,8 @@ const schema = a.schema({
   SplitPaymentSession: a
     .model({
       sessionId: a.id().required(),
-      bundleId: a.string().required(),
+      bundleId: a.string(),
+      groupId: a.string(),
       totalAmountCents: a.integer().required(),
       splitType: a.enum(['equal', 'custom']),
       payerCount: a.integer().required(),
