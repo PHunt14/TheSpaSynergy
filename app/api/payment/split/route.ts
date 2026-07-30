@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto';
+import { randomUUID } from 'node:crypto';
 import { Client, Environment } from 'square';
 import { generateClient } from 'aws-amplify/data';
 import type { Schema } from '../../../../amplify/data/resource';
@@ -37,6 +37,286 @@ export async function POST(request: Request) {
   }
 }
 
+// --- Extracted helpers to reduce cognitive complexity ---
+
+async function resolveBundleTotalCents(bundleId: string, dataClient: any) {
+  const { data: bundle } = await dataClient.models.Bundle.get({ bundleId });
+  if (!bundle) {
+    return { error: Response.json({ error: 'Invalid bundle status', details: 'Bundle not found' }, { status: 400 }) };
+  }
+
+  const validStatuses = ['pending', 'booked', 'pending-confirmation', 'confirmed'];
+  if (!bundle.status || !validStatuses.includes(bundle.status)) {
+    return { error: Response.json({ error: 'Invalid bundle status', details: `Bundle status "${bundle.status}" is not eligible for split payment` }, { status: 400 }) };
+  }
+
+  const { data: existingSessions } = await (dataClient.models as any).SplitPaymentSession.list({
+    filter: { bundleId: { eq: bundleId } }
+  });
+  if ((existingSessions || []).some((s: any) => s.status === 'pending' || s.status === 'partial')) {
+    return { error: Response.json({ error: 'Active split session already exists for this bundle' }, { status: 409 }) };
+  }
+
+  const totalCents = dollarsToCents(bundle.price);
+  const serviceIds = bundle.serviceIds || [];
+  const services: any[] = [];
+  for (const serviceId of serviceIds) {
+    const { data: service } = await dataClient.models.Service.get({ serviceId });
+    if (service) services.push(service);
+  }
+
+  const { data: vendors } = await dataClient.models.Vendor.list();
+  const houseVendor = (vendors || []).find((v: any) => v.isHouse);
+  if (!houseVendor) {
+    return { error: Response.json({ error: 'House vendor not configured' }, { status: 500 }) };
+  }
+
+  const subtotal = services.reduce((sum: number, s: any) => sum + (s.price || 0), 0);
+  const discountAmount = subtotal - bundle.price;
+  const bundleSplit = calculateBundlePaymentSplit({ services, discountAmount, houseVendorId: houseVendor.vendorId });
+
+  return { totalCents, bundleSplit };
+}
+
+async function resolveGroupTotalCents(groupId: string, dataClient: any) {
+  const { data: groupApts } = await dataClient.models.Appointment.list({
+    filter: { groupId: { eq: groupId } },
+  });
+
+  if (!groupApts || groupApts.length === 0) {
+    return { error: Response.json({ error: 'Group not found', details: `No appointments with groupId ${groupId}` }, { status: 404 }) };
+  }
+
+  if (groupApts.some((a: any) => a.paymentStatus === 'paid' || a.paymentId)) {
+    return { error: Response.json({ error: 'Group already paid', details: 'One or more appointments in this group have already been paid' }, { status: 400 }) };
+  }
+
+  const { data: allSessions } = await (dataClient.models as any).SplitPaymentSession.list();
+  if ((allSessions || []).some((s: any) => s.groupId === groupId && (s.status === 'pending' || s.status === 'partial'))) {
+    return { error: Response.json({ error: 'Active split session already exists for this group' }, { status: 409 }) };
+  }
+
+  const serviceId = (groupApts[0] as any).serviceId;
+  const { data: service } = await dataClient.models.Service.get({ serviceId });
+  if (!service) {
+    return { error: Response.json({ error: 'Service not found' }, { status: 400 }) };
+  }
+
+  return { totalCents: dollarsToCents(service.price) };
+}
+
+async function resolveAppointmentTotalCents(appointmentId: string, dataClient: any) {
+  const { data: apt } = await dataClient.models.Appointment.get({ appointmentId });
+  if (!apt) {
+    return { error: Response.json({ error: 'Appointment not found', details: `No appointment with id ${appointmentId}` }, { status: 404 }) };
+  }
+
+  if ((apt as any).paymentStatus === 'paid' || (apt as any).paymentId) {
+    return { error: Response.json({ error: 'Appointment already paid', details: 'This appointment has already been paid' }, { status: 400 }) };
+  }
+
+  const { data: allSessions } = await (dataClient.models as any).SplitPaymentSession.list();
+  if ((allSessions || []).some((s: any) => s.appointmentId === appointmentId && (s.status === 'pending' || s.status === 'partial'))) {
+    return { error: Response.json({ error: 'Active split session already exists for this appointment' }, { status: 409 }) };
+  }
+
+  const { data: service } = await dataClient.models.Service.get({ serviceId: (apt as any).serviceId });
+  if (!service) {
+    return { error: Response.json({ error: 'Service not found' }, { status: 400 }) };
+  }
+
+  return { totalCents: dollarsToCents(service.price) };
+}
+
+async function computeScaledAllocations(
+  session: any,
+  payer: any,
+  payerIndex: number,
+  payers: any[],
+  houseVendor: any,
+  dataClient: any
+): Promise<{ allocations?: any[]; error?: Response }> {
+  const allPayerShares = payers.map((p: any) => p.amountCents);
+
+  if (session.bundleId) {
+    return computeBundleAllocations(session, payer, payerIndex, allPayerShares, houseVendor, dataClient);
+  }
+  if (session.groupId) {
+    return computeGroupAllocations(session, payer, payerIndex, allPayerShares, houseVendor, dataClient);
+  }
+  if (session.appointmentId) {
+    return computeAppointmentAllocations(session, payer, payerIndex, allPayerShares, houseVendor, dataClient);
+  }
+  return { error: Response.json({ error: 'Session has no bundleId, groupId, or appointmentId' }, { status: 500 }) };
+}
+
+async function computeBundleAllocations(
+  session: any, payer: any, payerIndex: number, allPayerShares: number[], houseVendor: any, dataClient: any
+) {
+  const { data: bundle } = await dataClient.models.Bundle.get({ bundleId: session.bundleId });
+  if (!bundle) {
+    return { error: Response.json({ error: 'Bundle not found' }, { status: 500 }) };
+  }
+
+  const serviceIds = bundle.serviceIds || [];
+  const services: any[] = [];
+  for (const serviceId of serviceIds) {
+    const { data: service } = await dataClient.models.Service.get({ serviceId });
+    if (service) services.push(service);
+  }
+
+  const subtotal = services.reduce((sum: number, s: any) => sum + (s.price || 0), 0);
+  const discountAmount = subtotal - bundle.price;
+  const bundleSplit = calculateBundlePaymentSplit({ services, discountAmount, houseVendorId: houseVendor.vendorId });
+
+  const allocations = scaleVendorAllocations(
+    bundleSplit.bundlePayments, payer.amountCents, session.totalAmountCents, payerIndex, session.payerCount, allPayerShares
+  );
+  return { allocations };
+}
+
+async function computeGroupAllocations(
+  session: any, payer: any, payerIndex: number, allPayerShares: number[], houseVendor: any, dataClient: any
+) {
+  const { data: groupApts } = await dataClient.models.Appointment.list({
+    filter: { groupId: { eq: session.groupId } },
+  });
+
+  if (!groupApts || groupApts.length === 0) {
+    return { error: Response.json({ error: 'Group appointments not found' }, { status: 500 }) };
+  }
+
+  const serviceId = (groupApts[0] as any).serviceId;
+  const { data: service } = await dataClient.models.Service.get({ serviceId });
+  if (!service) {
+    return { error: Response.json({ error: 'Service not found' }, { status: 500 }) };
+  }
+
+  const assignedStaff = groupApts.map((apt: any) => ({ staffId: apt.staffId, vendorId: apt.vendorId }));
+  const providerSplit = calculateMultiProviderSplit({ service, assignedStaff, houseVendorId: houseVendor.vendorId });
+
+  const bundlePayments: any[] = [];
+  if (providerSplit.houseFee > 0) {
+    bundlePayments.push({ vendorId: houseVendor.vendorId, amount: providerSplit.houseFee, isHouseFee: true });
+  }
+  for (const share of providerSplit.providerShares) {
+    bundlePayments.push({ vendorId: share.vendorId, amount: share.amount, isHouseFee: false });
+  }
+
+  const allocations = scaleVendorAllocations(
+    bundlePayments, payer.amountCents, session.totalAmountCents, payerIndex, session.payerCount, allPayerShares
+  );
+  return { allocations };
+}
+
+async function computeAppointmentAllocations(
+  session: any, payer: any, payerIndex: number, allPayerShares: number[], houseVendor: any, dataClient: any
+) {
+  const { data: apt } = await dataClient.models.Appointment.get({ appointmentId: session.appointmentId });
+  if (!apt) {
+    return { error: Response.json({ error: 'Appointment not found' }, { status: 500 }) };
+  }
+
+  const { data: service } = await dataClient.models.Service.get({ serviceId: (apt as any).serviceId });
+  if (!service) {
+    return { error: Response.json({ error: 'Service not found' }, { status: 500 }) };
+  }
+
+  const bundlePayments: any[] = [];
+  const houseFee = (service as any).houseFeeEnabled && (service as any).houseFeeAmount > 0
+    ? (service as any).houseFeeAmount
+    : 0;
+
+  if (houseFee > 0) {
+    bundlePayments.push({ vendorId: houseVendor.vendorId, amount: houseFee, isHouseFee: true });
+  }
+
+  const vendorShare = service.price - houseFee;
+  if (vendorShare > 0) {
+    bundlePayments.push({ vendorId: (apt as any).vendorId, amount: vendorShare, isHouseFee: false });
+  }
+
+  const allocations = scaleVendorAllocations(
+    bundlePayments, payer.amountCents, session.totalAmountCents, payerIndex, session.payerCount, allPayerShares
+  );
+  return { allocations };
+}
+
+async function updateAppointmentStatuses(session: any, paymentStatus: string, dataClient: any) {
+  if (session.bundleId) {
+    const { data: bundleAppointments } = await dataClient.models.Appointment.list({
+      filter: { bundleId: { eq: session.bundleId } },
+    });
+    if (bundleAppointments?.length) {
+      await Promise.all(
+        bundleAppointments.map((appt: any) =>
+          dataClient.models.Appointment.update({ appointmentId: appt.appointmentId, paymentStatus } as any)
+        )
+      );
+    }
+  } else if (session.groupId) {
+    const { data: groupApts } = await dataClient.models.Appointment.list({
+      filter: { groupId: { eq: session.groupId } },
+    });
+    if (groupApts?.length) {
+      await Promise.all(
+        groupApts.map((appt: any) =>
+          dataClient.models.Appointment.update({ appointmentId: appt.appointmentId, paymentStatus } as any)
+        )
+      );
+    }
+  } else if (session.appointmentId) {
+    await dataClient.models.Appointment.update({
+      appointmentId: session.appointmentId,
+      paymentStatus,
+    } as any);
+  }
+}
+
+function buildRefundAmounts(
+  type: 'full' | 'partial',
+  paidPayers: any[],
+  refundAmountCents?: number
+) {
+  if (type === 'full') {
+    return paidPayers.map((p: any) => ({
+      payerIndex: p.payerIndex,
+      refundAmountCents: p.amountCents,
+      squarePaymentId: p.squarePaymentId,
+    }));
+  }
+
+  const totalPaidCents = paidPayers.reduce((sum: number, p: any) => sum + p.amountCents, 0);
+  const rawRefunds: { payerIndex: number; refundAmountCents: number; squarePaymentId: string }[] = [];
+  let distributedCents = 0;
+
+  for (const p of paidPayers) {
+    const proportionalRefund = Math.floor(refundAmountCents! * p.amountCents / totalPaidCents);
+    rawRefunds.push({ payerIndex: p.payerIndex, refundAmountCents: proportionalRefund, squarePaymentId: p.squarePaymentId });
+    distributedCents += proportionalRefund;
+  }
+
+  const remainderCents = refundAmountCents! - distributedCents;
+  const eligibleRefunds: typeof rawRefunds = [];
+  let reallocateCents = 0;
+
+  for (const r of rawRefunds) {
+    if (r.refundAmountCents < 1) {
+      reallocateCents += r.refundAmountCents;
+    } else {
+      eligibleRefunds.push(r);
+    }
+  }
+
+  if (eligibleRefunds.length > 0) {
+    eligibleRefunds[0].refundAmountCents += remainderCents + reallocateCents;
+  }
+
+  return eligibleRefunds;
+}
+
+// --- Main handlers ---
+
 async function handleCreateSession(body: {
   action: string;
   bundleId?: string;
@@ -58,165 +338,30 @@ async function handleCreateSession(body: {
 
   const dataClient = generateClient<Schema>();
 
-  // Determine total price and validate based on whether this is a bundle, group, or single-appointment split
+  // Resolve total amount and optional bundle split info
   let totalCents: number;
-  let services: any[] = [];
   let bundleSplit: any = null;
-  let isGroupSplit = false;
-  let isSingleAppointmentSplit = false;
-  let groupAppointments: any[] = [];
 
   if (bundleId) {
-    // --- BUNDLE SPLIT (existing flow) ---
-    const { data: bundle } = await dataClient.models.Bundle.get({ bundleId });
-    if (!bundle) {
-      return Response.json(
-        { error: 'Invalid bundle status', details: 'Bundle not found' },
-        { status: 400 }
-      );
-    }
-
-    const validStatuses = ['pending', 'booked', 'pending-confirmation', 'confirmed'];
-    if (!bundle.status || !validStatuses.includes(bundle.status)) {
-      return Response.json(
-        { error: 'Invalid bundle status', details: `Bundle status "${bundle.status}" is not eligible for split payment` },
-        { status: 400 }
-      );
-    }
-
-    // Check no active session exists for this bundleId
-    const { data: existingSessions } = await (dataClient.models as any).SplitPaymentSession.list({
-      filter: { bundleId: { eq: bundleId } }
-    });
-    const activeSession = (existingSessions || []).find(
-      (s: any) => s.status === 'pending' || s.status === 'partial'
-    );
-    if (activeSession) {
-      return Response.json(
-        { error: 'Active split session already exists for this bundle' },
-        { status: 409 }
-      );
-    }
-
-    totalCents = dollarsToCents(bundle.price);
-
-    // Fetch services for vendor allocation
-    const serviceIds = bundle.serviceIds || [];
-    for (const serviceId of serviceIds) {
-      const { data: service } = await dataClient.models.Service.get({ serviceId });
-      if (service) services.push(service);
-    }
-
-    // Get house vendor and compute bundle split
-    const { data: vendors } = await dataClient.models.Vendor.list();
-    const houseVendor = (vendors || []).find((v: any) => v.isHouse);
-    if (!houseVendor) {
-      return Response.json({ error: 'House vendor not configured' }, { status: 500 });
-    }
-
-    const subtotal = services.reduce((sum: number, s: any) => sum + (s.price || 0), 0);
-    const discountAmount = subtotal - bundle.price;
-
-    bundleSplit = calculateBundlePaymentSplit({
-      services,
-      discountAmount,
-      houseVendorId: houseVendor.vendorId,
-    });
+    const result = await resolveBundleTotalCents(bundleId, dataClient);
+    if (result.error) return result.error;
+    totalCents = result.totalCents!;
+    bundleSplit = result.bundleSplit;
   } else if (groupId) {
-    // --- GROUP (SERVICE) SPLIT ---
-    isGroupSplit = true;
-
-    // Fetch all appointments in this group
-    const { data: groupApts } = await dataClient.models.Appointment.list({
-      filter: { groupId: { eq: groupId } },
-    });
-
-    if (!groupApts || groupApts.length === 0) {
-      return Response.json(
-        { error: 'Group not found', details: `No appointments with groupId ${groupId}` },
-        { status: 404 }
-      );
-    }
-
-    groupAppointments = groupApts;
-
-    // Validate none are already paid
-    const alreadyPaid = groupApts.some((a: any) => a.paymentStatus === 'paid' || a.paymentId);
-    if (alreadyPaid) {
-      return Response.json(
-        { error: 'Group already paid', details: 'One or more appointments in this group have already been paid' },
-        { status: 400 }
-      );
-    }
-
-    // Check no active session exists for this groupId
-    const { data: allSessions } = await (dataClient.models as any).SplitPaymentSession.list();
-    const activeSession = (allSessions || []).find(
-      (s: any) => s.groupId === groupId && (s.status === 'pending' || s.status === 'partial')
-    );
-    if (activeSession) {
-      return Response.json(
-        { error: 'Active split session already exists for this group' },
-        { status: 409 }
-      );
-    }
-
-    // Get the service price (all appointments in a group share the same service)
-    const serviceId = (groupApts[0] as any).serviceId;
-    const { data: service } = await dataClient.models.Service.get({ serviceId });
-    if (!service) {
-      return Response.json({ error: 'Service not found' }, { status: 400 });
-    }
-
-    totalCents = dollarsToCents(service.price);
-  } else if (appointmentId) {
-    // --- SINGLE APPOINTMENT SPLIT ---
-    isSingleAppointmentSplit = true;
-
-    // Fetch the appointment
-    const { data: apt } = await dataClient.models.Appointment.get({ appointmentId });
-    if (!apt) {
-      return Response.json(
-        { error: 'Appointment not found', details: `No appointment with id ${appointmentId}` },
-        { status: 404 }
-      );
-    }
-
-    // Validate not already paid
-    if ((apt as any).paymentStatus === 'paid' || (apt as any).paymentId) {
-      return Response.json(
-        { error: 'Appointment already paid', details: 'This appointment has already been paid' },
-        { status: 400 }
-      );
-    }
-
-    // Check no active session exists for this appointmentId
-    const { data: allSessions } = await (dataClient.models as any).SplitPaymentSession.list();
-    const activeSession = (allSessions || []).find(
-      (s: any) => s.appointmentId === appointmentId && (s.status === 'pending' || s.status === 'partial')
-    );
-    if (activeSession) {
-      return Response.json(
-        { error: 'Active split session already exists for this appointment' },
-        { status: 409 }
-      );
-    }
-
-    // Get the service price
-    const { data: service } = await dataClient.models.Service.get({ serviceId: (apt as any).serviceId });
-    if (!service) {
-      return Response.json({ error: 'Service not found' }, { status: 400 });
-    }
-
-    totalCents = dollarsToCents(service.price);
+    const result = await resolveGroupTotalCents(groupId, dataClient);
+    if (result.error) return result.error;
+    totalCents = result.totalCents!;
+  } else {
+    const result = await resolveAppointmentTotalCents(appointmentId!, dataClient);
+    if (result.error) return result.error;
+    totalCents = result.totalCents!;
   }
 
   // Calculate payer amounts
   let payerAmounts: number[];
 
   if (splitType === 'equal') {
-    const result = calculateEqualSplit({ totalCents, payerCount });
-    payerAmounts = result.payerAmounts;
+    payerAmounts = calculateEqualSplit({ totalCents, payerCount }).payerAmounts;
   } else {
     if (!payerAmountsCents || payerAmountsCents.length !== payerCount) {
       return Response.json(
@@ -227,37 +372,24 @@ async function handleCreateSession(body: {
 
     const validation = validateCustomSplit({ totalCents, payerAmountsCents });
     if (!validation.valid) {
-      if (validation.error && validation.error.includes('below the minimum')) {
-        return Response.json(
-          { error: 'Amount below Square minimum', minAmount: 50 },
-          { status: 400 }
-        );
+      if (validation.error?.includes('below the minimum')) {
+        return Response.json({ error: 'Amount below Square minimum', minAmount: 50 }, { status: 400 });
       }
-      return Response.json(
-        { error: 'Payer amounts do not sum to total', details: validation.error },
-        { status: 400 }
-      );
+      return Response.json({ error: 'Payer amounts do not sum to total', details: validation.error }, { status: 400 });
     }
 
     payerAmounts = payerAmountsCents;
   }
 
   // For bundle splits, validate vendor distribution minimums
-  if (bundleSplit) {
-    const vendorCount = bundleSplit.bundlePayments.length;
-    if (vendorCount > 0) {
-      const minimumPayerAmount = vendorCount; // 1 cent per vendor
-      const minPayerAmount = Math.min(...payerAmounts);
-      if (minPayerAmount < minimumPayerAmount) {
-        return Response.json(
-          { error: 'Minimum payment too low for vendor distribution' },
-          { status: 400 }
-        );
-      }
+  if (bundleSplit?.bundlePayments.length) {
+    const minPayerAmount = Math.min(...payerAmounts);
+    if (minPayerAmount < bundleSplit.bundlePayments.length) {
+      return Response.json({ error: 'Minimum payment too low for vendor distribution' }, { status: 400 });
     }
   }
 
-  // Create payer records
+  // Create payer records and persist session
   const now = new Date();
   const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
@@ -270,7 +402,6 @@ async function handleCreateSession(body: {
     paidAt: null,
   }));
 
-  // Create SplitPaymentSession in DynamoDB
   const sessionId = randomUUID();
 
   await (dataClient.models as any).SplitPaymentSession.create({
@@ -315,10 +446,7 @@ async function handlePayPayer(body: {
   if (new Date(session.expiresAt) < new Date()) {
     if (session.status === 'pending' || session.status === 'partial') {
       try {
-        await (dataClient.models as any).SplitPaymentSession.update({
-          sessionId,
-          status: 'expired',
-        });
+        await (dataClient.models as any).SplitPaymentSession.update({ sessionId, status: 'expired' });
       } catch (err) {
         console.error('Failed to update session to expired:', err);
       }
@@ -327,13 +455,7 @@ async function handlePayPayer(body: {
   }
 
   // 3. Validate payerIndex
-  if (
-    payerIndex === undefined ||
-    payerIndex === null ||
-    !Number.isInteger(payerIndex) ||
-    payerIndex < 0 ||
-    payerIndex >= session.payerCount
-  ) {
+  if (!Number.isInteger(payerIndex) || payerIndex < 0 || payerIndex >= session.payerCount) {
     return Response.json({ error: 'Invalid payer index' }, { status: 400 });
   }
 
@@ -346,7 +468,7 @@ async function handlePayPayer(body: {
   }
 
   // 5. Validate sourceId
-  if (!sourceId || sourceId.trim() === '') {
+  if (!sourceId?.trim()) {
     return Response.json({ error: 'Missing card nonce' }, { status: 400 });
   }
 
@@ -362,170 +484,23 @@ async function handlePayPayer(body: {
     return Response.json({ error: 'House vendor not configured' }, { status: 500 });
   }
 
-  // 8. Compute vendor allocations based on bundle or group
-  let scaledAllocations: any[];
-
-  if (session.bundleId) {
-    // --- BUNDLE SPLIT PAYMENT ---
-    const { data: bundle } = await dataClient.models.Bundle.get({ bundleId: session.bundleId });
-    if (!bundle) {
-      return Response.json({ error: 'Bundle not found' }, { status: 500 });
-    }
-
-    const serviceIds = bundle.serviceIds || [];
-    const services: any[] = [];
-    for (const serviceId of serviceIds) {
-      const { data: service } = await dataClient.models.Service.get({ serviceId });
-      if (service) services.push(service);
-    }
-
-    const subtotal = services.reduce((sum: number, s: any) => sum + (s.price || 0), 0);
-    const discountAmount = subtotal - bundle.price;
-
-    const bundleSplit = calculateBundlePaymentSplit({
-      services,
-      discountAmount,
-      houseVendorId: houseVendor.vendorId,
-    });
-
-    const allPayerShares = payers.map((p: any) => p.amountCents);
-    scaledAllocations = scaleVendorAllocations(
-      bundleSplit.bundlePayments,
-      payer.amountCents,
-      session.totalAmountCents,
-      payerIndex,
-      session.payerCount,
-      allPayerShares
-    );
-  } else if (session.groupId) {
-    // --- GROUP (SERVICE) SPLIT PAYMENT ---
-    // For group splits, we need to compute the multi-provider split and scale it
-    const { data: groupApts } = await dataClient.models.Appointment.list({
-      filter: { groupId: { eq: session.groupId } },
-    });
-
-    if (!groupApts || groupApts.length === 0) {
-      return Response.json({ error: 'Group appointments not found' }, { status: 500 });
-    }
-
-    const serviceId = (groupApts[0] as any).serviceId;
-    const { data: service } = await dataClient.models.Service.get({ serviceId });
-    if (!service) {
-      return Response.json({ error: 'Service not found' }, { status: 500 });
-    }
-
-    // Build assignedStaff from group appointments
-    const assignedStaff = groupApts.map((apt: any) => ({
-      staffId: apt.staffId,
-      vendorId: apt.vendorId,
-    }));
-
-    // Calculate multi-provider split using the service's paymentSplitRules
-    const providerSplit = calculateMultiProviderSplit({
-      service,
-      assignedStaff,
-      houseVendorId: houseVendor.vendorId,
-    });
-
-    // Convert multi-provider split into bundlePayments format for scaleVendorAllocations
-    const bundlePayments: any[] = [];
-
-    // Add house fee if present
-    if (providerSplit.houseFee > 0) {
-      bundlePayments.push({
-        vendorId: houseVendor.vendorId,
-        amount: providerSplit.houseFee,
-        isHouseFee: true,
-      });
-    }
-
-    // Add provider shares
-    for (const share of providerSplit.providerShares) {
-      bundlePayments.push({
-        vendorId: share.vendorId,
-        amount: share.amount,
-        isHouseFee: false,
-      });
-    }
-
-    const allPayerShares = payers.map((p: any) => p.amountCents);
-    scaledAllocations = scaleVendorAllocations(
-      bundlePayments,
-      payer.amountCents,
-      session.totalAmountCents,
-      payerIndex,
-      session.payerCount,
-      allPayerShares
-    );
-  } else if (session.appointmentId) {
-    // --- SINGLE APPOINTMENT SPLIT PAYMENT ---
-    // For single-service splits, the allocation is straightforward:
-    // house fee (if applicable) goes to house vendor, remainder to service vendor.
-    const { data: apt } = await dataClient.models.Appointment.get({ appointmentId: session.appointmentId });
-    if (!apt) {
-      return Response.json({ error: 'Appointment not found' }, { status: 500 });
-    }
-
-    const { data: service } = await dataClient.models.Service.get({ serviceId: (apt as any).serviceId });
-    if (!service) {
-      return Response.json({ error: 'Service not found' }, { status: 500 });
-    }
-
-    // Build simple vendor allocation: house fee + vendor share
-    const bundlePayments: any[] = [];
-    const houseFee = (service as any).houseFeeEnabled && (service as any).houseFeeAmount > 0
-      ? (service as any).houseFeeAmount
-      : 0;
-
-    if (houseFee > 0) {
-      bundlePayments.push({
-        vendorId: houseVendor.vendorId,
-        amount: houseFee,
-        isHouseFee: true,
-      });
-    }
-
-    const vendorShare = service.price - houseFee;
-    if (vendorShare > 0) {
-      bundlePayments.push({
-        vendorId: (apt as any).vendorId,
-        amount: vendorShare,
-        isHouseFee: false,
-      });
-    }
-
-    const allPayerShares = payers.map((p: any) => p.amountCents);
-    scaledAllocations = scaleVendorAllocations(
-      bundlePayments,
-      payer.amountCents,
-      session.totalAmountCents,
-      payerIndex,
-      session.payerCount,
-      allPayerShares
-    );
-  } else {
-    return Response.json({ error: 'Session has no bundleId, groupId, or appointmentId' }, { status: 500 });
-  }
+  // 8. Compute vendor allocations
+  const allocationResult = await computeScaledAllocations(session, payer, payerIndex, payers, houseVendor, dataClient);
+  if (allocationResult.error) return allocationResult.error;
+  const scaledAllocations = allocationResult.allocations!;
 
   // 9. Build Square payment request
-  const houseAllocation = scaledAllocations.find(
-    (a) => a.vendorId === houseVendor.vendorId
-  );
   const otherAllocations = scaledAllocations.filter(
     (a) => a.vendorId !== houseVendor.vendorId && a.amountCents > 0
   );
 
-  // Fetch vendor details for additionalRecipients (need squareLocationId)
   const additionalRecipients: any[] = [];
   for (const allocation of otherAllocations) {
     const { data: vendor } = await dataClient.models.Vendor.get({ vendorId: allocation.vendorId });
     if (vendor?.squareLocationId) {
       additionalRecipients.push({
         locationId: vendor.squareLocationId,
-        amountMoney: {
-          amount: BigInt(allocation.amountCents),
-          currency: 'USD',
-        },
+        amountMoney: { amount: BigInt(allocation.amountCents), currency: 'USD' },
         description: 'Vendor payment',
       });
     }
@@ -542,30 +517,19 @@ async function handlePayPayer(body: {
 
   // 10. Process Square charge
   try {
-    const paymentRequest: any = {
+    const { result } = await client.paymentsApi.createPayment({
       sourceId,
       idempotencyKey,
-      amountMoney: {
-        amount: BigInt(payer.amountCents),
-        currency: 'USD',
-      },
+      amountMoney: { amount: BigInt(payer.amountCents), currency: 'USD' },
       locationId: houseVendor.squareLocationId,
       additionalRecipients: additionalRecipients.length > 0 ? additionalRecipients : undefined,
-    };
-
-    const { result } = await client.paymentsApi.createPayment(paymentRequest);
+    });
     const squarePaymentId = result.payment?.id;
 
     // 11. Update payer status in session
     const now = new Date().toISOString();
-    payers[payerIndex] = {
-      ...payers[payerIndex],
-      status: 'paid',
-      squarePaymentId: squarePaymentId || null,
-      paidAt: now,
-    };
+    payers[payerIndex] = { ...payers[payerIndex], status: 'paid', squarePaymentId: squarePaymentId || null, paidAt: now };
 
-    // Determine new session status
     const paidCount = payers.filter((p: any) => p.status === 'paid').length;
     const allPaid = paidCount === session.payerCount;
     const newSessionStatus = allPaid ? 'completed' : 'partial';
@@ -577,43 +541,8 @@ async function handlePayPayer(body: {
         status: newSessionStatus,
       });
 
-      // Update appointment payment status
       const appointmentPaymentStatus = allPaid ? 'paid' : 'partial';
-
-      if (session.bundleId) {
-        const { data: bundleAppointments } = await dataClient.models.Appointment.list({
-          filter: { bundleId: { eq: session.bundleId } },
-        });
-        if (bundleAppointments && bundleAppointments.length > 0) {
-          await Promise.all(
-            bundleAppointments.map(async (appt: any) => {
-              await dataClient.models.Appointment.update({
-                appointmentId: appt.appointmentId,
-                paymentStatus: appointmentPaymentStatus,
-              } as any);
-            })
-          );
-        }
-      } else if (session.groupId) {
-        const { data: groupApts } = await dataClient.models.Appointment.list({
-          filter: { groupId: { eq: session.groupId } },
-        });
-        if (groupApts && groupApts.length > 0) {
-          await Promise.all(
-            groupApts.map(async (appt: any) => {
-              await dataClient.models.Appointment.update({
-                appointmentId: appt.appointmentId,
-                paymentStatus: appointmentPaymentStatus,
-              } as any);
-            })
-          );
-        }
-      } else if (session.appointmentId) {
-        await dataClient.models.Appointment.update({
-          appointmentId: session.appointmentId,
-          paymentStatus: appointmentPaymentStatus,
-        } as any);
-      }
+      await updateAppointmentStatuses(session, appointmentPaymentStatus, dataClient);
     } catch (updateError: any) {
       console.error(
         'Split payment session update failed after successful charge. ' +
@@ -633,10 +562,7 @@ async function handlePayPayer(body: {
   } catch (error: any) {
     console.error('Square API error (split payer payment):', JSON.stringify(error, null, 2));
     const details = error?.errors?.[0]?.detail || error?.message || 'Unknown Square error';
-    return Response.json({
-      error: 'Payment processing failed',
-      details,
-    }, { status: 502 });
+    return Response.json({ error: 'Payment processing failed', details }, { status: 502 });
   }
 }
 
@@ -699,7 +625,7 @@ async function handleRefund(body: {
     return Response.json({ error: 'Missing required field: sessionId' }, { status: 400 });
   }
 
-  if (!type || (type !== 'full' && type !== 'partial')) {
+  if (type !== 'full' && type !== 'partial') {
     return Response.json({ error: 'Missing or invalid refund type' }, { status: 400 });
   }
 
@@ -709,13 +635,11 @@ async function handleRefund(body: {
 
   const dataClient = generateClient<Schema>();
 
-  // 1. Fetch session
   const { data: session } = await (dataClient.models as any).SplitPaymentSession.get({ sessionId });
   if (!session) {
     return Response.json({ error: 'Split payment session not found' }, { status: 404 });
   }
 
-  // 2. Parse payers and find all paid payers
   const payers = typeof session.payers === 'string' ? JSON.parse(session.payers) : session.payers;
   const paidPayers = payers.filter((p: any) => p.status === 'paid');
 
@@ -723,64 +647,8 @@ async function handleRefund(body: {
     return Response.json({ error: 'No paid payers to refund' }, { status: 400 });
   }
 
-  // 3. Calculate refund amounts per payer
-  interface PayerRefund {
-    payerIndex: number;
-    refundAmountCents: number;
-    squarePaymentId: string;
-  }
+  const payerRefunds = buildRefundAmounts(type, paidPayers, refundAmountCents);
 
-  let payerRefunds: PayerRefund[] = [];
-
-  if (type === 'full') {
-    // Full refund: each paid payer gets refunded their full amountCents
-    payerRefunds = paidPayers.map((p: any) => ({
-      payerIndex: p.payerIndex,
-      refundAmountCents: p.amountCents,
-      squarePaymentId: p.squarePaymentId,
-    }));
-  } else {
-    // Partial refund: distribute proportionally based on original payment shares
-    const totalPaidCents = paidPayers.reduce((sum: number, p: any) => sum + p.amountCents, 0);
-
-    // Calculate proportional refund for each paid payer
-    let rawRefunds: { payerIndex: number; refundAmountCents: number; squarePaymentId: string }[] = [];
-    let distributedCents = 0;
-
-    for (const p of paidPayers) {
-      const proportionalRefund = Math.floor(refundAmountCents! * p.amountCents / totalPaidCents);
-      rawRefunds.push({
-        payerIndex: p.payerIndex,
-        refundAmountCents: proportionalRefund,
-        squarePaymentId: p.squarePaymentId,
-      });
-      distributedCents += proportionalRefund;
-    }
-
-    // Assign remainder to first eligible payer
-    let remainderCents = refundAmountCents! - distributedCents;
-
-    // Skip payers whose refund < 1 cent and reallocate their portion
-    let eligibleRefunds: PayerRefund[] = [];
-    let reallocateCents = 0;
-
-    for (const r of rawRefunds) {
-      if (r.refundAmountCents < 1) {
-        reallocateCents += r.refundAmountCents;
-      } else {
-        eligibleRefunds.push(r);
-      }
-    }
-
-    // Add remainder + reallocated cents to first eligible payer
-    if (eligibleRefunds.length > 0) {
-      eligibleRefunds[0].refundAmountCents += remainderCents + reallocateCents;
-    }
-
-    payerRefunds = eligibleRefunds;
-  }
-
-  // 4. Get house vendor credentials for Square client
   const { data: vendors } = await dataClient.models.Vendor.list();
   const houseVendor = (vendors || []).find((v: any) => v.isHouse);
   if (!houseVendor) {
@@ -794,55 +662,34 @@ async function handleRefund(body: {
       : Environment.Sandbox,
   });
 
-  // 5. Process refunds for each eligible payer
   const results: { payerIndex: number; success: boolean; refundedAmountCents?: number; error?: string }[] = [];
 
   for (const refund of payerRefunds) {
     try {
-      const { result } = await client.refundsApi.refundPayment({
+      await client.refundsApi.refundPayment({
         idempotencyKey: `${sessionId}-refund-${refund.payerIndex}`,
         paymentId: refund.squarePaymentId,
         amountMoney: { amount: BigInt(refund.refundAmountCents), currency: 'USD' },
-        reason: 'Bundle split payment refund',
+        reason: 'Split payment refund',
       });
-
-      results.push({
-        payerIndex: refund.payerIndex,
-        success: true,
-        refundedAmountCents: refund.refundAmountCents,
-      });
+      results.push({ payerIndex: refund.payerIndex, success: true, refundedAmountCents: refund.refundAmountCents });
     } catch (error: any) {
       const details = error?.errors?.[0]?.detail || error?.message || 'Unknown refund error';
-      results.push({
-        payerIndex: refund.payerIndex,
-        success: false,
-        error: details,
-      });
+      results.push({ payerIndex: refund.payerIndex, success: false, error: details });
     }
   }
 
-  // 6. Determine session status based on results
   const allSucceeded = results.every((r) => r.success);
   const sessionStatus = allSucceeded ? 'refunded' : 'partially_refunded';
 
-  // 7. Update session status
   try {
-    await (dataClient.models as any).SplitPaymentSession.update({
-      sessionId,
-      status: sessionStatus,
-    });
+    await (dataClient.models as any).SplitPaymentSession.update({ sessionId, status: sessionStatus });
   } catch (updateError: any) {
     console.error(
-      `Failed to update session status to "${sessionStatus}" after refund. ` +
-      `SessionId: ${sessionId}. Manual reconciliation required.`,
+      `Failed to update session status to "${sessionStatus}" after refund. SessionId: ${sessionId}. Manual reconciliation required.`,
       updateError
     );
   }
 
-  // 8. Return detailed report
-  return Response.json({
-    success: allSucceeded,
-    sessionStatus,
-    results,
-  });
+  return Response.json({ success: allSucceeded, sessionStatus, results });
 }
