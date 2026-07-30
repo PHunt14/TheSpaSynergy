@@ -122,7 +122,7 @@ async function handleCreateSession(body: {
       discountAmount,
       houseVendorId: houseVendor.vendorId,
     });
-  } else {
+  } else if (groupId) {
     // --- GROUP (SERVICE) SPLIT ---
     isGroupSplit = true;
 
