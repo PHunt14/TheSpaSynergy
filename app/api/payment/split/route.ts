@@ -517,13 +517,15 @@ async function handlePayPayer(body: {
 
   // 10. Process Square charge
   try {
-    const { result } = await client.paymentsApi.createPayment({
+    const paymentRequest: any = {
       sourceId,
       idempotencyKey,
       amountMoney: { amount: BigInt(payer.amountCents), currency: 'USD' },
       locationId: houseVendor.squareLocationId,
       additionalRecipients: additionalRecipients.length > 0 ? additionalRecipients : undefined,
-    });
+    };
+
+    const { result } = await client.paymentsApi.createPayment(paymentRequest);
     const squarePaymentId = result.payment?.id;
 
     // 11. Update payer status in session
