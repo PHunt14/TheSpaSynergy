@@ -27,7 +27,11 @@ function PaymentContent() {
   const [paymentMode, setPaymentMode] = useState(null) // null | 'full' | 'split'
   const [splitError, setSplitError] = useState(null)
 
-  const { card } = useSquarePayment(squareLocationId, paid || paymentMode === 'split')
+  // Only initialize Square card when the card form is actually rendered.
+  // The form renders when: (!canSplitPay || paymentMode === 'full') && squareLocationId
+  // canSplitPay depends on appointment being loaded with price > 0
+  const shouldDisableCard = paid || (paymentMode === 'split') || (paymentMode === null && appointment?.service?.price > 0)
+  const { card } = useSquarePayment(squareLocationId, shouldDisableCard)
 
   useEffect(() => {
     fetch(`/api/kiosk/appointments?appointmentId=${appointmentId}`)
