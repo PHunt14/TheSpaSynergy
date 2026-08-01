@@ -73,11 +73,11 @@ export default function useSquarePayment(squareLocationId, disabled = false) {
 export function resolveSquareLocation(vendorId, onResolved) {
   if (!vendorId) return
 
-  fetch(`/api/vendors?vendorId=${vendorId}`)
+  fetch(`/api/providers?providerId=${vendorId}`)
     .then(r => r.json())
     .then(vData => {
-      if (vData.vendor?.squareLocationId) {
-        onResolved(vData.vendor.squareLocationId)
+      if (vData.provider?.squareLocationId) {
+        onResolved(vData.provider.squareLocationId)
       } else {
         fetch(`/api/staff-schedules?vendorId=${vendorId}`)
           .then(r => r.json())

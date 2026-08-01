@@ -32,11 +32,11 @@ function MultiPaymentContent() {
 
     Promise.all([
       ...ids.map(id => fetch(`/api/kiosk/appointments?appointmentId=${id}`).then(r => r.json())),
-      fetch('/api/vendors').then(r => r.json()),
+      fetch('/api/providers').then(r => r.json()),
     ])
       .then(results => {
         const vendorData = results.pop()
-        setVendors(vendorData.vendors || [])
+        setVendors(vendorData.providers || [])
 
         const apts = results.flatMap(r => r.appointments || [])
         setAppointments(apts)

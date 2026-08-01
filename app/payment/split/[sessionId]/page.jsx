@@ -53,9 +53,9 @@ function SplitPaymentContent() {
   useEffect(() => {
     async function loadSquareLocation() {
       try {
-        const res = await fetch('/api/vendors')
+        const res = await fetch('/api/providers')
         const data = await res.json()
-        const houseVendor = (data.vendors || []).find(v => v.isHouse)
+        const houseVendor = (data.providers || []).find(v => v.isHouse)
         if (houseVendor?.squareLocationId) {
           setSquareLocationId(houseVendor.squareLocationId)
         }

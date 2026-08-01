@@ -31,18 +31,19 @@ function BundlePaymentContent() {
   const [paymentMode, setPaymentMode] = useState(null) // null | 'full' | 'split'
   const [splitError, setSplitError] = useState(null)
 
-  const { card } = useSquarePayment(squareLocationId, paid || paymentMode !== 'full')
+  // Initialize Square card as soon as we have a location — card-container is always in the DOM
+  const { card } = useSquarePayment(squareLocationId, paid)
 
   useEffect(() => {
     Promise.all([
       fetch(`/api/kiosk/appointments?bundleId=${bundleId}`).then(r => r.json()),
       fetch('/api/bundles').then(r => r.json()),
-      fetch('/api/vendors').then(r => r.json()),
+      fetch('/api/providers').then(r => r.json()),
     ])
       .then(([aptData, bundleData, vendorData]) => {
         const apts = aptData.appointments || []
         setAppointments(apts)
-        setVendors(vendorData.vendors || [])
+        setVendors(vendorData.providers || [])
 
         const foundBundle = bundleData.bundles?.find(b => b.bundleId === bundleId)
         setBundle(foundBundle)
@@ -285,29 +286,27 @@ function BundlePaymentContent() {
         </div>
       </fieldset>
 
-      {/* Full Payment Flow */}
-      {paymentMode === 'full' && (
-        <>
-          {squareLocationId && (
-            <TipSelection
-              servicePrice={bundlePrice}
-              tipAmount={tipAmount}
-              onTipChange={setTipAmount}
-            />
-          )}
+      {/* Full Payment Flow — card form always rendered (hidden until 'full' selected) so Square can attach */}
+      <div style={paymentMode !== 'full' ? { position: 'absolute', left: '-9999px', opacity: 0, pointerEvents: 'none' } : undefined}>
+        {squareLocationId && (
+          <TipSelection
+            servicePrice={bundlePrice}
+            tipAmount={tipAmount}
+            onTipChange={setTipAmount}
+          />
+        )}
 
-          <TotalDueDisplay totalDue={totalDue} tipAmount={tipAmount} priceLabel="Package" priceAmount={bundlePrice} />
+        <TotalDueDisplay totalDue={totalDue} tipAmount={tipAmount} priceLabel="Package" priceAmount={bundlePrice} />
 
-          {!squareLocationId ? (
-            <div style={{ padding: '1.5rem', background: '#fff3cd', borderRadius: '8px', border: '1px solid #ffc107', textAlign: 'center' }}>
-              <strong>Card payment not available</strong>
-              <p style={{ margin: '0.5rem 0 0', fontSize: '0.9rem' }}>Vendors in this package have not connected Square.</p>
-            </div>
-          ) : (
-            <KioskPaymentForm totalDue={totalDue} paying={paying} card={card} error={error} onPay={handlePay} />
-          )}
-        </>
-      )}
+        {!squareLocationId ? (
+          <div style={{ padding: '1.5rem', background: '#fff3cd', borderRadius: '8px', border: '1px solid #ffc107', textAlign: 'center' }}>
+            <strong>Card payment not available</strong>
+            <p style={{ margin: '0.5rem 0 0', fontSize: '0.9rem' }}>Vendors in this package have not connected Square.</p>
+          </div>
+        ) : (
+          <KioskPaymentForm totalDue={totalDue} paying={paying} card={card} error={error} onPay={handlePay} />
+        )}
+      </div>
 
       {/* Split Payment Flow */}
       {paymentMode === 'split' && (
