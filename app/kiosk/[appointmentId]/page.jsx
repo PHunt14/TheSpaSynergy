@@ -27,7 +27,8 @@ function PaymentContent() {
   const [paymentMode, setPaymentMode] = useState(null) // null | 'full' | 'split'
   const [splitError, setSplitError] = useState(null)
 
-  const { card } = useSquarePayment(squareLocationId, paid || paymentMode === 'split')
+  // Initialize Square card as soon as we have a location — card-container is always in the DOM
+  const { card } = useSquarePayment(squareLocationId, paid)
 
   useEffect(() => {
     fetch(`/api/kiosk/appointments?appointmentId=${appointmentId}`)
@@ -298,18 +299,19 @@ function PaymentContent() {
       )}
 
       {/* Full Payment Flow (default for non-group or when 'full' selected) */}
-      {(!canSplitPay || paymentMode === 'full') && (
-        <>
-          {!squareLocationId ? (
+      {/* Card form is always rendered so Square SDK can attach; hidden until user picks 'full' */}
+      <div style={canSplitPay && paymentMode !== 'full' ? { position: 'absolute', left: '-9999px', opacity: 0, pointerEvents: 'none' } : undefined}>
+        {!squareLocationId ? (
+          (!canSplitPay || paymentMode === 'full') ? (
             <div style={{ padding: '1.5rem', background: '#fff3cd', borderRadius: '8px', border: '1px solid #ffc107', textAlign: 'center' }}>
               <strong>Card payment not available</strong>
               <p style={{ margin: '0.5rem 0 0', fontSize: '0.9rem' }}>This vendor has not connected Square.</p>
             </div>
-          ) : (
-            <KioskPaymentForm totalDue={totalDue} paying={paying} card={card} error={error} onPay={handlePay} />
-          )}
-        </>
-      )}
+          ) : null
+        ) : (
+          <KioskPaymentForm totalDue={totalDue} paying={paying} card={card} error={error} onPay={handlePay} />
+        )}
+      </div>
 
       {/* Split Payment Flow */}
       {canSplitPay && paymentMode === 'split' && (
