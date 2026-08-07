@@ -102,6 +102,7 @@ The payment API then:
 | "House vendor not configured" | Ensure one vendor has `isHouse: true` in the database |
 | House fees not splitting | Check service has `houseFeeEnabled: true` and `houseFeeAmount` set |
 | Vendor receives wrong amount | Verify: vendor amount = price - houseFeeAmount |
+| Kiosk shows "Card payment not available" on house-fee services | Ensure the house vendor record has `squareAccessToken` and `squareLocationId` set. `squareOAuthStatus` does not need to be `'connected'` — the house vendor's credentials are stored directly on the Vendor record, not via the staff OAuth flow. Check Dashboard → Settings → Vendor Settings for the house vendor. |
 
 ## Future Enhancements
 

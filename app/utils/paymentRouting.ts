@@ -172,8 +172,15 @@ export function resolvePaymentRoute(
   // Staff gets the remainder after house fee
   const staffAmount = service.price - houseFeeAmount;
 
-  // House fee credentials come from the house provider
-  const houseFeeCredentials = extractCredentials(houseProvider);
+  // House fee credentials come from the house provider.
+  // The house vendor uses vendor-level credentials (not staff OAuth), so we only
+  // require a token and locationId — squareOAuthStatus may be 'disconnected' even
+  // when credentials are valid (vendor-level tokens are set directly, not via OAuth flow).
+  const houseFeeCredentials =
+    houseProvider.squareAccessToken && houseProvider.squareAccessToken.trim() !== '' &&
+    houseProvider.squareLocationId && houseProvider.squareLocationId.trim() !== ''
+      ? { accessToken: houseProvider.squareAccessToken!, locationId: houseProvider.squareLocationId! }
+      : extractCredentials(houseProvider);
   if (!houseFeeCredentials) {
     throw new PaymentRouteError(
       `Cannot process house fee: house provider "${houseProvider.name}" does not have valid Square credentials.`

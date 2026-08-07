@@ -297,6 +297,24 @@ describe('resolvePaymentRoute', () => {
       ).toThrow(PaymentRouteError)
     })
 
+    test('accepts house provider credentials when squareOAuthStatus is "disconnected" but tokens are present', () => {
+      // Real-world case: Stacey's vendor record has valid tokens but squareOAuthStatus
+      // was never set to "connected" (vendor-level tokens set directly, not via OAuth flow)
+      const houseProvider = makeHouseProvider({ squareOAuthStatus: 'disconnected' })
+      const result = resolvePaymentRoute(
+        makeAppointment(),
+        makeStaff(),
+        makeProvider(),
+        makeService(),
+        houseProvider
+      )
+
+      expect(result.houseFeeCredentials).toEqual({
+        accessToken: houseProvider.squareAccessToken,
+        locationId: houseProvider.squareLocationId,
+      })
+    })
+
     test('staff amount is full price when no house fee', () => {
       const result = resolvePaymentRoute(
         makeAppointment(),

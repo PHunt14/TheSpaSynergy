@@ -112,6 +112,9 @@ function arbProviderWithCredentials() {
 
 /**
  * Generates a house provider with valid Square credentials.
+ * squareOAuthStatus can be any value (including 'disconnected' or null) because
+ * the house vendor's credentials are set directly on the Vendor record, not via
+ * the staff OAuth flow. resolvePaymentRoute only requires token + locationId.
  */
 function arbHouseProvider() {
   return fc.record({
@@ -122,7 +125,11 @@ function arbHouseProvider() {
     isHouse: fc.constant(true),
     squareAccessToken: arbCredentialString(),
     squareLocationId: arbCredentialString(),
-    squareOAuthStatus: arbValidOAuthStatus(),
+    squareOAuthStatus: fc.oneof(
+      fc.constant('connected'),
+      fc.constant('disconnected'),
+      fc.constant(null),
+    ),
   })
 }
 
