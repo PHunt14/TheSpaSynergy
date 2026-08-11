@@ -49,7 +49,18 @@ function BundlePaymentContent() {
         setBundle(foundBundle)
 
         if (apts.length > 0) {
-          resolveSquareLocation(apts[0].vendorId, setSquareLocationId)
+          // Try each appointment's vendor in order until one resolves a Square location
+          const tryResolve = (index) => {
+            if (index >= apts.length) return
+            resolveSquareLocation(apts[index].vendorId, (locationId) => {
+              if (locationId) {
+                setSquareLocationId(locationId)
+              } else {
+                tryResolve(index + 1)
+              }
+            })
+          }
+          tryResolve(0)
         }
 
         setLoading(false)
@@ -91,10 +102,13 @@ function BundlePaymentContent() {
         houseVendorId: houseVendor?.vendorId || '',
       })
 
-      // Enrich bundlePayments with staffId for staff-level credential resolution
+      // Enrich bundlePayments with staffId — track used appointmentIds to avoid
+      // assigning the same staff member to multiple payment entries for the same vendor
+      const usedAppointmentIds = new Set()
       const enrichedPayments = split.bundlePayments.map(bp => {
         if (bp.isHouseFee) return bp
-        const matchingApt = appointments.find(a => a.vendorId === bp.vendorId)
+        const matchingApt = appointments.find(a => a.vendorId === bp.vendorId && !usedAppointmentIds.has(a.appointmentId))
+        if (matchingApt) usedAppointmentIds.add(matchingApt.appointmentId)
         return { ...bp, staffId: matchingApt?.staffId || undefined }
       })
 

@@ -42,7 +42,18 @@ function MultiPaymentContent() {
         setAppointments(apts)
 
         if (apts.length > 0) {
-          resolveSquareLocation(apts[0].vendorId, setSquareLocationId)
+          // Try each appointment's vendor in order until one resolves a Square location
+          const tryResolve = (index) => {
+            if (index >= apts.length) return
+            resolveSquareLocation(apts[index].vendorId, (locationId) => {
+              if (locationId) {
+                setSquareLocationId(locationId)
+              } else {
+                tryResolve(index + 1)
+              }
+            })
+          }
+          tryResolve(0)
         }
 
         setLoading(false)
@@ -124,21 +135,25 @@ function MultiPaymentContent() {
         return
       }
 
+      // For multi-vendor splits, match each appointment to its specific payment ID
+      const splitPayments = payData.splitPayments || []
       await Promise.all(
-        appointments.map(apt =>
-          fetch('/api/appointments', {
+        appointments.map(apt => {
+          const match = splitPayments.find(sp => !sp.isHouseFee && (sp.staffId === apt.staffId || sp.vendorId === apt.vendorId))
+          const paymentId = match?.paymentId || payData.paymentId
+          return fetch('/api/appointments', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               appointmentId: apt.appointmentId,
-              paymentId: payData.paymentId,
+              paymentId,
               paymentStatus: 'paid',
               paymentAmount: apt.service?.price || 0,
               tipAmount: tipAmount > 0 ? Math.round((tipAmount / appointments.length) * 100) / 100 : undefined,
               status: 'confirmed',
             })
           })
-        )
+        })
       )
 
       setPaid(true)

@@ -2,7 +2,7 @@ import { generateServerClientUsingCookies } from '@aws-amplify/adapter-nextjs/da
 import { cookies } from 'next/headers';
 import type { Schema } from '../../../../amplify/data/resource';
 import config from '../../../../amplify_outputs.json' with { type: 'json' };
-import { randomUUID } from 'crypto';
+import { randomUUID, timingSafeEqual } from 'crypto';
 
 const client = generateServerClientUsingCookies<Schema>({ config, cookies });
 
@@ -19,7 +19,10 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Kiosk PIN not configured. Ask an admin to set one in Dashboard → Settings.' }, { status: 403 });
     }
 
-    if (pin !== setting.settingValue) {
+    const pinBuffer = Buffer.from(pin);
+    const storedBuffer = Buffer.from(setting.settingValue);
+    const pinMatch = pinBuffer.length === storedBuffer.length && timingSafeEqual(pinBuffer, storedBuffer);
+    if (!pinMatch) {
       return Response.json({ error: 'Invalid PIN' }, { status: 401 });
     }
 

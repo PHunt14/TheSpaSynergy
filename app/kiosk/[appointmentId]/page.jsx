@@ -281,7 +281,7 @@ function PaymentContent() {
             </button>
             <button
               type="button"
-              onClick={() => { setPaymentMode('split'); setSplitError(null) }}
+              onClick={() => { setPaymentMode('split'); setTipAmount(0); setSplitError(null) }}
               aria-pressed={paymentMode === 'split'}
               aria-label="Split Payment"
               style={{

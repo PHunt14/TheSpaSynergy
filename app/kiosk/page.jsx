@@ -46,12 +46,15 @@ function KioskContent() {
     }
   })
 
-  // Group individual appointments by customer name
+  // Group individual appointments by customer — use clientId when available,
+  // fall back to name+dateTime prefix to avoid collisions between same-named customers
   const customerGroups = {}
   individualAppointments.forEach(apt => {
-    const name = apt.customer?.name || 'Walk-in'
-    if (!customerGroups[name]) customerGroups[name] = []
-    customerGroups[name].push(apt)
+    const key = apt.clientId
+      ? `client:${apt.clientId}`
+      : `name:${apt.customer?.name || 'Walk-in'}:${apt.dateTime?.slice(0, 10) || ''}`
+    if (!customerGroups[key]) customerGroups[key] = []
+    customerGroups[key].push(apt)
   })
 
   return (
