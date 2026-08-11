@@ -19,8 +19,8 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Kiosk PIN not configured. Ask an admin to set one in Dashboard → Settings.' }, { status: 403 });
     }
 
-    const pinBuffer = Buffer.from(pin);
-    const storedBuffer = Buffer.from(setting.settingValue);
+    const pinBuffer = new TextEncoder().encode(pin);
+    const storedBuffer = new TextEncoder().encode(setting.settingValue);
     const pinMatch = pinBuffer.length === storedBuffer.length && timingSafeEqual(pinBuffer, storedBuffer);
     if (!pinMatch) {
       return Response.json({ error: 'Invalid PIN' }, { status: 401 });

@@ -3,6 +3,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { fetchAuthSession } from 'aws-amplify/auth'
 
+const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+const DAY_LABELS = { monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu', friday: 'Fri', saturday: 'Sat', sunday: 'Sun' }
+
 const DEFAULT_WORKING_HOURS = {
   monday: { start: '09:00', end: '17:00', closed: false },
   tuesday: { start: '09:00', end: '17:00', closed: false },
@@ -13,10 +16,14 @@ const DEFAULT_WORKING_HOURS = {
   sunday: { start: '10:00', end: '15:00', closed: true }
 }
 
+const inputStyle = { padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.95rem' }
+const btnStyle = (bg) => ({ padding: '0.5rem 1rem', borderRadius: '6px', border: 'none', background: bg, color: 'white', cursor: 'pointer', fontSize: '0.85rem' })
+
 const emptyVendorForm = () => ({
   name: '', description: '', email: '', phone: '',
   bufferMinutes: 15, isActive: true, isHouse: false,
-  workingHours: { ...DEFAULT_WORKING_HOURS }
+  workingHours: { ...DEFAULT_WORKING_HOURS },
+  overrides: {}
 })
 
 export default function Vendors() {
@@ -64,12 +71,13 @@ export default function Vendors() {
       bufferMinutes: newVendor.bufferMinutes,
       isActive: newVendor.isActive,
       isHouse: newVendor.isHouse,
-      workingHours: newVendor.workingHours
     }
 
-    if (!editingVendor) {
-      vendorData.workingHours = newVendor.workingHours
+    const finalWorkingHours = { ...newVendor.workingHours }
+    if (Object.keys(newVendor.overrides).length > 0) {
+      finalWorkingHours.overrides = newVendor.overrides
     }
+    vendorData.workingHours = finalWorkingHours
     
     try {
       const response = await fetch('/api/vendors', {
@@ -100,6 +108,7 @@ export default function Vendors() {
     if (typeof parsedHours === 'string') {
       try { parsedHours = JSON.parse(parsedHours) } catch { parsedHours = null }
     }
+    const { overrides: parsedOverrides, ...weeklyHours } = parsedHours || DEFAULT_WORKING_HOURS
     setNewVendor({
       name: vendor.name,
       description: vendor.description || '',
@@ -108,7 +117,8 @@ export default function Vendors() {
       bufferMinutes: vendor.bufferMinutes || 15,
       isActive: vendor.isActive !== undefined ? vendor.isActive : true,
       isHouse: vendor.isHouse || false,
-      workingHours: parsedHours || { ...DEFAULT_WORKING_HOURS }
+      workingHours: weeklyHours,
+      overrides: parsedOverrides || {}
     })
     setShowAddForm(true)
     setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
@@ -284,64 +294,89 @@ export default function Vendors() {
           </div>
 
           <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', marginBottom: '1rem', fontWeight: 'bold' }}>Working Hours</label>
-            {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => (
-              <div key={day} style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.75rem' }}>
-                <div style={{ width: '100px', textTransform: 'capitalize' }}>{day}</div>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <input
-                    type="checkbox"
-                    checked={newVendor.workingHours[day].closed}
-                    onChange={(e) => setNewVendor({
-                      ...newVendor,
-                      workingHours: {
-                        ...newVendor.workingHours,
-                        [day]: { ...newVendor.workingHours[day], closed: e.target.checked }
-                      }
-                    })}
-                    style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                  />
-                  <span style={{ fontSize: '0.9rem' }}>Closed</span>
-                </label>
-                {!newVendor.workingHours[day].closed && (
-                  <>
-                    <input
-                      type="time"
-                      value={newVendor.workingHours[day].start}
-                      onChange={(e) => setNewVendor({
-                        ...newVendor,
-                        workingHours: {
-                          ...newVendor.workingHours,
-                          [day]: { ...newVendor.workingHours[day], start: e.target.value }
-                        }
-                      })}
-                      style={{
-                        padding: '0.5rem',
-                        borderRadius: '4px',
-                        border: '1px solid var(--color-border)'
-                      }}
-                    />
-                    <span>to</span>
-                    <input
-                      type="time"
-                      value={newVendor.workingHours[day].end}
-                      onChange={(e) => setNewVendor({
-                        ...newVendor,
-                        workingHours: {
-                          ...newVendor.workingHours,
-                          [day]: { ...newVendor.workingHours[day], end: e.target.value }
-                        }
-                      })}
-                      style={{
-                        padding: '0.5rem',
-                        borderRadius: '4px',
-                        border: '1px solid var(--color-border)'
-                      }}
-                    />
-                  </>
-                )}
-              </div>
-            ))}
+            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Weekly Hours</label>
+            <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginBottom: '0.75rem' }}>
+              Default hours each week. Use date overrides below to open or close specific dates.
+            </p>
+            <div style={{ display: 'grid', gap: '0.5rem', marginBottom: '1.5rem' }}>
+              {DAYS.map(day => {
+                const dayData = newVendor.workingHours[day] || {}
+                const isOpen = !dayData.closed
+                return (
+                  <div key={day} style={{ padding: '0.5rem 0.75rem', background: isOpen ? 'white' : '#f5f5f5', borderRadius: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                      <span style={{ width: '40px', fontWeight: 600, fontSize: '0.9rem' }}>{DAY_LABELS[day]}</span>
+                      <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                        <input type="checkbox" checked={isOpen} onChange={() => setNewVendor(prev => ({
+                          ...prev,
+                          workingHours: { ...prev.workingHours, [day]: { ...prev.workingHours[day], closed: isOpen } }
+                        }))} />
+                      </label>
+                      {isOpen ? (
+                        <>
+                          <input type="time" value={dayData.start || '09:00'}
+                            onChange={(e) => setNewVendor(prev => ({ ...prev, workingHours: { ...prev.workingHours, [day]: { ...prev.workingHours[day], start: e.target.value } } }))}
+                            style={{ ...inputStyle, width: '130px' }} />
+                          <span>to</span>
+                          <input type="time" value={dayData.end || '17:00'}
+                            onChange={(e) => setNewVendor(prev => ({ ...prev, workingHours: { ...prev.workingHours, [day]: { ...prev.workingHours[day], end: e.target.value } } }))}
+                            style={{ ...inputStyle, width: '130px' }} />
+                        </>
+                      ) : (
+                        <span style={{ color: '#999', fontSize: '0.9rem' }}>Closed</span>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Date Overrides</label>
+            <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginBottom: '0.75rem' }}>
+              Open or close bookings for a specific date, regardless of the weekly schedule.
+            </p>
+            <div style={{ display: 'grid', gap: '0.5rem', marginBottom: '0.75rem' }}>
+              {Object.entries(newVendor.overrides)
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([dateStr, hours]) => (
+                  <div key={dateStr} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', padding: '0.5rem 0.75rem', background: hours ? '#e8f5e9' : '#fce4ec', borderRadius: '8px' }}>
+                    <span style={{ fontWeight: 600, fontSize: '0.9rem', minWidth: '110px' }}>{dateStr}</span>
+                    {hours ? (
+                      <>
+                        <span style={{ fontSize: '0.85rem', color: '#2e7d32' }}>Open</span>
+                        <input type="time" value={hours.start}
+                          onChange={(e) => setNewVendor(prev => ({ ...prev, overrides: { ...prev.overrides, [dateStr]: { ...prev.overrides[dateStr], start: e.target.value } } }))}
+                          style={{ ...inputStyle, width: '130px' }} />
+                        <span>to</span>
+                        <input type="time" value={hours.end}
+                          onChange={(e) => setNewVendor(prev => ({ ...prev, overrides: { ...prev.overrides, [dateStr]: { ...prev.overrides[dateStr], end: e.target.value } } }))}
+                          style={{ ...inputStyle, width: '130px' }} />
+                      </>
+                    ) : (
+                      <span style={{ fontSize: '0.85rem', color: '#c62828' }}>Closed</span>
+                    )}
+                    <button type="button"
+                      onClick={() => setNewVendor(prev => { const next = { ...prev.overrides }; delete next[dateStr]; return { ...prev, overrides: next } })}
+                      style={{ ...btnStyle('#999'), marginLeft: 'auto', padding: '0.25rem 0.6rem' }}>✕</button>
+                  </div>
+                ))
+              }
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <input type="date" id="vendor-override-date" min={new Date().toISOString().split('T')[0]} style={{ ...inputStyle }} />
+              <button type="button" onClick={() => {
+                const d = document.getElementById('vendor-override-date').value
+                if (!d || newVendor.overrides[d] !== undefined) return
+                setNewVendor(prev => ({ ...prev, overrides: { ...prev.overrides, [d]: { start: '09:00', end: '17:00' } } }))
+                document.getElementById('vendor-override-date').value = ''
+              }} style={btnStyle('#4CAF50')}>+ Open this date</button>
+              <button type="button" onClick={() => {
+                const d = document.getElementById('vendor-override-date').value
+                if (!d || newVendor.overrides[d] !== undefined) return
+                setNewVendor(prev => ({ ...prev, overrides: { ...prev.overrides, [d]: null } }))
+                document.getElementById('vendor-override-date').value = ''
+              }} style={btnStyle('#e53935')}>✕ Close this date</button>
+            </div>
           </div>
 
           <div style={{ marginBottom: '1rem' }}>
