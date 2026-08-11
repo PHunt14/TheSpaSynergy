@@ -74,6 +74,24 @@ jest.unstable_mockModule('aws-amplify/data', () => ({
     },
   })),
 }))
+jest.unstable_mockModule('@aws-amplify/adapter-nextjs/data', () => ({
+  generateServerClientUsingCookies: jest.fn(() => ({
+    models: {
+      Vendor: { get: mockVendorGet, list: mockVendorList },
+      Appointment: { list: mockAppointmentList, update: mockAppointmentUpdate },
+      Service: { get: mockServiceGet },
+      StaffSchedule: { get: mockStaffGet, listStaffScheduleByVendorId: mockStaffList },
+      SiteSettings: { get: mockSiteSettingsGet, update: mockSiteSettingsUpdate, create: mockSiteSettingsCreate },
+    },
+  })),
+}))
+jest.unstable_mockModule('next/headers', () => ({
+  cookies: jest.fn(async () => ({
+    get: jest.fn(),
+    set: jest.fn(),
+    delete: jest.fn(),
+  })),
+}))
 jest.unstable_mockModule('aws-amplify', () => ({ Amplify: { configure: jest.fn() } }))
 jest.unstable_mockModule('../../amplify_outputs.json', () => ({ default: {} }), { virtual: true })
 jest.unstable_mockModule('../../lib/square/catalog.js', () => ({ buildOrderLineItems: jest.fn(() => []) }))

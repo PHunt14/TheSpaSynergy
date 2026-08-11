@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
+import { cookies } from 'next/headers'
 
 export async function GET(request: NextRequest) {
   try {
@@ -18,6 +19,16 @@ export async function GET(request: NextRequest) {
 
     const nonce = randomUUID()
     const state = Buffer.from(JSON.stringify({ vendorId, staffId, nonce })).toString('base64url')
+
+    // Store nonce in a short-lived httpOnly cookie so the callback can verify it
+    const cookieStore = await cookies()
+    cookieStore.set('square_oauth_nonce', nonce, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 600, // 10 minutes
+      path: '/',
+    })
 
     const redirectUri = encodeURIComponent(`${baseUrl}/api/square/callback`)
     const scopes = [

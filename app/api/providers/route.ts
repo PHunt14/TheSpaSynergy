@@ -1,10 +1,28 @@
 import { client, getCurrentUser } from '@/lib/auth';
 
+const SENSITIVE_VENDOR_FIELDS = [
+  'squareAccessToken', 'squareRefreshToken', 'squareApplicationId',
+  'squareAccountId', 'squareTokenExpiresAt', 'squareConnectedAt',
+  'smsAlertPhone',
+] as const;
+
+function stripSensitiveFields(vendor: any) {
+  const safe = { ...vendor };
+  for (const field of SENSITIVE_VENDOR_FIELDS) delete safe[field];
+  return safe;
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const includeInactive = searchParams.get('includeInactive');
     const providerId = searchParams.get('providerId');
+
+    // includeInactive requires authentication
+    if (includeInactive === 'true') {
+      const currentUser = await getCurrentUser();
+      if (!currentUser) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
     // If providerId is provided, fetch single provider
     if (providerId) {
@@ -19,7 +37,7 @@ export async function GET(request: Request) {
         return Response.json({ error: 'Provider not found' }, { status: 404 });
       }
 
-      return Response.json({ provider });
+      return Response.json({ provider: stripSensitiveFields(provider) });
     }
 
     // Otherwise, fetch all providers
@@ -48,16 +66,16 @@ export async function GET(request: Request) {
             const activeStaff = (staffMembers || [])
               .filter((s: any) => s.isActive === true)
               .map((s: any) => ({ visibleId: s.visibleId, staffName: s.staffName }));
-            return { ...provider, staff: activeStaff };
+          return { ...stripSensitiveFields(provider), staff: activeStaff };
           } catch {
-            return { ...provider, staff: [] };
+            return { ...stripSensitiveFields(provider), staff: [] };
           }
         })
       );
       return Response.json({ providers: providersWithStaff });
     }
 
-    return Response.json({ providers });
+    return Response.json({ providers: (providers as any[]).map(stripSensitiveFields) });
   } catch (error) {
     console.error('Error fetching providers:', error);
     return Response.json({ error: 'Failed to fetch providers' }, { status: 500 });
@@ -115,7 +133,10 @@ export async function PATCH(request: Request) {
     }
 
     const currentUser = await getCurrentUser();
-    if ((currentUser?.role === 'vendor' || currentUser?.role === 'owner') && vendorId !== currentUser.vendorId) {
+    if (!currentUser) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if ((currentUser.role === 'vendor' || currentUser.role === 'owner') && vendorId !== currentUser.vendorId) {
       return Response.json({ error: 'Unauthorized: Can only update your own provider' }, { status: 403 });
     }
 

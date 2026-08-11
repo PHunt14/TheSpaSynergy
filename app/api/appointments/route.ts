@@ -15,6 +15,11 @@ const client = generateServerClientUsingCookies<Schema>({
 
 export async function PATCH(request: Request) {
   try {
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { appointmentId, paymentId, paymentStatus, paymentAmount, status, serviceId, staffId, vendorId, customer, createdBy, confirmOverlap, dateTime } = await request.json();
 
     if (!appointmentId) {
