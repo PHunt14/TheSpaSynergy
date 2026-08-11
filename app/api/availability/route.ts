@@ -2,7 +2,7 @@ import { generateServerClientUsingCookies } from '@aws-amplify/adapter-nextjs/da
 import { cookies } from 'next/headers';
 import type { Schema } from '../../../amplify/data/resource';
 import config from '../../../amplify_outputs.json' with { type: 'json' };
-import { getRecurrenceHours, generateTimeSlots, getMultiProviderSlots } from '../../utils/availability.js';
+import { getRecurrenceHours, generateTimeSlots, getMultiProviderSlots, getScheduleOverride } from '../../utils/availability.js';
 import { getParallelQuantitySlots, getSequentialQuantitySlots } from '../../utils/quantityAvailability.js';
 import { getEligibleStaff } from '../../utils/staffEligibility';
 
@@ -302,6 +302,16 @@ async function computeSlotsForStaff(
 function getStaffWorkingHoursForDay(staff: any, dayOfWeek: string, requestedDate: Date) {
   if (!staff.schedule) return null;
   const schedule = typeof staff.schedule === 'string' ? JSON.parse(staff.schedule) : staff.schedule;
+
+  // Date-specific overrides take priority over the weekly template
+  const overrides = schedule.overrides;
+  const dateStr = requestedDate.toISOString().split('T')[0];
+  const override = getScheduleOverride(overrides, dateStr);
+  if (override !== undefined) {
+    // null = explicitly closed for this date; { start, end } = custom hours
+    return override ? { start: override.start, end: override.end } : null;
+  }
+
   const daySchedule = schedule[dayOfWeek];
   if (!daySchedule || !daySchedule.start) return null;
 

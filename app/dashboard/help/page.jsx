@@ -36,7 +36,7 @@ const sections = [
   {
     title: 'Staff',
     description:
-      'Add and manage your staff members. Staff can be assigned to specific services so customers know who will be performing their appointment. Set individual schedules, enable auto-assign rules, and configure SMS/email alerts per staff member. Staff can also connect their own Square account for direct payments.',
+      'Add and manage your staff members. Set a weekly schedule for each staff member — the days and hours they work by default. Use Date Overrides to open or close your books for any specific date, regardless of the weekly schedule (e.g. working a Saturday you normally have off, or closing for a holiday). You can also set "every other week" recurrence for days you only work bi-weekly. Auto-assign rules let bookings on selected days go directly to a staff member. SMS and email alerts can be enabled per staff member, and staff can connect their own Square account for direct payments.',
   },
   {
     title: 'Clients',
@@ -57,7 +57,18 @@ const sections = [
 
 const platformUpdates = [
   {
-    version: 'v1.4.0',
+    version: 'v1.5.0',
+    date: 'July 2025',
+    title: 'Staff Schedule Date Overrides',
+    changes: [
+      'Staff schedules now support date-specific overrides — open or close your books for any individual date',
+      'Override open: work a day you normally have off (e.g. a specific Saturday), with custom hours',
+      'Override closed: block off a specific date even if it falls on a normally-working day (e.g. a holiday)',
+      'Overrides take priority over the weekly schedule and any recurrence rules',
+      'Removed confusing “2nd of month” recurrence option — date overrides replace this use case cleanly',
+      'Schedule list now shows override count alongside weekly hours summary',
+    ],
+  },
     date: 'July 2025',
     title: 'Split Payments & Group Booking Enhancements',
     changes: [

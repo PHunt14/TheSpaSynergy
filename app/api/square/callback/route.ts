@@ -27,12 +27,22 @@ export async function GET(request: NextRequest) {
 
     let vendorId: string
     let staffId: string | null = null
+    let nonce: string | null = null
     try {
       const decoded = JSON.parse(Buffer.from(state, 'base64url').toString())
       vendorId = decoded.vendorId
       staffId = decoded.staffId || null
+      nonce = decoded.nonce || null
     } catch {
       return Response.redirect(`${baseUrl}/dashboard/settings?error=oauth_failed&details=invalid_state`)
+    }
+
+    // Verify nonce against the cookie set during connect to prevent CSRF
+    const cookieStore = await cookies()
+    const storedNonce = cookieStore.get('square_oauth_nonce')?.value
+    cookieStore.delete('square_oauth_nonce')
+    if (!nonce || !storedNonce || nonce !== storedNonce) {
+      return Response.redirect(`${baseUrl}/dashboard/settings?error=oauth_failed&details=invalid_nonce`)
     }
 
     if (!vendorId) {

@@ -36,7 +36,7 @@ export default function Staff() {
   const [schedules, setSchedules] = useState([])
   const [loadingSchedules, setLoadingSchedules] = useState(true)
   const [editingSchedule, setEditingSchedule] = useState(null) // visibleId or 'new'
-  const [scheduleForm, setScheduleForm] = useState({ staffName: '', staffEmail: '', vendorId: '', schedule: emptySchedule(), autoAssignDays: [], smsAlertsEnabled: false, smsAlertPhone: '', emailAlertsEnabled: false })
+  const [scheduleForm, setScheduleForm] = useState({ staffName: '', staffEmail: '', vendorId: '', schedule: emptySchedule(), autoAssignDays: [], smsAlertsEnabled: false, smsAlertPhone: '', emailAlertsEnabled: false, overrides: {} })
   const [savingSchedule, setSavingSchedule] = useState(false)
 
   const canManageSchedules = currentUserRole === 'admin' || currentUserRole === 'vendor' || currentUserRole === 'owner'
@@ -143,7 +143,7 @@ export default function Staff() {
   // --- Schedule management handlers ---
   const startNewSchedule = () => {
     const vendorId = currentUserRole === 'vendor' ? currentUserVendorId : (vendors[0]?.vendorId || '')
-    setScheduleForm({ staffName: '', staffEmail: '', vendorId, linkedUser: '', schedule: emptySchedule(), autoAssignDays: [], recurrenceDays: {}, smsAlertsEnabled: false, smsAlertPhone: '', emailAlertsEnabled: false })
+    setScheduleForm({ staffName: '', staffEmail: '', vendorId, linkedUser: '', schedule: emptySchedule(), autoAssignDays: [], recurrenceDays: {}, smsAlertsEnabled: false, smsAlertPhone: '', emailAlertsEnabled: false, overrides: {} })
     setEditingSchedule('new')
   }
 
@@ -160,7 +160,7 @@ export default function Staff() {
         }
       }
     })
-    setScheduleForm({ staffName: s.staffName || '', staffEmail: s.staffEmail || '', vendorId: s.vendorId, linkedUser: '', schedule, autoAssignDays, recurrenceDays, smsAlertsEnabled: s.smsAlertsEnabled || false, smsAlertPhone: s.smsAlertPhone || '', emailAlertsEnabled: s.emailAlertsEnabled || false })
+    setScheduleForm({ staffName: s.staffName || '', staffEmail: s.staffEmail || '', vendorId: s.vendorId, linkedUser: '', schedule, autoAssignDays, recurrenceDays, smsAlertsEnabled: s.smsAlertsEnabled || false, smsAlertPhone: s.smsAlertPhone || '', emailAlertsEnabled: s.emailAlertsEnabled || false, overrides: schedule.overrides || {} })
     setEditingSchedule(s.visibleId)
   }
 
@@ -219,7 +219,7 @@ export default function Staff() {
       alert('Email address is required to enable email alerts'); setSavingSchedule(false); return
     }
 
-    // Merge recurrence info into schedule
+    // Merge recurrence info into schedule, and attach overrides
     const finalSchedule = { ...scheduleForm.schedule }
     DAYS.forEach(day => {
       const rec = scheduleForm.recurrenceDays?.[day]
@@ -230,6 +230,12 @@ export default function Staff() {
         finalSchedule[day] = rest
       }
     })
+    // Store overrides under a reserved key (not a day name)
+    if (Object.keys(scheduleForm.overrides).length > 0) {
+      finalSchedule.overrides = scheduleForm.overrides
+    } else {
+      delete finalSchedule.overrides
+    }
 
     try {
       const isNew = editingSchedule === 'new'
@@ -267,13 +273,36 @@ export default function Staff() {
 
   const formatScheduleDisplay = (s) => {
     const schedule = typeof s.schedule === 'string' ? JSON.parse(s.schedule) : (s.schedule || {})
-    return DAYS.filter(d => schedule[d]?.start).map(d => {
+    const weekly = DAYS.filter(d => schedule[d]?.start).map(d => {
       const h = schedule[d]
-      let rec = ''
-      if (h.recurrence === 'every-other') rec = ' (every other)'
-      else if (h.recurrence === '2nd-of-month') rec = ' (2nd of month)'
+      const rec = h.recurrence === 'every-other' ? ' (every other)' : ''
       return `${DAY_LABELS[d]} ${h.start}–${h.end}${rec}`
     }).join(', ') || 'No hours set'
+    const overrides = schedule.overrides || {}
+    const overrideCount = Object.keys(overrides).length
+    return overrideCount > 0 ? `${weekly} · ${overrideCount} date override${overrideCount > 1 ? 's' : ''}` : weekly
+  }
+
+  const addOverride = (dateStr, open) => {
+    setScheduleForm(prev => ({
+      ...prev,
+      overrides: { ...prev.overrides, [dateStr]: open ? { start: '09:00', end: '17:00' } : null }
+    }))
+  }
+
+  const removeOverride = (dateStr) => {
+    setScheduleForm(prev => {
+      const next = { ...prev.overrides }
+      delete next[dateStr]
+      return { ...prev, overrides: next }
+    })
+  }
+
+  const updateOverride = (dateStr, field, value) => {
+    setScheduleForm(prev => ({
+      ...prev,
+      overrides: { ...prev.overrides, [dateStr]: { ...prev.overrides[dateStr], [field]: value } }
+    }))
   }
 
   // --- Render ---
@@ -486,7 +515,10 @@ export default function Staff() {
               )}
             </div>
 
-            <h4 style={{ marginBottom: '0.75rem' }}>Working Hours</h4>
+            <h4 style={{ marginBottom: '0.25rem' }}>Weekly Schedule</h4>
+            <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginBottom: '0.75rem' }}>
+              Your default hours each week. Use date overrides below to open or close specific dates.
+            </p>
             <div style={{ display: 'grid', gap: '0.5rem', marginBottom: '1.5rem' }}>
               {DAYS.map(day => {
                 const dayData = scheduleForm.schedule[day] || {}
@@ -494,7 +526,7 @@ export default function Staff() {
                 const rec = scheduleForm.recurrenceDays?.[day]
                 return (
                   <div key={day} style={{ padding: '0.5rem 0.75rem', background: isWorking ? 'white' : '#f5f5f5', borderRadius: '8px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
                       <span style={{ width: '40px', fontWeight: 600, fontSize: '0.9rem' }}>{DAY_LABELS[day]}</span>
                       <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                         <input type="checkbox" checked={isWorking} onChange={() => toggleDayOff(day)} />
@@ -504,53 +536,96 @@ export default function Staff() {
                           <input type="time" value={dayData.start || ''} onChange={(e) => updateDay(day, 'start', e.target.value)} style={{ ...inputStyle, width: '130px' }} />
                           <span>to</span>
                           <input type="time" value={dayData.end || ''} onChange={(e) => updateDay(day, 'end', e.target.value)} style={{ ...inputStyle, width: '130px' }} />
+                          <select
+                            value={rec?.type || ''}
+                            onChange={(e) => {
+                              const type = e.target.value
+                              setScheduleForm(prev => ({
+                                ...prev,
+                                recurrenceDays: {
+                                  ...prev.recurrenceDays,
+                                  [day]: type ? { type, anchorDate: prev.recurrenceDays?.[day]?.anchorDate || '' } : undefined
+                                }
+                              }))
+                            }}
+                            style={{ ...inputStyle, fontSize: '0.85rem' }}
+                          >
+                            <option value="">Every week</option>
+                            <option value="every-other">Every other week</option>
+                          </select>
+                          {rec?.type === 'every-other' && (
+                            <>
+                              <label style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', whiteSpace: 'nowrap' }}>Working on:</label>
+                              <input
+                                type="date"
+                                value={rec.anchorDate || ''}
+                                onChange={(e) => setScheduleForm(prev => ({
+                                  ...prev,
+                                  recurrenceDays: {
+                                    ...prev.recurrenceDays,
+                                    [day]: { ...prev.recurrenceDays[day], anchorDate: e.target.value }
+                                  }
+                                }))}
+                                style={{ ...inputStyle, fontSize: '0.85rem' }}
+                              />
+                            </>
+                          )}
                         </>
                       ) : (
                         <span style={{ color: '#999', fontSize: '0.9rem' }}>Off</span>
                       )}
                     </div>
-                    {isWorking && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.4rem', marginLeft: '40px', paddingLeft: '0.75rem' }}>
-                        <select
-                          value={rec?.type || ''}
-                          onChange={(e) => {
-                            const type = e.target.value
-                            setScheduleForm(prev => ({
-                              ...prev,
-                              recurrenceDays: {
-                                ...prev.recurrenceDays,
-                                [day]: type ? { type, anchorDate: prev.recurrenceDays?.[day]?.anchorDate || '' } : undefined
-                              }
-                            }))
-                          }}
-                          style={{ ...inputStyle, fontSize: '0.85rem' }}
-                        >
-                          <option value="">Every week</option>
-                          <option value="every-other">Every other week</option>
-                          <option value="2nd-of-month">2nd of month</option>
-                        </select>
-                        {rec?.type === 'every-other' && (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                            <label style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', whiteSpace: 'nowrap' }}>Working on:</label>
-                            <input
-                              type="date"
-                              value={rec.anchorDate || ''}
-                              onChange={(e) => setScheduleForm(prev => ({
-                                ...prev,
-                                recurrenceDays: {
-                                  ...prev.recurrenceDays,
-                                  [day]: { ...prev.recurrenceDays[day], anchorDate: e.target.value }
-                                }
-                              }))}
-                              style={{ ...inputStyle, fontSize: '0.85rem' }}
-                            />
-                          </div>
-                        )}
-                      </div>
-                    )}
                   </div>
                 )
               })}
+            </div>
+
+            <h4 style={{ marginBottom: '0.25rem' }}>Date Overrides</h4>
+            <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginBottom: '0.75rem' }}>
+              Open or close your books for a specific date, regardless of your weekly schedule.
+            </p>
+            <div style={{ display: 'grid', gap: '0.5rem', marginBottom: '0.75rem' }}>
+              {Object.entries(scheduleForm.overrides)
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([dateStr, hours]) => (
+                  <div key={dateStr} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', padding: '0.5rem 0.75rem', background: hours ? '#e8f5e9' : '#fce4ec', borderRadius: '8px' }}>
+                    <span style={{ fontWeight: 600, fontSize: '0.9rem', minWidth: '110px' }}>{dateStr}</span>
+                    {hours ? (
+                      <>
+                        <span style={{ fontSize: '0.85rem', color: '#2e7d32' }}>Open</span>
+                        <input type="time" value={hours.start} onChange={(e) => updateOverride(dateStr, 'start', e.target.value)} style={{ ...inputStyle, width: '130px' }} />
+                        <span>to</span>
+                        <input type="time" value={hours.end} onChange={(e) => updateOverride(dateStr, 'end', e.target.value)} style={{ ...inputStyle, width: '130px' }} />
+                      </>
+                    ) : (
+                      <span style={{ fontSize: '0.85rem', color: '#c62828' }}>Closed</span>
+                    )}
+                    <button type="button" onClick={() => removeOverride(dateStr)} style={{ ...btnStyle('#999'), marginLeft: 'auto', padding: '0.25rem 0.6rem' }}>✕</button>
+                  </div>
+                ))
+              }
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
+              <input
+                type="date"
+                id="override-date-picker"
+                min={new Date().toISOString().split('T')[0]}
+                style={{ ...inputStyle }}
+              />
+              <button type="button" onClick={() => {
+                const d = document.getElementById('override-date-picker').value
+                if (!d) return
+                if (scheduleForm.overrides[d] !== undefined) return
+                addOverride(d, true)
+                document.getElementById('override-date-picker').value = ''
+              }} style={btnStyle('#4CAF50')}>+ Open this date</button>
+              <button type="button" onClick={() => {
+                const d = document.getElementById('override-date-picker').value
+                if (!d) return
+                if (scheduleForm.overrides[d] !== undefined) return
+                addOverride(d, false)
+                document.getElementById('override-date-picker').value = ''
+              }} style={btnStyle('#e53935')}>✕ Close this date</button>
             </div>
 
             <h4 style={{ marginBottom: '0.5rem' }}>Auto-Assign Days</h4>

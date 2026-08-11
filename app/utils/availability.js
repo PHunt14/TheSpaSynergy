@@ -2,6 +2,18 @@ const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'frid
 
 export { DAY_NAMES }
 
+/**
+ * Checks a date-specific override for a staff member's schedule.
+ * overrides is a map of { "YYYY-MM-DD": { start, end } | null }
+ * Returns { start, end } if open, null if explicitly closed, or undefined if no override.
+ */
+export function getScheduleOverride(overrides, date) {
+  if (!overrides) return undefined
+  const dateStr = typeof date === 'string' ? date : date.toISOString().split('T')[0]
+  if (!(dateStr in overrides)) return undefined
+  return overrides[dateStr] // null = closed, { start, end } = open with custom hours
+}
+
 export function getRecurrenceHours(daySchedule, requestedDate) {
   if (daySchedule.recurrence === 'every-other') {
     if (daySchedule.anchorDate) {
@@ -20,14 +32,6 @@ export function getRecurrenceHours(daySchedule, requestedDate) {
     return null
   }
 
-  if (daySchedule.recurrence === '2nd-of-month') {
-    const dayOfMonth = requestedDate.getDate()
-    if (dayOfMonth >= 8 && dayOfMonth <= 14) {
-      return { start: daySchedule.recurrenceStart, end: daySchedule.recurrenceEnd }
-    }
-    return null
-  }
-
   return daySchedule.start ? { start: daySchedule.start, end: daySchedule.end } : null
 }
 
@@ -35,10 +39,13 @@ export function resolveStaffSync(staffList, dayOfWeek, requestedDate, allowedSta
   const isAllowed = (staff) => !allowedStaffIds || allowedStaffIds.length === 0 || allowedStaffIds.includes(staff.visibleId)
   const eligible = staffList.filter(s => s.isActive && isAllowed(s))
 
-  // Helper: check if a staff member actually works on this specific day (respects recurrence)
+  // Helper: check if a staff member actually works on this specific day (respects overrides + recurrence)
   const isWorkingThisDay = (staff) => {
     if (!staff.schedule) return false
     const schedule = JSON.parse(staff.schedule)
+    // Check date-specific override first
+    const override = getScheduleOverride(schedule.overrides, requestedDate)
+    if (override !== undefined) return override !== null
     const daySchedule = schedule[dayOfWeek]
     if (!daySchedule || !daySchedule.start) return false
     if (daySchedule.recurrence) return !!getRecurrenceHours(daySchedule, requestedDate)?.start
@@ -322,6 +329,13 @@ export function getMultiProviderSlots({ service, staffSchedules, appointments, d
 function getStaffWorkingHours(staff, dayOfWeek, requestedDate) {
   if (!staff.schedule) return null
   const schedule = typeof staff.schedule === 'string' ? JSON.parse(staff.schedule) : staff.schedule
+
+  // Date-specific overrides take priority
+  const override = getScheduleOverride(schedule.overrides, requestedDate)
+  if (override !== undefined) {
+    return override ? { start: override.start, end: override.end } : null
+  }
+
   const daySchedule = schedule[dayOfWeek]
   if (!daySchedule) return null
 

@@ -3,14 +3,15 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { fetchAuthSession } from 'aws-amplify/auth'
 
-const navItems = [
+const allNavItems = [
   { href: '/dashboard', label: 'Overview', icon: '📊' },
   { href: '/dashboard/calendar', label: 'Calendar', icon: '📅' },
   { href: '/dashboard/transactions', label: 'Transactions', icon: '💰' },
   { href: '/dashboard/services', label: 'Services', icon: '💆' },
   { href: '/dashboard/bundles', label: 'Packages', icon: '📦' },
-  { href: '/dashboard/providers', label: 'Providers', icon: '👤' },
+  { href: '/dashboard/providers', label: 'Providers', icon: '👤', adminOnly: true },
   { href: '/dashboard/staff', label: 'Staff', icon: '👥' },
   { href: '/dashboard/clients', label: 'Clients', icon: '🧑‍🤝‍🧑' },
   { href: '/dashboard/settings', label: 'Settings', icon: '⚙️' },
@@ -22,6 +23,7 @@ export default function Sidebar() {
   const [isMobile, setIsMobile] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [hovered, setHovered] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768)
@@ -29,6 +31,17 @@ export default function Sidebar() {
     window.addEventListener('resize', check)
     return () => window.removeEventListener('resize', check)
   }, [])
+
+  useEffect(() => {
+    fetchAuthSession()
+      .then(session => {
+        const role = session.tokens?.idToken?.payload['custom:role']
+        setIsAdmin(role === 'admin')
+      })
+      .catch(() => {})
+  }, [])
+
+  const navItems = allNavItems.filter(item => !item.adminOnly || isAdmin)
 
   // Close mobile menu on route change
   useEffect(() => {

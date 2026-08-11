@@ -83,6 +83,7 @@ export async function GET(request: Request) {
           vendorName: vendorMap.get(apt.vendorId) || 'Unknown',
           serviceId: apt.serviceId,
           staffId: apt.staffId,
+          clientId: apt.clientId || null,
           bundleId: (apt as any).bundleId || null,
           groupId: (apt as any).groupId || null,
           dateTime: apt.dateTime,

@@ -13,6 +13,7 @@
 
 import {
   getRecurrenceHours,
+  getScheduleOverride,
   resolveStaffSync,
   getDayHoursSync,
   hasAnySlot,
@@ -23,19 +24,82 @@ import {
   getMultiProviderSlots,
 } from '../../app/utils/availability.js'
 
+// ── getScheduleOverride ──────────────────────────────────────
+
+describe('getScheduleOverride', () => {
+  test('returns undefined when overrides is null/undefined', () => {
+    expect(getScheduleOverride(null, '2025-07-12')).toBeUndefined()
+    expect(getScheduleOverride(undefined, '2025-07-12')).toBeUndefined()
+  })
+
+  test('returns undefined when date not in overrides', () => {
+    expect(getScheduleOverride({ '2025-07-13': null }, '2025-07-12')).toBeUndefined()
+  })
+
+  test('returns null for an explicitly closed date', () => {
+    expect(getScheduleOverride({ '2025-07-12': null }, '2025-07-12')).toBeNull()
+  })
+
+  test('returns hours for an explicitly open date', () => {
+    const overrides = { '2025-07-12': { start: '10:00', end: '14:00' } }
+    expect(getScheduleOverride(overrides, '2025-07-12')).toEqual({ start: '10:00', end: '14:00' })
+  })
+
+  test('accepts a Date object as well as a string', () => {
+    const overrides = { '2025-07-12': { start: '09:00', end: '17:00' } }
+    expect(getScheduleOverride(overrides, new Date('2025-07-12T00:00:00Z'))).toEqual({ start: '09:00', end: '17:00' })
+  })
+})
+
+// ── override integration with resolveStaffSync ────────────────
+
+describe('resolveStaffSync with overrides', () => {
+  const makeStaffWithOverrides = (id, weeklySchedule, overrides) => ({
+    visibleId: id,
+    isActive: true,
+    autoAssignRules: null,
+    schedule: JSON.stringify({ ...weeklySchedule, overrides }),
+  })
+
+  test('override open on normally-off day makes staff available', () => {
+    // Staff has no Saturday in weekly schedule, but override opens it
+    const staff = makeStaffWithOverrides('s1', {}, { '2025-07-12': { start: '10:00', end: '15:00' } })
+    const result = resolveStaffSync([staff], 'saturday', new Date('2025-07-12T00:00:00'), null)
+    expect(result?.visibleId).toBe('s1')
+  })
+
+  test('override closed on normally-open day makes staff unavailable', () => {
+    // Staff works Monday normally, but override closes this specific Monday
+    const staff = makeStaffWithOverrides('s1',
+      { monday: { start: '09:00', end: '17:00' } },
+      { '2025-07-14': null }
+    )
+    const result = resolveStaffSync([staff], 'monday', new Date('2025-07-14T00:00:00'), null)
+    expect(result).toBeNull()
+  })
+
+  test('override does not affect other dates', () => {
+    const staff = makeStaffWithOverrides('s1',
+      { monday: { start: '09:00', end: '17:00' } },
+      { '2025-07-14': null }
+    )
+    // Different Monday — no override, should be available
+    const result = resolveStaffSync([staff], 'monday', new Date('2025-07-07T00:00:00'), null)
+    expect(result?.visibleId).toBe('s1')
+  })
+})
+
 // ── getRecurrenceHours ────────────────────────────────────────
 
 describe('getRecurrenceHours', () => {
   test('every-other with anchor — returns hours on matching week', () => {
     const schedule = { recurrence: 'every-other', anchorDate: '2025-01-06', start: '09:00', end: '17:00' }
-    // Same week as anchor (0 weeks diff)
     const result = getRecurrenceHours(schedule, new Date('2025-01-06T00:00:00'))
     expect(result).toEqual({ start: '09:00', end: '17:00' })
   })
 
   test('every-other with anchor — returns null on off week', () => {
     const schedule = { recurrence: 'every-other', anchorDate: '2025-01-06', start: '09:00', end: '17:00' }
-    // 1 week after anchor
     const result = getRecurrenceHours(schedule, new Date('2025-01-13T00:00:00'))
     expect(result).toBeNull()
   })
@@ -56,19 +120,6 @@ describe('getRecurrenceHours', () => {
     } else {
       expect(result).toBeNull()
     }
-  })
-
-  test('2nd-of-month — returns hours for day 8-14', () => {
-    const schedule = { recurrence: '2nd-of-month', recurrenceStart: '11:00', recurrenceEnd: '15:00' }
-    const result = getRecurrenceHours(schedule, new Date('2025-06-10T00:00:00'))
-    expect(result).toEqual({ start: '11:00', end: '15:00' })
-  })
-
-  test('2nd-of-month — returns null for day outside 8-14', () => {
-    const schedule = { recurrence: '2nd-of-month', recurrenceStart: '11:00', recurrenceEnd: '15:00' }
-    expect(getRecurrenceHours(schedule, new Date('2025-06-07T00:00:00'))).toBeNull()
-    expect(getRecurrenceHours(schedule, new Date('2025-06-15T00:00:00'))).toBeNull()
-    expect(getRecurrenceHours(schedule, new Date('2025-06-01T00:00:00'))).toBeNull()
   })
 
   test('no recurrence — returns hours if start exists', () => {
