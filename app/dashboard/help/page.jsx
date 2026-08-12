@@ -69,6 +69,8 @@ const platformUpdates = [
       'Schedule list now shows override count alongside weekly hours summary',
     ],
   },
+  {
+    version: 'v1.4.0',
     date: 'July 2025',
     title: 'Split Payments & Group Booking Enhancements',
     changes: [
