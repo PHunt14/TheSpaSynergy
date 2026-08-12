@@ -284,10 +284,15 @@ export default function Staff() {
   }
 
   const addOverride = (dateStr, open) => {
-    setScheduleForm(prev => ({
-      ...prev,
-      overrides: { ...prev.overrides, [dateStr]: open ? { start: '09:00', end: '17:00' } : null }
-    }))
+    setScheduleForm(prev => {
+      let defaultHours = { start: '09:00', end: '17:00' }
+      if (open) {
+        const dow = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'][new Date(dateStr + 'T00:00:00').getDay()]
+        const dayData = prev.schedule[dow]
+        if (dayData?.start) defaultHours = { start: dayData.start, end: dayData.end }
+      }
+      return { ...prev, overrides: { ...prev.overrides, [dateStr]: open ? defaultHours : null } }
+    })
   }
 
   const removeOverride = (dateStr) => {
@@ -584,28 +589,7 @@ export default function Staff() {
             <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginBottom: '0.75rem' }}>
               Open or close your books for a specific date, regardless of your weekly schedule.
             </p>
-            <div style={{ display: 'grid', gap: '0.5rem', marginBottom: '0.75rem' }}>
-              {Object.entries(scheduleForm.overrides)
-                .sort(([a], [b]) => a.localeCompare(b))
-                .map(([dateStr, hours]) => (
-                  <div key={dateStr} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', padding: '0.5rem 0.75rem', background: hours ? '#e8f5e9' : '#fce4ec', borderRadius: '8px' }}>
-                    <span style={{ fontWeight: 600, fontSize: '0.9rem', minWidth: '110px' }}>{dateStr}</span>
-                    {hours ? (
-                      <>
-                        <span style={{ fontSize: '0.85rem', color: '#2e7d32' }}>Open</span>
-                        <input type="time" value={hours.start} onChange={(e) => updateOverride(dateStr, 'start', e.target.value)} style={{ ...inputStyle, width: '130px' }} />
-                        <span>to</span>
-                        <input type="time" value={hours.end} onChange={(e) => updateOverride(dateStr, 'end', e.target.value)} style={{ ...inputStyle, width: '130px' }} />
-                      </>
-                    ) : (
-                      <span style={{ fontSize: '0.85rem', color: '#c62828' }}>Closed</span>
-                    )}
-                    <button type="button" onClick={() => removeOverride(dateStr)} style={{ ...btnStyle('#999'), marginLeft: 'auto', padding: '0.25rem 0.6rem' }}>✕</button>
-                  </div>
-                ))
-              }
-            </div>
-            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
               <input
                 type="date"
                 id="override-date-picker"
@@ -626,6 +610,27 @@ export default function Staff() {
                 addOverride(d, false)
                 document.getElementById('override-date-picker').value = ''
               }} style={btnStyle('#e53935')}>✕ Close this date</button>
+            </div>
+            <div style={{ display: 'grid', gap: '0.5rem', marginBottom: '1.5rem' }}>
+              {Object.entries(scheduleForm.overrides)
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([dateStr, hours]) => (
+                  <div key={dateStr} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', padding: '0.5rem 0.75rem', background: hours ? '#e8f5e9' : '#fce4ec', borderRadius: '8px' }}>
+                    <span style={{ fontWeight: 600, fontSize: '0.9rem', minWidth: '110px' }}>{dateStr}</span>
+                    {hours ? (
+                      <>
+                        <span style={{ fontSize: '0.85rem', color: '#2e7d32' }}>Open</span>
+                        <input type="time" value={hours.start} onChange={(e) => updateOverride(dateStr, 'start', e.target.value)} style={{ ...inputStyle, width: '130px' }} />
+                        <span>to</span>
+                        <input type="time" value={hours.end} onChange={(e) => updateOverride(dateStr, 'end', e.target.value)} style={{ ...inputStyle, width: '130px' }} />
+                      </>
+                    ) : (
+                      <span style={{ fontSize: '0.85rem', color: '#c62828' }}>Closed</span>
+                    )}
+                    <button type="button" onClick={() => removeOverride(dateStr)} style={{ ...btnStyle('#999'), marginLeft: 'auto', padding: '0.25rem 0.6rem' }}>✕</button>
+                  </div>
+                ))
+              }
             </div>
 
             <h4 style={{ marginBottom: '0.5rem' }}>Auto-Assign Days</h4>
