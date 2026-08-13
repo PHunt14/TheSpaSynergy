@@ -173,6 +173,7 @@ export async function GET(request: Request) {
         groupId: apt.groupId || null,
         bundleId: apt.bundleId || null,
         dateTime: apt.dateTime,
+        timeFrame: apt.timeFrame || null,
         status: apt.status,
         customer: { name: customer?.name || 'Unknown', phone: customer?.phone || '', email: customer?.email || '' },
         paymentId: apt.paymentId || null,

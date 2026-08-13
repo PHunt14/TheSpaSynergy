@@ -11,6 +11,7 @@ const allNavItems = [
   { href: '/dashboard/transactions', label: 'Transactions', icon: '💰' },
   { href: '/dashboard/services', label: 'Services', icon: '💆' },
   { href: '/dashboard/bundles', label: 'Packages', icon: '📦' },
+  { href: '/dashboard/extras', label: 'Extras', icon: '🧺' },
   { href: '/dashboard/providers', label: 'Providers', icon: '👤', adminOnly: true },
   { href: '/dashboard/staff', label: 'Staff', icon: '👥' },
   { href: '/dashboard/clients', label: 'Clients', icon: '🧑‍🤝‍🧑' },

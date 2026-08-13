@@ -338,7 +338,7 @@ function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onEdit, 
               <p style={{ margin: 0 }}><strong>Service:</strong> {appointment.service?.name} ({appointment.service?.duration} min)</p>
               <p style={{ margin: 0 }}><strong>Price:</strong> ${appointment.service?.price?.toFixed(2)}</p>
               {appointment.staffName && <p style={{ margin: 0 }}><strong>With:</strong> {appointment.staffName}</p>}
-              {aptDate && <p style={{ margin: 0 }}><strong>Time:</strong> {formatTime(aptDate)}</p>}
+              {aptDate && <p style={{ margin: 0 }}><strong>Time:</strong> {appointment.timeFrame ? appointment.timeFrame.charAt(0).toUpperCase() + appointment.timeFrame.slice(1) : formatTime(aptDate)}</p>}
               {aptDate && <p style={{ margin: 0 }}><strong>Date:</strong> {aptDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>}
               {(appointment.groupId || appointment.bundleId) && (
                 <p style={{ margin: 0 }}><strong>{appointment.bundleId ? '📦 Bundle' : '🔗 Group'}:</strong> This is part of a multi-appointment booking</p>
@@ -658,7 +658,9 @@ function MonthView({ currentDate, appointments, onAppointmentClick }) {
                     : apt.status === 'confirmed' ? '#2196F3'
                     : '#FF9800'
                   const aptDate = parseAppointmentDate(apt.rawDateTime)
-                  const timeStr = aptDate ? aptDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : ''
+                  const timeStr = apt.timeFrame
+                    ? apt.timeFrame.charAt(0).toUpperCase() + apt.timeFrame.slice(1)
+                    : (aptDate ? aptDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : '')
                   return (
                   <div
                     key={apt.appointmentId}

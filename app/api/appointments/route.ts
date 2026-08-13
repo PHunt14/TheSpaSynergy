@@ -7,6 +7,9 @@ import { resolveAppointmentDetails, sendAppointmentNotifications, sendStaffBooki
 import { assignStaff } from '@/app/utils/staffAssigner.js';
 import { detectConflict, extractDateFromDateTime } from '@/app/utils/overlapDetection';
 import { getCurrentUser } from '@/lib/auth';
+import { validateTimeFrame, sanitizeTextInput, validateExtras, validateIsNewClient } from '@/app/utils/bookingValidation.js';
+import { determineBookingStatus } from '@/app/utils/bookingStatus.js';
+import { calculateExtrasCost } from '@/app/utils/extrasCalculator.js';
 
 const client = generateServerClientUsingCookies<Schema>({
   config,
@@ -113,10 +116,78 @@ export async function PATCH(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { serviceId, bundleId, dateTime, customer, status, paymentId, paymentStatus, paymentAmount, staffId, createdBy: rawCreatedBy, confirmOverlap: rawConfirmOverlap } = body;
+    const { serviceId, bundleId, dateTime, customer, status, paymentId, paymentStatus, paymentAmount, staffId, createdBy: rawCreatedBy, confirmOverlap: rawConfirmOverlap, timeFrame, isNewClient, extras: clientExtras } = body;
 
     if (!serviceId || !dateTime || !customer) {
       return Response.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+
+    // --- Booking Enhancement Validations ---
+
+    // Validate isNewClient field (must be boolean type if provided)
+    if (isNewClient !== undefined && isNewClient !== null) {
+      const isNewClientResult = validateIsNewClient(isNewClient);
+      if (!isNewClientResult.valid) {
+        return Response.json({ error: isNewClientResult.error, field: 'isNewClient' }, { status: 400 });
+      }
+    }
+
+    // Validate timeFrame field if provided
+    if (timeFrame !== undefined && timeFrame !== null) {
+      const timeFrameResult = validateTimeFrame(timeFrame);
+      if (!timeFrameResult.valid) {
+        return Response.json({ error: timeFrameResult.error, field: 'timeFrame' }, { status: 400 });
+      }
+    }
+
+    // If bundle has useTimeFrames: true, timeFrame is required
+    if (bundleId) {
+      const { data: bundleData } = await client.models.Bundle.get({ bundleId });
+      if (bundleData?.useTimeFrames && !timeFrame) {
+        return Response.json({ error: 'timeFrame is required for time-frame-enabled bundles', field: 'timeFrame' }, { status: 400 });
+      }
+    }
+
+    // Validate extras array if provided
+    let validatedExtras: any[] = [];
+    let extrasMetadata: any = null;
+    if (clientExtras && Array.isArray(clientExtras) && clientExtras.length > 0) {
+      // Check max count first
+      if (clientExtras.length > 20) {
+        return Response.json({ error: 'Maximum 20 extras per booking', field: 'extras' }, { status: 400 });
+      }
+
+      // Fetch the Extra catalog for validation
+      const { data: extraCatalog } = await client.models.Extra.list() as any;
+      const catalog = extraCatalog || [];
+
+      // Extract extra IDs from client submission
+      const extraIds = clientExtras.map((e: any) => typeof e === 'string' ? e : e.extraId);
+
+      const extrasValidation = validateExtras(extraIds, bundleId || '', catalog);
+      if (!extrasValidation.valid) {
+        // Return the first error
+        return Response.json({ error: extrasValidation.errors[0], field: 'extras' }, { status: 400 });
+      }
+
+      // Server-side price re-calculation from catalog (never trust client prices)
+      const groupSize = customer?.people || customer?.groupSize || 1;
+      const costResult = calculateExtrasCost(extrasValidation.validExtras, groupSize);
+      extrasMetadata = costResult;
+      validatedExtras = extrasValidation.validExtras;
+    }
+
+    // Sanitize notes field (strip HTML, max 500 chars)
+    let sanitizedNotes = customer?.notes || '';
+    if (customer?.notes) {
+      // Check raw note length before sanitization - reject if too long
+      const rawNotes = String(customer.notes);
+      // Strip HTML first to check actual text length
+      let textOnly = rawNotes.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<[^>]*>/g, '').trim();
+      if (textOnly.length > 500) {
+        return Response.json({ error: 'Notes must be 500 characters or fewer', field: 'notes' }, { status: 400 });
+      }
+      sanitizedNotes = sanitizeTextInput(customer.notes, 500);
     }
 
     // Security: Only authenticated vendor/admin users can set createdBy or confirmOverlap.
@@ -353,6 +424,22 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Could not resolve vendor for this appointment' }, { status: 400 });
     }
 
+    // Determine booking status using the new status determination logic
+    const resolvedIsNewClient = isNewClient === true;
+    const determinedStatus = determineBookingStatus({
+      isNewClient: resolvedIsNewClient,
+      resourceType: resourceType as string,
+      requiresConsultation: serviceCheck2?.requiresConsultation || false,
+    });
+
+    // Build customer JSON with isNewClient and sanitized notes
+    const customerData = {
+      ...customer,
+      notes: sanitizedNotes,
+      isNewClient: resolvedIsNewClient,
+      duration,
+    };
+
     const { data, errors } = await client.models.Appointment.create({
       appointmentId,
       vendorId: resolvedVendorId,
@@ -360,13 +447,15 @@ export async function POST(request: Request) {
       staffId: assignedStaffId || undefined,
       bundleId: bundleId || undefined,
       dateTime,
-      customer: JSON.stringify({ ...customer, duration }),
-      status: status || 'pending-confirmation',
+      customer: JSON.stringify(customerData),
+      status: status || determinedStatus,
       paymentId,
       paymentStatus: paymentStatus || undefined,
       paymentAmount: paymentAmount || undefined,
       createdBy: createdBy || undefined,
       createdAt: new Date().toISOString(),
+      timeFrame: timeFrame || undefined,
+      extras: extrasMetadata ? JSON.stringify(extrasMetadata.items) : undefined,
     } as any);
 
     if (errors) {
@@ -418,9 +507,9 @@ export async function POST(request: Request) {
     } catch (e) { console.error('Client auto-populate failed:', e); }
 
     // Notify staff only on booking — customer/vendor notified at confirmation
-    await sendStaffBookingNotification({ appointmentId, vendorId: resolvedVendorId, serviceId, staffId: assignedStaffId, dateTime, customer }).catch(e => console.error('Staff notification failed:', e));
+    await sendStaffBookingNotification({ appointmentId, vendorId: resolvedVendorId, serviceId, staffId: assignedStaffId, dateTime, customer: { ...customer, isNewClient: resolvedIsNewClient } }).catch(e => console.error('Staff notification failed:', e));
 
-    return Response.json({ success: true, appointmentId, staffId: assignedStaffId, vendorId: resolvedVendorId });
+    return Response.json({ success: true, appointmentId, staffId: assignedStaffId, vendorId: resolvedVendorId, ...(extrasMetadata ? { extras: extrasMetadata } : {}) });
   } catch (error) {
     console.error('Error creating appointment:', error);
     return Response.json({ error: 'Failed to create appointment' }, { status: 500 });

@@ -90,6 +90,7 @@ const schema = a.schema({
       maxPeople: a.integer(),
       allowedDays: a.string().array(),
       addOns: a.json(),
+      useTimeFrames: a.boolean().default(false),
       contactOnly: a.boolean().default(false),
       serviceOrder: a.string().array(),
       schedule: a.json(),
@@ -97,6 +98,20 @@ const schema = a.schema({
       refundRecord: a.json(),
     })
     .identifier(['bundleId'])
+    .authorization((allow) => [allow.publicApiKey()]),
+
+  Extra: a
+    .model({
+      extraId: a.id().required(),
+      name: a.string().required(),
+      description: a.string(),
+      price: a.float().required(),
+      perPerson: a.boolean().default(false),
+      groupOnly: a.boolean().default(false),
+      isActive: a.boolean().default(true),
+      assignedBundleIds: a.string().array(),
+    })
+    .identifier(['extraId'])
     .authorization((allow) => [allow.publicApiKey()]),
 
   BundleSettings: a
@@ -119,12 +134,14 @@ const schema = a.schema({
       bundleId: a.string(),
       groupId: a.string(),
       dateTime: a.string().required(),
+      timeFrame: a.string(),
       customer: a.json().required(),
       status: a.string().default('pending'),
       paymentId: a.string(),
       paymentAmount: a.float(),
       paymentStatus: a.string(),
       paymentRaw: a.json(),
+      extras: a.json(),
       clientId: a.string(),
       createdBy: a.string(),
       createdAt: a.datetime(),

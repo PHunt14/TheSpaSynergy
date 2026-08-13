@@ -14,6 +14,7 @@ scripts/dev-tools/
 
 # Playwright
 test-results/
+test-results.txt
 playwright-report/
 # Kiro specs
 .kiro/

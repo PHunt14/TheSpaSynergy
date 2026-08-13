@@ -57,6 +57,18 @@ const sections = [
 
 const platformUpdates = [
   {
+    version: 'v1.6.0',
+    date: 'August 2025',
+    title: 'Time Frames, New Client Flag & Booking Extras',
+    changes: [
+      'Event/package time frame selection — choose morning, afternoon, or evening blocks instead of exact time slots',
+      'New client checkbox at booking — flags first-time clients and triggers consultation scheduling',
+      'Booking extras/add-ons — optional add-ons with pricing, selectable during checkout',
+      'Extras management page for admins to create, edit, and organize available add-ons',
+      'Returning client detection — auto-identifies existing clients during booking',
+    ],
+  },
+  {
     version: 'v1.5.0',
     date: 'July 2025',
     title: 'Staff Schedule Date Overrides',
