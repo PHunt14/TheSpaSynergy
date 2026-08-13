@@ -137,7 +137,7 @@ export async function POST(request: Request) {
     const extraId = randomUUID()
 
     const { data: extra, errors } = await client.models.Extra.create({
-      extraId: extraId as any,
+      extraId,
       name: name.trim(),
       description: description || undefined,
       price,
@@ -145,7 +145,7 @@ export async function POST(request: Request) {
       groupOnly: groupOnly ?? false,
       isActive: true,
       assignedBundleIds: assignedBundleIds || [],
-    })
+    } as any)
 
     if (errors) {
       console.error('Error creating extra:', errors)
@@ -289,9 +289,9 @@ export async function DELETE(request: Request) {
 
     // Soft-delete: set isActive to false
     const { data: extra, errors } = await client.models.Extra.update({
-      extraId: extraId as any,
+      extraId,
       isActive: false,
-    })
+    } as any)
 
     if (errors) {
       console.error('Error deactivating extra:', errors)
