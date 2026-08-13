@@ -153,8 +153,7 @@ The customer chooses their preferred mode on the time selection page. If only on
 | `docs/SMS_PHONE_NUMBER.md` | Toll-free number registration, AWS verification form values, approval tips |
 | `docs/KIOSK_CHECKOUT.md` | Tablet point-of-sale for in-person payments, kiosk auth, Square Terminal upgrade path |
 | `docs/TESTING.md` | Testing strategy, running tests, what's covered, and roadmap for future test coverage |
-| `docs/CUSTOMER_FEEDBACK_MARCH_2025.md` | March 2025 customer feedback: schedules, auto-routing, add-ons, sauna separation |
-| `docs/VISIT_NOTES_APRIL_2025.md` | April 2025 on-site visit notes: group bookings, intake forms, CRM, calendar invites |
+| `docs/WORKLOG.md` | Consolidated worklog: monthly notes, completed items, and backlog |
 | `docs/GOOGLE_ANALYTICS.md` | Google Analytics (GA4) setup: property creation, env var, what's tracked |
 | `docs/MONTHLY_REPORT.md` | Planned: automated monthly operations report via Lambda + SES |
 | `docs/UPTIME_MONITORING.md` | Uptime monitoring: Route 53 health checks, CloudWatch dashboard, SNS alerts |
@@ -231,40 +230,35 @@ The following bounded contexts are candidates for extraction from the Next.js mo
 
 ## Known Issues
 
-- [ ] **Square sandbox OAuth is broken** — Square's sandbox login page (`connect.squareupsandbox.com`) renders a blank screen for unauthenticated users. The OAuth flow works correctly with production credentials. To test OAuth without real payments, use production Square credentials and process $0 services or refund small test payments. See `SQUARE_SETUP.md` for details
+- [ ] **Square sandbox OAuth is broken** — Square's sandbox login page renders a blank screen. The OAuth flow works correctly with production credentials. See `SQUARE_SETUP.md` for workaround
 - [ ] Relaxation, Beauty, and Wellness category blocks should link to filtered service lists
 - [ ] Recurring services not yet supported (e.g., sauna as a recurring first service)
-- [ ] "Rebook" should suggest dates 4+ weeks out after checkout
-- [ ] Dashboard defaults to "week of" view but should also surface "today" prominently
-- [ ] Need to remove inactive/old vendors from public pages
-- [ ] Some services are offered by multiple vendors — need shared service support
-- [ ] Update Kera's service list
-- [ ] Vagaro calendar sync — currently handled via booking blackout + manual entry (see `docs/BOOKING_BLACKOUT_MANUAL_APPOINTMENTS.md`)
-- [ ] Staff/profile pictures should be uniform size on vendor pages
-- [ ] Verify social media + Google review links render on public vendor pages
 
 ## Future Enhancements
 
-- [ ] **Booking flow redesign**: book → pick day/week → select services (instead of vendor-first)
-- [ ] **Multi-service week requests**: select multiple services and request availability for a given week
-- [ ] **Square Catalog sync**: ~~link services to Square catalog items for automatic pricing/reporting~~ ✅ Implemented — staff can sync from My Settings. Future: auto-sync on service create/edit
-- [ ] **Appointment export**: vendors can text themselves a link to the day's appointments
-- [ ] **Appointment reminders**: SMS/email reminders before appointments
-- [ ] **Calendar sync**: Google/Apple calendar integration
-- [ ] **Auto rent payment**: automated rent collection from subletting vendors
-- [ ] **Square Integration service**: aplit as a backend microservice that can be duplicated and/or used separately
-- [ ] **Kiosk checkout (tablet POS)**: tablet at checkout counter for in-person payments — see `docs/KIOSK_CHECKOUT.md`
-- [ ] **Bridal party / group booking rules**: limit to ≤30 min services for 3+ people, require deposit
-- [ ] **Spa package day restrictions**: configurable allowed days (e.g., Sat–Mon) per bundle
-- [ ] **Advance booking minimum**: no same-day bookings for spa day packages (configurable per bundle/service)
-- [ ] **Event time frame selection**: morning/afternoon/evening blocks instead of exact time slots for packages
-- [ ] **Vendor intake forms**: per-vendor or per-service intake questions shown during booking
-- [ ] **New client flag**: checkbox at booking for first-time clients (triggers consultation scheduling)
-- [ ] **Liability/waiver form**: acceptance required at booking, stored on appointment
-- [ ] **Calendar invites**: iCal attachments in booking/confirmation/cancellation/reschedule emails
-- [x] **Client CRM**: ~~customer profiles with notes, booking history, cross-vendor visibility~~ ✅ Implemented — auto-populates from bookings, see `docs/CLIENT_CRM.md`
+See `docs/WORKLOG.md` for the full backlog and monthly tracking.
+
+- [x] ~~Booking flow redesign~~ ✅
+- [x] ~~Multi-service week requests~~ ✅
+- [x] ~~Square Catalog sync~~ ✅ — staff can sync from My Settings
+- [x] ~~Appointment reminders~~ ✅
+- [x] ~~Kiosk checkout (tablet POS)~~ ✅ — see `docs/KIOSK_CHECKOUT.md`
+- [x] ~~Spa package day restrictions~~ ✅ — `allowedDays` on Bundle
+- [x] ~~Advance booking minimum~~ ✅
+- [x] ~~Client CRM~~ ✅ — auto-populates from bookings, see `docs/CLIENT_CRM.md`
+- [ ] **Calendar sync + invites**: Google/Apple integration + .ics attachments in emails
+- [ ] **Bridal party / group booking rules**: limit ≤30 min for 3+, deposit, group filtering
+- [ ] **Event time frame selection**: morning/afternoon/evening blocks for packages
+- [ ] **Vendor intake forms**: per-vendor/per-service questions during booking
+- [ ] **Liability/waiver form**: acceptance at booking, stored on appointment
+- [ ] **Booking add-ons**: optional add-ons with tiered pricing
+- [ ] **Force deposit/full payment per service**: per-service payment requirement
+- [ ] **Refund strategy**: full refunds, then vendor ledger + partial refunds
 - [ ] **No-show tracking**: flag repeat offenders, require prepayment
+- [ ] **Appointment export**: vendors text themselves daily appointment links
+- [ ] **Auto rent payment**: automated rent collection from subletting vendors
+- [ ] **Payment service extraction**: standalone microservice
 - [ ] **Membership option**: explore recurring membership model
 - [ ] **Sound room rental**: bookable resource like sauna
-- [ ] **Sound bath classes**: class calendar, registration, vendor CRUD for class management
+- [ ] **Sound bath classes**: class calendar, registration, vendor CRUD
 
