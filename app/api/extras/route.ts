@@ -8,6 +8,8 @@ import { randomUUID } from 'crypto'
 Amplify.configure(config, { ssr: true })
 const client = generateClient<Schema>()
 
+// Guard: Extra model may not be in amplify_outputs.json until next deploy
+const isExtraModelAvailable = () => !!(client.models as any).Extra
 /**
  * GET /api/extras?bundleId={id}
  * GET /api/extras?includeInactive=true  (management mode - returns all extras)
@@ -18,6 +20,13 @@ const client = generateClient<Schema>()
  */
 export async function GET(request: Request) {
   try {
+    if (!isExtraModelAvailable()) {
+      return Response.json(
+        { error: 'Extra model not yet deployed. Run ampx sandbox or deploy to provision the model.', extras: [], source: 'catalog' },
+        { status: 200 }
+      )
+    }
+
     const { searchParams } = new URL(request.url)
     const bundleId = searchParams.get('bundleId')
     const includeInactive = searchParams.get('includeInactive') === 'true'
@@ -97,6 +106,10 @@ export async function GET(request: Request) {
  */
 export async function POST(request: Request) {
   try {
+    if (!isExtraModelAvailable()) {
+      return Response.json({ error: 'Extra model not yet deployed. Run ampx sandbox or deploy.' }, { status: 503 })
+    }
+
     // Staff-only auth check
     const currentUser = await getCurrentUser()
     if (!currentUser) {
@@ -173,6 +186,10 @@ export async function POST(request: Request) {
  */
 export async function PATCH(request: Request) {
   try {
+    if (!isExtraModelAvailable()) {
+      return Response.json({ error: 'Extra model not yet deployed. Run ampx sandbox or deploy.' }, { status: 503 })
+    }
+
     // Staff-only auth check
     const currentUser = await getCurrentUser()
     if (!currentUser) {
@@ -262,6 +279,10 @@ export async function PATCH(request: Request) {
  */
 export async function DELETE(request: Request) {
   try {
+    if (!isExtraModelAvailable()) {
+      return Response.json({ error: 'Extra model not yet deployed. Run ampx sandbox or deploy.' }, { status: 503 })
+    }
+
     // Staff-only auth check
     const currentUser = await getCurrentUser()
     if (!currentUser) {
