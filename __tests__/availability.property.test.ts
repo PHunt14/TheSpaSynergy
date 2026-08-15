@@ -15,6 +15,7 @@
  * **Validates: Requirements 4.1, 4.2, 4.3, 8.3, 8.5, 8.6, 1.5**
  */
 
+import { describe, test, expect } from '@jest/globals';
 import fc from 'fast-check';
 import {
   generateTimeSlots,

@@ -11,7 +11,7 @@
  * - Input sanitization: verify HTML/script payloads are neutralized before persistence
  */
 
-import { describe, test, expect, beforeEach, jest } from '@jest/globals';
+import { describe, test, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import { checkRateLimit, _resetStore, getClientIp, rateLimitResponse } from '../app/utils/rateLimiter';
 import { auditReject, logRejection, hashRequestBody, type AuditLogEntry } from '../app/utils/auditLogger';
 import { verifyStaffEntity, verifyVendorEntity, verifyBookingEntities } from '../app/utils/entityVerification';

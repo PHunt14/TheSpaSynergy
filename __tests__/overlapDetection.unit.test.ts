@@ -18,7 +18,7 @@ import {
   intervalsOverlap,
   getEffectiveAppointmentDuration,
   type OverlapCheckParams,
-} from '../app/utils/overlapDetection.ts'
+} from '../app/utils/overlapDetection'
 
 describe('Overlap Detection - Boundary Edge Cases', () => {
   describe('Boundary non-overlap: newStart === existingEnd (no conflict)', () => {

@@ -12,6 +12,7 @@
  * **Validates: Requirements 11.4, 2.4**
  */
 
+import { describe, test, expect } from '@jest/globals';
 import fc from 'fast-check';
 import { stripPrivilegedFields, PRIVILEGED_FIELDS } from '../app/utils/stripPrivilegedFields';
 

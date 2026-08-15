@@ -10,6 +10,7 @@
  * Requirements: 9.1, 9.3, 9.4, 9.5
  */
 
+import { describe, test, expect } from '@jest/globals';
 import {
   checkBundleConflicts,
   checkIntraBundleConflicts,

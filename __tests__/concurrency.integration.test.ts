@@ -63,7 +63,7 @@ function createMockClient(options: {
           }
           return { data, errors: null };
         }),
-        listAppointmentByVendorIdAndDateTime: jest.fn(async () => {
+        listAppointmentByVendorIdAndDateTime: jest.fn(async (_params?: any) => {
           queryCallCount++;
           if (queryCallCount === 1) {
             // Pre-write check: return whatever appointments exist at start

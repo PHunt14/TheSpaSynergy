@@ -18,6 +18,7 @@
  * **Validates: Requirements 9.1, 9.2, 9.3, 9.4, 9.6**
  */
 
+import { describe, test, expect } from '@jest/globals';
 import fc from 'fast-check';
 import {
   checkBundleConflicts,

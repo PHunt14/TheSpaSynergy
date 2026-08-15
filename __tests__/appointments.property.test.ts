@@ -12,6 +12,7 @@
  * **Validates: Requirements 1.4, 2.4**
  */
 
+import { describe, test, expect } from '@jest/globals';
 import fc from 'fast-check';
 import { stripPrivilegedFields } from '../app/utils/stripPrivilegedFields';
 import { detectConflict } from '../app/utils/overlapDetection';
