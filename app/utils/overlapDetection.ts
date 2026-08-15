@@ -86,17 +86,21 @@ export function extractDateFromDateTime(dateTime: string): string {
 /**
  * Determines the effective duration of an existing appointment.
  *
- * Priority:
- * 1. If it's blocked time with a duration in the customer JSON, use that
- * 2. If a service duration is provided (from DB lookup), use that
- * 3. Fall back to defaultDuration
+ * For blocked/manual appointments (serviceId = "blocked" or "manual"):
+ * - Duration MUST come from the customer JSON field
+ * - If the stored duration is missing, null, zero, or negative, an error is thrown immediately
+ * - No fallback to a default value or service lookup is allowed
+ *
+ * For regular appointments:
+ * 1. If a service duration is provided (from DB lookup), use that
+ * 2. Fall back to defaultDuration
  */
 export function getEffectiveAppointmentDuration(
-  appointment: { serviceId?: string; customer?: any; status?: string },
+  appointment: { serviceId?: string; customer?: any; status?: string; appointmentId?: string },
   serviceDurationMap: Record<string, number>,
   defaultDuration: number = 60
 ): number {
-  // Parse customer JSON to check for blocked time duration
+  // Parse customer JSON to check for duration
   let customer: Record<string, any> = {};
   if (typeof appointment.customer === 'string') {
     try { customer = JSON.parse(appointment.customer); } catch { customer = {}; }
@@ -104,9 +108,15 @@ export function getEffectiveAppointmentDuration(
     customer = appointment.customer;
   }
 
-  // Blocked time stores its duration in the customer JSON
-  if (customer.isBlockedTime && customer.duration) {
-    return customer.duration;
+  // Strict enforcement for blocked/manual appointments:
+  // Duration must come from customer JSON — no fallback allowed
+  if (appointment.serviceId === 'blocked' || appointment.serviceId === 'manual') {
+    const duration = customer.duration;
+    if (duration == null || duration <= 0) {
+      const id = appointment.appointmentId || 'unknown';
+      throw new Error(`Blocked/manual appointment ${id} has invalid duration`);
+    }
+    return duration;
   }
 
   // Use service duration from the lookup map
@@ -114,7 +124,7 @@ export function getEffectiveAppointmentDuration(
     return serviceDurationMap[appointment.serviceId];
   }
 
-  // Manual appointments may store duration in customer JSON
+  // Regular appointments may store duration in customer JSON
   if (customer.duration) {
     return customer.duration;
   }

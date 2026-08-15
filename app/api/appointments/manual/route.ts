@@ -2,6 +2,11 @@ import { client, getCurrentUser } from '@/lib/auth';
 import { randomUUID } from 'crypto';
 import { sendEmail } from '@/lib/email';
 import { sendSms } from '@/lib/sms';
+import { sanitizeCustomerName, sanitizeNotes } from '@/app/utils/inputSanitization';
+import { checkRateLimit, rateLimitResponse, getClientIp } from '@/app/utils/rateLimiter';
+import { validateManualBookingInput, buildValidationErrorResponse } from '@/app/utils/inputValidation';
+import { verifyBookingEntities } from '@/app/utils/entityVerification';
+import { auditReject, safeErrorResponse } from '@/app/utils/auditLogger';
 
 const emailWrapper = (content: string) => `
   <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -121,14 +126,46 @@ function sendManualApptNotifications(ctx: ManualApptContext): Promise<void>[] {
 }
 
 export async function POST(request: Request) {
+  const clientIp = getClientIp(request);
+  let body: any = {};
   try {
     const user = await getCurrentUser();
-    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!user) {
+      auditReject(clientIp, {}, 'auth', 401, undefined, 'Unauthenticated manual booking attempt');
+      return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
-    const body = await request.json();
-    const { vendorId, serviceId, staffId, staffIds, dateTime, customerName, customerPhone, customerEmail, notes, isBlockedTime, duration, createdBy, confirmOverlap } = body;
+    // Rate limiting: 30 requests/min per authenticated user for manual bookings (Req 11.2)
+    const userKey = user.vendorId || 'unknown-user';
+    const rateCheck = checkRateLimit(`manual-booking:${userKey}`, 30, 60 * 1000);
+    if (!rateCheck.allowed) {
+      auditReject(clientIp, {}, 'rate_limit', 429, userKey, 'Manual booking rate limit exceeded');
+      return rateLimitResponse(rateCheck.retryAfter!);
+    }
+
+    body = await request.json();
+
+    // --- Input Validation (Requirements 11.1) ---
+    const validationResult = validateManualBookingInput(body);
+    if (!validationResult.valid) {
+      auditReject(clientIp, body, 'validation', 400, user.vendorId, 'Manual booking validation failed');
+      return Response.json(buildValidationErrorResponse(validationResult.errors), { status: 400 });
+    }
+
+    const { vendorId, serviceId, staffId, staffIds, dateTime, customerName: rawCustomerName, customerPhone, customerEmail, notes: rawNotes, isBlockedTime, duration, createdBy, confirmOverlap } = body;
+
+    // Sanitize string inputs before persistence (Requirements 11.5)
+    const customerName = sanitizeCustomerName(rawCustomerName);
+    const notes = sanitizeNotes(rawNotes);
 
     if (!vendorId || !dateTime) return Response.json({ error: 'vendorId and dateTime are required' }, { status: 400 });
+
+    // Entity verification: verify staffId and vendorId exist and are active (Req 11.7)
+    const entityCheck = await verifyBookingEntities(client, staffId, vendorId);
+    if (!entityCheck.valid) {
+      auditReject(clientIp, body, 'not_found', entityCheck.statusCode || 404, user.vendorId, 'Entity not found');
+      return Response.json({ error: entityCheck.error }, { status: entityCheck.statusCode || 404 });
+    }
 
     const appointmentId = randomUUID();
 
@@ -154,15 +191,17 @@ export async function POST(request: Request) {
       if (svcData?.duration) svcDuration = svcData.duration as number;
     }
 
-    if (staffId && !confirmOverlap) {
+    if (staffId) {
       const overlap = await detectManualOverlap(staffId, dateTime, svcDuration, undefined);
-      if (overlap) {
+      if (overlap && !confirmOverlap) {
+        auditReject(clientIp, body, 'conflict', 409, user.vendorId, `Conflict with appointment at ${overlap.dateTime}`);
         return Response.json({
-          warning: 'Scheduling conflict detected',
-          conflict: overlap,
-          message: 'This overlaps with an existing appointment. Save anyway?',
+          error: 'Scheduling conflict detected',
+          conflict: { dateTime: overlap.dateTime, staffId: overlap.staffId, appointmentId: overlap.appointmentId },
+          message: 'Resubmit with confirmOverlap=true to override',
         }, { status: 409 });
       }
+      // If confirmOverlap is true, proceed to persist regardless of overlap
     }
 
     // Multi-provider booking (e.g., couples head bath)
@@ -225,7 +264,8 @@ export async function POST(request: Request) {
     return Response.json({ success: true, appointmentId });
   } catch (error) {
     console.error('Error creating manual appointment:', error);
-    return Response.json({ error: 'Failed to create appointment' }, { status: 500 });
+    auditReject(clientIp, body, 'server_error', 500, undefined, 'Internal error during manual appointment creation');
+    return Response.json(safeErrorResponse(500), { status: 500 });
   }
 }
 

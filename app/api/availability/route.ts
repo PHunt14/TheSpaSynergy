@@ -5,6 +5,7 @@ import config from '../../../amplify_outputs.json' with { type: 'json' };
 import { getRecurrenceHours, generateTimeSlots, getMultiProviderSlots, getScheduleOverride } from '../../utils/availability.js';
 import { getParallelQuantitySlots, getSequentialQuantitySlots } from '../../utils/quantityAvailability.js';
 import { getEligibleStaff } from '../../utils/staffEligibility';
+import { checkRateLimit, getClientIp, rateLimitResponse } from '@/app/utils/rateLimiter';
 
 const client = generateServerClientUsingCookies<Schema>({
   config,
@@ -12,6 +13,13 @@ const client = generateServerClientUsingCookies<Schema>({
 });
 
 export async function GET(request: Request) {
+  // Rate limiting: 60 requests/min per IP for availability queries (Req 11.2)
+  const clientIp = getClientIp(request);
+  const rateCheck = checkRateLimit(`availability:${clientIp}`, 60, 60 * 1000);
+  if (!rateCheck.allowed) {
+    return rateLimitResponse(rateCheck.retryAfter!);
+  }
+
   const { searchParams } = new URL(request.url);
   const vendorId = searchParams.get('vendorId');
   const serviceId = searchParams.get('serviceId');
@@ -259,7 +267,14 @@ export async function GET(request: Request) {
 /**
  * Computes time slots for one or more staff members, merging results.
  * Each staff member's available slots are calculated based on their schedule
- * and existing appointments.
+ * and existing appointments (including regular, blocked, and manual types).
+ *
+ * When called with multiple staff members (no staffId filter — "Any Available" mode),
+ * slots are generated per-staff and merged: a time is available if ANY staff member
+ * is free at that time. Deduplication happens in the caller (Req 4.4).
+ *
+ * When called with a single staff member (specific staffId), only that staff's
+ * appointments are considered for conflict detection (Req 4.3).
  */
 async function computeSlotsForStaff(
   staffMembers: any[],
@@ -325,7 +340,13 @@ function getStaffWorkingHoursForDay(staff: any, dayOfWeek: string, requestedDate
 /**
  * Fetches appointments for a specific staff member on a given date.
  * Filters out cancelled appointments and the excluded appointment.
+ * Includes ALL non-cancelled appointment types (regular, blocked, manual) in the
+ * conflict set — blocked-time entries (serviceId = "blocked") are NOT excluded.
  * Enriches each appointment with the actual service duration for accurate overlap detection.
+ * For blocked/manual appointments, duration comes from customer JSON (Req 5.3).
+ *
+ * Requirements: 4.1 (exclude conflicting slots), 4.2 (all appointment types),
+ *               4.3 (staff-filtered)
  */
 async function getStaffAppointments(
   vendorId: string,
@@ -354,7 +375,9 @@ async function getStaffAppointments(
   });
 
   // Enrich with actual service duration for overlap detection
-  const serviceIds = [...new Set(filtered.map(a => a.serviceId).filter(Boolean))];
+  // Skip lookup for blocked/manual — their duration comes from customer JSON (Req 5.3)
+  const serviceIds = [...new Set(filtered.map(a => a.serviceId).filter(Boolean))]
+    .filter(sid => sid !== 'blocked' && sid !== 'manual');
   const serviceMap: Record<string, number> = {};
   await Promise.all(serviceIds.map(async (sid) => {
     const { data } = await client.models.Service.get({ serviceId: sid });

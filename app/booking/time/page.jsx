@@ -15,7 +15,7 @@ function TimePageContent() {
   const quantityParam = params.get('quantity')
   const quantity = quantityParam ? parseInt(quantityParam) : 1
 
-  const [selectedDate, setSelectedDate] = useState(new Date())
+  const [selectedDate, setSelectedDate] = useState(null)
   const [selectedTime, setSelectedTime] = useState(null)
   const [availableSlots, setAvailableSlots] = useState([])
   const [loading, setLoading] = useState(false)
@@ -27,6 +27,15 @@ function TimePageContent() {
   const [availableDates, setAvailableDates] = useState(null)
   const [datesLoading, setDatesLoading] = useState(true)
   const [quantityMode, setQuantityMode] = useState('sequential')
+  const [slotVerifying, setSlotVerifying] = useState(false)
+
+  // Compute the first selectable date based on service resource type
+  const getFirstSelectableDate = (svc) => {
+    if (svc?.resourceType === 'sauna' || svc?.resourceType === 'room') {
+      return new Date()
+    }
+    return new Date(Date.now() + 86400000) // Tomorrow
+  }
 
   useEffect(() => {
     if (!service) return
@@ -37,6 +46,13 @@ function TimePageContent() {
       .then(data => {
         const svc = data.services?.find(s => s.serviceId === service)
         setServiceInfo(svc)
+        // Auto-set the first selectable date so availability is fetched immediately (Requirement 8.1)
+        if (!selectedDate) {
+          const firstDate = getFirstSelectableDate(svc)
+          setSelectedDate(firstDate)
+          // Also fetch available dates for the calendar immediately
+          if (isBookingEnabled) fetchAvailableDates(firstDate)
+        }
       })
     
     // Fetch vendor info only if vendor param is provided (legacy flow)
@@ -67,8 +83,8 @@ function TimePageContent() {
   }
 
   useEffect(() => {
-    if (service && isBookingEnabled) fetchAvailableDates(selectedDate)
-  }, [service, staffId])
+    if (service && selectedDate && isBookingEnabled) fetchAvailableDates(selectedDate)
+  }, [staffId])
 
   const isDateAvailable = (date) => {
     if (!availableDates || datesLoading) return false
@@ -195,9 +211,9 @@ function TimePageContent() {
 
       <div style={{ marginTop: '2rem' }}>
         <h3>{serviceInfo?.requiresConsultation ? 'Preferred Time' : 'Available Times'}</h3>
-        {loading && <p>Loading available times...</p>}
+        {(loading || !selectedDate) && <p>Loading available times...</p>}
         
-        {!loading && availableSlots.length === 0 && (
+        {!loading && selectedDate && availableSlots.length === 0 && (
           <div style={{
             background: 'var(--color-accent)',
             padding: '1.5rem',
@@ -250,8 +266,10 @@ function TimePageContent() {
       {selectedTime && (
         <button
           className="cta"
+          disabled={slotVerifying}
           onClick={async () => {
-            // Re-validate the slot is still available before proceeding
+            setSlotVerifying(true)
+            // Re-fetch availability and verify the selected slot is still free (Requirement 8.4)
             const dateStr = selectedDate.toISOString().split('T')[0]
             const multiProviderParam = multiProvider ? '&multiProvider=true' : ''
             const quantityParams = quantity > 1 ? `&quantity=${quantity}&mode=${quantityMode}` : ''
@@ -266,16 +284,18 @@ function TimePageContent() {
                 alert('Sorry, this time slot was just booked by someone else. Please select a different time.')
                 setAvailableSlots(freshSlots)
                 setSelectedTime(null)
+                setSlotVerifying(false)
                 return
               }
             } catch (e) {
               // If re-check fails, proceed anyway — server-side check will catch conflicts
             }
+            setSlotVerifying(false)
             const url = `/booking/confirm?service=${service}&date=${selectedDate.toISOString()}&time=${selectedTime}${vendor ? `&vendor=${vendor}` : ''}${staffId ? `&staffId=${staffId}` : ''}${multiProvider ? '&multiProvider=true' : ''}${quantity > 1 ? `&quantity=${quantity}&mode=${quantityMode}` : ''}${assignedStaff ? `&staffId=${assignedStaff.id}&staffName=${encodeURIComponent(assignedStaff.name)}` : ''}`
             window.location.href = url
           }}
         >
-          Continue
+          {slotVerifying ? 'Verifying availability...' : 'Continue'}
         </button>
       )}
     </main>
