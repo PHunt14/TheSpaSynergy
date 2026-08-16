@@ -51,11 +51,11 @@ export function sanitizeInput(text: unknown, maxLength: number = MAX_LENGTHS.not
     return '';
   }
 
-  if (typeof text !== 'string') {
+  if (typeof text === 'object') {
     return '';
   }
 
-  let sanitized = text;
+  let sanitized = String(text);
 
   // 1. Encode HTML entities (must happen before whitespace normalization
   //    so that entity characters like & in &amp; aren't double-encoded)

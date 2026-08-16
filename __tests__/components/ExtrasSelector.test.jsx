@@ -153,9 +153,9 @@ describe('ExtrasSelector', () => {
     render(<ExtrasSelector {...defaultProps} selectedExtras={['extra-1']} />)
 
     const selectedItem = screen.getByRole('checkbox', { name: /Charcuterie Board/ })
-    expect(selectedItem).toHaveAttribute('aria-checked', 'true')
+    expect(selectedItem).toBeChecked()
 
     const unselectedItem = screen.getByRole('checkbox', { name: /Fruit Tray/ })
-    expect(unselectedItem).toHaveAttribute('aria-checked', 'false')
+    expect(unselectedItem).not.toBeChecked()
   })
 })
