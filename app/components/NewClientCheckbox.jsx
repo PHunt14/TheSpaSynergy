@@ -3,6 +3,13 @@
 import PropTypes from 'prop-types'
 
 export default function NewClientCheckbox({ checked = false, onChange, isReturningClient = false, showSuggestion = false }) {
+  let describedBy
+  if (isReturningClient) {
+    describedBy = 'returning-client-badge'
+  } else if (showSuggestion) {
+    describedBy = 'new-client-suggestion'
+  }
+
   return (
     <div style={{ marginBottom: '1rem' }}>
       <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
@@ -10,11 +17,7 @@ export default function NewClientCheckbox({ checked = false, onChange, isReturni
           type="checkbox"
           checked={checked}
           onChange={(e) => onChange(e.target.checked)}
-          aria-describedby={
-            isReturningClient ? 'returning-client-badge' :
-            showSuggestion ? 'new-client-suggestion' :
-            undefined
-          }
+          aria-describedby={describedBy}
           style={{ marginTop: '0.1rem' }}
         />
         <span style={{ fontSize: '0.95rem' }}>First time visiting?</span>

@@ -20,7 +20,7 @@ export default function AddOnsSection({ services, staffSchedules, onReload }) {
 
   // Add-ons are services that have parentServiceIds
   const addons = services.filter(s => s.parentServiceIds && s.parentServiceIds.length > 0)
-  const parentServices = services.filter(s => !(s.parentServiceIds?.length > 0) && s.isActive !== false)
+  const parentServices = services.filter(s => !s.parentServiceIds?.length && s.isActive !== false)
 
   const filtered = searchQuery.trim()
     ? addons.filter(a =>
@@ -132,6 +132,7 @@ export default function AddOnsSection({ services, staffSchedules, onReload }) {
           </p>
         </div>
         <button
+          type="button"
           onClick={() => {
             if (showCreateForm || editingAddon) resetForm()
             else { setShowCreateForm(true); setEditingAddon(null) }
@@ -159,8 +160,9 @@ export default function AddOnsSection({ services, staffSchedules, onReload }) {
           </h3>
 
           <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Name *</label>
+            <label htmlFor="addon-name" style={{ display: 'block', marginBottom: '0.5rem' }}>Name *</label>
             <input
+              id="addon-name"
               type="text"
               required
               value={formData.name}
@@ -171,8 +173,9 @@ export default function AddOnsSection({ services, staffSchedules, onReload }) {
           </div>
 
           <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Description</label>
+            <label htmlFor="addon-description" style={{ display: 'block', marginBottom: '0.5rem' }}>Description</label>
             <textarea
+              id="addon-description"
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               rows="2"
@@ -182,26 +185,28 @@ export default function AddOnsSection({ services, staffSchedules, onReload }) {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
             <div>
-              <label style={{ display: 'block', marginBottom: '0.5rem' }}>Duration (min) *</label>
+              <label htmlFor="addon-duration" style={{ display: 'block', marginBottom: '0.5rem' }}>Duration (min) *</label>
               <input
+                id="addon-duration"
                 type="number"
                 required
                 min="5"
                 step="5"
                 value={formData.duration}
-                onChange={(e) => setFormData({ ...formData, duration: parseInt(e.target.value) || 15 })}
+                onChange={(e) => setFormData({ ...formData, duration: Number.parseInt(e.target.value) || 15 })}
                 style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }}
               />
             </div>
             <div>
-              <label style={{ display: 'block', marginBottom: '0.5rem' }}>Price ($) *</label>
+              <label htmlFor="addon-price" style={{ display: 'block', marginBottom: '0.5rem' }}>Price ($) *</label>
               <input
+                id="addon-price"
                 type="number"
                 required
                 min="0"
                 step="0.01"
                 value={formData.price}
-                onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) || 0 })}
+                onChange={(e) => setFormData({ ...formData, price: Number.parseFloat(e.target.value) || 0 })}
                 style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }}
               />
             </div>
@@ -209,8 +214,8 @@ export default function AddOnsSection({ services, staffSchedules, onReload }) {
 
           {/* Parent service assignment */}
           <div style={{ marginBottom: '1.5rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Attach to Parent Services</label>
-            <div style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid var(--color-border)', borderRadius: '8px', padding: '0.75rem' }}>
+            <label htmlFor="addon-parent-services" style={{ display: 'block', marginBottom: '0.5rem' }}>Attach to Parent Services</label>
+            <div id="addon-parent-services" style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid var(--color-border)', borderRadius: '8px', padding: '0.75rem' }}>
               {parentServices.length === 0 ? (
                 <p style={{ color: 'var(--color-text-light)', fontSize: '0.9rem', margin: 0 }}>No parent services available</p>
               ) : (
@@ -291,11 +296,11 @@ export default function AddOnsSection({ services, staffSchedules, onReload }) {
               </p>
             </div>
             <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
-              <button onClick={() => handleEdit(addon)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: 'var(--color-primary)', color: 'white' }}>Edit</button>
-              <button onClick={() => handleToggleActive(addon)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: addon.isActive !== false ? '#4CAF50' : '#999', color: 'white' }}>
+              <button type="button" onClick={() => handleEdit(addon)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: 'var(--color-primary)', color: 'white' }}>Edit</button>
+              <button type="button" onClick={() => handleToggleActive(addon)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: addon.isActive !== false ? '#4CAF50' : '#999', color: 'white' }}>
                 {addon.isActive !== false ? 'Active' : 'Inactive'}
               </button>
-              <button onClick={() => handleDelete(addon)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: '#f44336', color: 'white' }}>Delete</button>
+              <button type="button" onClick={() => handleDelete(addon)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: '#f44336', color: 'white' }}>Delete</button>
             </div>
           </div>
         ))}

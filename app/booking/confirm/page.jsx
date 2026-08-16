@@ -112,7 +112,7 @@ function ConfirmPageContent() {
 
   // Apply bundle discount to base services only, then add extras at full price
   const bundleDiscountedBase = useMemo(() => {
-    if (!bundleDetails || !bundleDetails.discountPercent || allServiceDetails.length === 0) {
+    if (!bundleDetails?.discountPercent || allServiceDetails.length === 0) {
       return baseServicePrice
     }
     const result = calculateBundlePrice({
@@ -168,7 +168,7 @@ function ConfirmPageContent() {
         }
 
         // Process extras - only set if there are active extras (Req 3.1, 3.2)
-        if (extrasData && extrasData.extras && extrasData.extras.length > 0) {
+        if (extrasData?.extras?.length > 0) {
           setBundleExtras(extrasData.extras)
         }
       })

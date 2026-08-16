@@ -49,19 +49,8 @@ export default function ExtrasSelector({ extras, selectedExtras, onToggle, group
           const isSelected = selectedExtras.includes(extra.extraId)
 
           return (
-            <div
+            <label
               key={extra.extraId}
-              role="checkbox"
-              aria-checked={isSelected}
-              aria-label={`${extra.name} - $${extra.price}${extra.perPerson ? ' per person' : ''}`}
-              tabIndex={0}
-              onClick={() => onToggle(extra.extraId)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault()
-                  onToggle(extra.extraId)
-                }
-              }}
               style={{
                 padding: '0.875rem 1rem',
                 borderRadius: '8px',
@@ -72,8 +61,16 @@ export default function ExtrasSelector({ extras, selectedExtras, onToggle, group
                   ? '2px solid var(--color-primary-dark)'
                   : '2px solid var(--color-border)',
                 transition: '0.2s ease',
+                display: 'block',
               }}
             >
+              <input
+                type="checkbox"
+                checked={isSelected}
+                onChange={() => onToggle(extra.extraId)}
+                aria-label={`${extra.name} - $${extra.price}${extra.perPerson ? ' per person' : ''}`}
+                style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }}
+              />
               <div style={{
                 display: 'flex',
                 justifyContent: 'space-between',
@@ -112,7 +109,7 @@ export default function ExtrasSelector({ extras, selectedExtras, onToggle, group
                   </span>
                 )}
               </div>
-            </div>
+            </label>
           )
         })}
       </div>

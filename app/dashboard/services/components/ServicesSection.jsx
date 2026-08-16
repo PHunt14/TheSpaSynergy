@@ -3,6 +3,53 @@
 import { useState, useRef, useEffect } from 'react'
 
 /**
+ * AllowedStaffSelector — renders staff assignment controls for a service.
+ * Extracted to module scope to satisfy component definition best practices.
+ */
+function AllowedStaffSelector({ staffSchedules, newService, setNewService, handleStaffToggle }) {
+  const activeStaff = staffSchedules
+    .filter(s => s.isActive !== false && !s.visibleId.startsWith('resource-'))
+    .sort((a, b) => (a.staffName || '').localeCompare(b.staffName || ''))
+
+  return (
+    <>
+      <div style={{ marginBottom: '1rem' }}>
+        <label htmlFor="staff-assignment-select" style={{ display: 'block', marginBottom: '0.5rem' }}>Staff Assignment</label>
+        <select
+          id="staff-assignment-select"
+          value={newService.staffRestriction}
+          onChange={(e) => {
+            const value = e.target.value
+            if (value === 'specific' && newService.allowedStaff.length === 0) {
+              setNewService({ ...newService, staffRestriction: value, allowedStaff: activeStaff.map(s => s.visibleId) })
+            } else {
+              setNewService({ ...newService, staffRestriction: value, allowedStaff: value === 'all' ? [] : newService.allowedStaff })
+            }
+          }}
+          style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }}
+        >
+          <option value="all">All Staff Members</option>
+          <option value="specific">Specific Staff Members</option>
+        </select>
+      </div>
+      {newService.staffRestriction === 'specific' && (
+        <div style={{ marginBottom: '1rem' }}>
+          <label htmlFor="staff-members-list" style={{ display: 'block', marginBottom: '0.5rem' }}>Select Staff Members</label>
+          <div id="staff-members-list" style={{ border: '1px solid var(--color-border)', borderRadius: '8px', padding: '0.75rem', maxHeight: '200px', overflowY: 'auto' }}>
+            {activeStaff.map(s => (
+              <label key={s.visibleId} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', padding: '0.35rem 0' }}>
+                <input type="checkbox" checked={newService.allowedStaff.includes(s.visibleId)} onChange={(e) => handleStaffToggle(s.visibleId, e.target.checked)} style={{ width: '18px', height: '18px' }} />
+                <span>{s.staffName || s.visibleId}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+/**
  * Services Section — manages standalone services (not add-ons).
  * Add-ons (services with parentServiceIds) are managed in the Add-Ons section.
  */
@@ -39,7 +86,7 @@ export default function ServicesSection({ services, staffSchedules, existingCate
   const [sortBy, setSortBy] = useState('name')
 
   // Only show parent services (not add-ons)
-  const parentServices = services.filter(s => !(s.parentServiceIds?.length > 0))
+  const parentServices = services.filter(s => !s.parentServiceIds?.length)
 
   const canCreate = currentUserRole === 'admin'
   const canDelete = currentUserRole === 'admin'
@@ -78,7 +125,7 @@ export default function ServicesSection({ services, staffSchedules, existingCate
       description: newService.description,
       duration: newService.duration,
       price: newService.price,
-      bufferMinutes: newService.bufferMinutes !== '' ? parseInt(newService.bufferMinutes) : null,
+      bufferMinutes: newService.bufferMinutes !== '' ? Number.parseInt(newService.bufferMinutes) : null,
       houseFeeEnabled: newService.houseFeeEnabled,
       houseFeeAmount: newService.houseFeeEnabled ? newService.houseFeeAmount : 0,
       requiresConsultation: newService.requiresConsultation,
@@ -155,9 +202,14 @@ export default function ServicesSection({ services, staffSchedules, existingCate
 
   const handleEdit = (service) => {
     setEditingService(service)
-    const categories = service.categories && Array.isArray(service.categories)
-      ? service.categories
-      : (service.category ? [service.category] : [])
+    let categories
+    if (service.categories && Array.isArray(service.categories)) {
+      categories = service.categories
+    } else if (service.category) {
+      categories = [service.category]
+    } else {
+      categories = []
+    }
     setNewService({
       name: service.name,
       categories,
@@ -231,49 +283,6 @@ export default function ServicesSection({ services, staffSchedules, existingCate
     !newService.categories.some(sel => sel.toLowerCase() === c.toLowerCase())
   )
 
-  // Staff selector
-  const AllowedStaffSelector = () => {
-    const activeStaff = staffSchedules
-      .filter(s => s.isActive !== false && !s.visibleId.startsWith('resource-'))
-      .sort((a, b) => (a.staffName || '').localeCompare(b.staffName || ''))
-
-    return (
-      <>
-        <div style={{ marginBottom: '1rem' }}>
-          <label style={{ display: 'block', marginBottom: '0.5rem' }}>Staff Assignment</label>
-          <select
-            value={newService.staffRestriction}
-            onChange={(e) => {
-              const value = e.target.value
-              if (value === 'specific' && newService.allowedStaff.length === 0) {
-                setNewService({ ...newService, staffRestriction: value, allowedStaff: activeStaff.map(s => s.visibleId) })
-              } else {
-                setNewService({ ...newService, staffRestriction: value, allowedStaff: value === 'all' ? [] : newService.allowedStaff })
-              }
-            }}
-            style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }}
-          >
-            <option value="all">All Staff Members</option>
-            <option value="specific">Specific Staff Members</option>
-          </select>
-        </div>
-        {newService.staffRestriction === 'specific' && (
-          <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Select Staff Members</label>
-            <div style={{ border: '1px solid var(--color-border)', borderRadius: '8px', padding: '0.75rem', maxHeight: '200px', overflowY: 'auto' }}>
-              {activeStaff.map(s => (
-                <label key={s.visibleId} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', padding: '0.35rem 0' }}>
-                  <input type="checkbox" checked={newService.allowedStaff.includes(s.visibleId)} onChange={(e) => handleStaffToggle(s.visibleId, e.target.checked)} style={{ width: '18px', height: '18px' }} />
-                  <span>{s.staffName || s.visibleId}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-        )}
-      </>
-    )
-  }
-
   const renderServiceForm = (isEdit) => (
     <form ref={formRef} onSubmit={currentUserRole === 'admin' ? handleAddService : handleStaffPriceUpdate} style={{
       background: isEdit ? '#fff8f0' : 'var(--color-accent)',
@@ -286,22 +295,22 @@ export default function ServicesSection({ services, staffSchedules, existingCate
         <>
           <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginBottom: '1rem' }}>As staff, you can only update the price.</p>
           <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Price ($) *</label>
-            <input type="number" required min="0" step="0.01" value={newService.price} onChange={(e) => setNewService({ ...newService, price: parseFloat(e.target.value) })}
+            <label htmlFor="svc-staff-price" style={{ display: 'block', marginBottom: '0.5rem' }}>Price ($) *</label>
+            <input id="svc-staff-price" type="number" required min="0" step="0.01" value={newService.price} onChange={(e) => setNewService({ ...newService, price: Number.parseFloat(e.target.value) })}
               style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />
           </div>
         </>
       ) : (
         <>
           <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Service Name *</label>
-            <input type="text" required value={newService.name} onChange={(e) => setNewService({ ...newService, name: e.target.value })}
+            <label htmlFor="svc-name" style={{ display: 'block', marginBottom: '0.5rem' }}>Service Name *</label>
+            <input id="svc-name" type="text" required value={newService.name} onChange={(e) => setNewService({ ...newService, name: e.target.value })}
               style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />
           </div>
 
           {/* Category selector */}
           <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Categories * <span style={{ fontSize: '0.85rem', color: 'var(--color-text-light)' }}>(1-5)</span></label>
+            <label htmlFor="svc-category-input" style={{ display: 'block', marginBottom: '0.5rem' }}>Categories * <span style={{ fontSize: '0.85rem', color: 'var(--color-text-light)' }}>(1-5)</span></label>
             {newService.categories.length > 0 && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.5rem' }}>
                 {newService.categories.map(cat => (
@@ -313,7 +322,7 @@ export default function ServicesSection({ services, staffSchedules, existingCate
               </div>
             )}
             <div ref={categoryInputRef} style={{ position: 'relative' }}>
-              <input type="text" value={categoryInput}
+              <input id="svc-category-input" type="text" value={categoryInput}
                 onChange={(e) => { setCategoryInput(e.target.value); setShowCategoryDropdown(true); setCategoryError('') }}
                 onFocus={() => setShowCategoryDropdown(true)}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (categoryInput.trim() && filteredCategories.length > 0) addCategory(filteredCategories[0]) } }}
@@ -322,9 +331,9 @@ export default function ServicesSection({ services, staffSchedules, existingCate
                 style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: `1px solid ${categoryError ? '#f44336' : 'var(--color-border)'}`, fontSize: '1rem' }}
               />
               {showCategoryDropdown && (
-                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '1px solid var(--color-border)', borderRadius: '0 0 8px 8px', maxHeight: '200px', overflowY: 'auto', zIndex: 10, boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
+                <div role="listbox" style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '1px solid var(--color-border)', borderRadius: '0 0 8px 8px', maxHeight: '200px', overflowY: 'auto', zIndex: 10, boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
                   {filteredCategories.length > 0 ? filteredCategories.map(cat => (
-                    <div key={cat} role="option" tabIndex={0} onMouseDown={(e) => { e.preventDefault(); addCategory(cat) }} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); addCategory(cat) } }}
+                    <div key={cat} role="option" aria-selected={false} tabIndex={0} onMouseDown={(e) => { e.preventDefault(); addCategory(cat) }} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); addCategory(cat) } }}
                       style={{ padding: '0.5rem 0.75rem', cursor: 'pointer', borderBottom: '1px solid #f0f0f0', fontSize: '0.9rem' }}
                       onMouseEnter={(e) => e.target.style.background = '#f5f5f5'} onMouseLeave={(e) => e.target.style.background = 'white'}
                     >{cat}</div>
@@ -338,27 +347,27 @@ export default function ServicesSection({ services, staffSchedules, existingCate
           </div>
 
           <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Description</label>
-            <textarea value={newService.description} onChange={(e) => setNewService({ ...newService, description: e.target.value })} rows="3"
+            <label htmlFor="svc-description" style={{ display: 'block', marginBottom: '0.5rem' }}>Description</label>
+            <textarea id="svc-description" value={newService.description} onChange={(e) => setNewService({ ...newService, description: e.target.value })} rows="3"
               style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem', resize: 'vertical' }} />
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
             <div>
-              <label style={{ display: 'block', marginBottom: '0.5rem' }}>Duration (min) *</label>
-              <input type="number" required min="5" step="5" value={newService.duration} onChange={(e) => setNewService({ ...newService, duration: parseInt(e.target.value) })}
+              <label htmlFor="svc-duration" style={{ display: 'block', marginBottom: '0.5rem' }}>Duration (min) *</label>
+              <input id="svc-duration" type="number" required min="5" step="5" value={newService.duration} onChange={(e) => setNewService({ ...newService, duration: Number.parseInt(e.target.value) })}
                 style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />
             </div>
             <div>
-              <label style={{ display: 'block', marginBottom: '0.5rem' }}>Price ($) *</label>
-              <input type="number" required min="0" step="0.01" value={newService.price} onChange={(e) => setNewService({ ...newService, price: parseFloat(e.target.value) })}
+              <label htmlFor="svc-price" style={{ display: 'block', marginBottom: '0.5rem' }}>Price ($) *</label>
+              <input id="svc-price" type="number" required min="0" step="0.01" value={newService.price} onChange={(e) => setNewService({ ...newService, price: Number.parseFloat(e.target.value) })}
                 style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />
             </div>
           </div>
 
           <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Buffer Time (minutes)</label>
-            <input type="number" min="0" step="5" value={newService.bufferMinutes} onChange={(e) => setNewService({ ...newService, bufferMinutes: e.target.value === '' ? '' : parseInt(e.target.value) })}
+            <label htmlFor="svc-buffer" style={{ display: 'block', marginBottom: '0.5rem' }}>Buffer Time (minutes)</label>
+            <input id="svc-buffer" type="number" min="0" step="5" value={newService.bufferMinutes} onChange={(e) => setNewService({ ...newService, bufferMinutes: e.target.value === '' ? '' : Number.parseInt(e.target.value) })}
               placeholder="Default (15 min)" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />
           </div>
 
@@ -370,8 +379,8 @@ export default function ServicesSection({ services, staffSchedules, existingCate
           </div>
           {newService.houseFeeEnabled && (
             <div style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.5rem' }}>House Fee Amount ($)</label>
-              <input type="number" min="0" step="0.01" value={newService.houseFeeAmount} onChange={(e) => setNewService({ ...newService, houseFeeAmount: parseFloat(e.target.value) || 0 })}
+              <label htmlFor="svc-house-fee" style={{ display: 'block', marginBottom: '0.5rem' }}>House Fee Amount ($)</label>
+              <input id="svc-house-fee" type="number" min="0" step="0.01" value={newService.houseFeeAmount} onChange={(e) => setNewService({ ...newService, houseFeeAmount: Number.parseFloat(e.target.value) || 0 })}
                 style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />
             </div>
           )}
@@ -392,20 +401,20 @@ export default function ServicesSection({ services, staffSchedules, existingCate
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
             <div>
-              <label style={{ display: 'block', marginBottom: '0.5rem' }}>Max Qty Per Booking</label>
-              <input type="number" min="1" max="10" value={newService.maxQuantityPerBooking} onChange={(e) => setNewService({ ...newService, maxQuantityPerBooking: parseInt(e.target.value) || 1 })}
+              <label htmlFor="svc-max-qty" style={{ display: 'block', marginBottom: '0.5rem' }}>Max Qty Per Booking</label>
+              <input id="svc-max-qty" type="number" min="1" max="10" value={newService.maxQuantityPerBooking} onChange={(e) => setNewService({ ...newService, maxQuantityPerBooking: Number.parseInt(e.target.value) || 1 })}
                 style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />
             </div>
             <div>
-              <label style={{ display: 'block', marginBottom: '0.5rem' }}>Providers Required</label>
-              <input type="number" min="1" max="10" value={newService.providersRequired} onChange={(e) => setNewService({ ...newService, providersRequired: parseInt(e.target.value) || 1 })}
+              <label htmlFor="svc-providers" style={{ display: 'block', marginBottom: '0.5rem' }}>Providers Required</label>
+              <input id="svc-providers" type="number" min="1" max="10" value={newService.providersRequired} onChange={(e) => setNewService({ ...newService, providersRequired: Number.parseInt(e.target.value) || 1 })}
                 style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />
             </div>
           </div>
 
           <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Resource Type</label>
-            <select value={newService.resourceType} onChange={(e) => setNewService({ ...newService, resourceType: e.target.value })}
+            <label htmlFor="svc-resource-type" style={{ display: 'block', marginBottom: '0.5rem' }}>Resource Type</label>
+            <select id="svc-resource-type" value={newService.resourceType} onChange={(e) => setNewService({ ...newService, resourceType: e.target.value })}
               style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }}>
               <option value="staff">Staff</option>
               <option value="room">Spa Room</option>
@@ -413,7 +422,7 @@ export default function ServicesSection({ services, staffSchedules, existingCate
             </select>
           </div>
 
-          {(newService.resourceType === 'staff' || newService.resourceType === 'room') && <AllowedStaffSelector />}
+          {(newService.resourceType === 'staff' || newService.resourceType === 'room') && <AllowedStaffSelector staffSchedules={staffSchedules} newService={newService} setNewService={setNewService} handleStaffToggle={handleStaffToggle} />}
         </>
       )}
 
@@ -440,7 +449,7 @@ export default function ServicesSection({ services, staffSchedules, existingCate
     return 0
   })
 
-  const allCategories = [...new Set(services.flatMap(s => s.categories || (s.category ? [s.category] : [])))].sort()
+  const allCategories = [...new Set(services.flatMap(s => s.categories || (s.category ? [s.category] : [])))].sort((a, b) => a.localeCompare(b))
   const addons = services.filter(s => s.parentServiceIds?.length > 0)
 
   return (
@@ -453,7 +462,7 @@ export default function ServicesSection({ services, staffSchedules, existingCate
           </p>
         </div>
         {canCreate && (
-          <button onClick={() => { if (showAddForm) handleCancelEdit(); else { setEditingService(null); setShowAddForm(true) } }} className="cta">
+          <button type="button" onClick={() => { if (showAddForm) handleCancelEdit(); else { setEditingService(null); setShowAddForm(true) } }} className="cta">
             {showAddForm ? 'Cancel' : '+ Add New Service'}
           </button>
         )}
@@ -484,10 +493,17 @@ export default function ServicesSection({ services, staffSchedules, existingCate
         {filtered.length === 0 && <p style={{ color: 'var(--color-text-light)', textAlign: 'center', padding: '2rem' }}>No services found.</p>}
         {filtered.map(service => {
           const serviceAddons = addons.filter(a => a.parentServiceIds?.includes(service.serviceId))
-          const staffNames = service.allowedStaff && service.allowedStaff.length > 0
+          const staffNames = service.allowedStaff?.length > 0
             ? service.allowedStaff.map(id => { const staff = staffSchedules.find(s => s.visibleId === id); return staff?.staffName?.split(' ')[0] || id.replace('staff-', '') })
             : null
-          const categories = service.categories && Array.isArray(service.categories) ? service.categories : (service.category ? [service.category] : [])
+          let categories
+          if (service.categories && Array.isArray(service.categories)) {
+            categories = service.categories
+          } else if (service.category) {
+            categories = [service.category]
+          } else {
+            categories = []
+          }
 
           return (
             <div key={service.serviceId}>
@@ -507,14 +523,14 @@ export default function ServicesSection({ services, staffSchedules, existingCate
                   </p>
                 </div>
                 <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0, flexWrap: 'wrap' }}>
-                  <button onClick={() => handleEdit(service)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: 'var(--color-primary)', color: 'white' }}>Edit</button>
+                  <button type="button" onClick={() => handleEdit(service)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: 'var(--color-primary)', color: 'white' }}>Edit</button>
                   {canCreate && (
-                    <button onClick={() => handleToggleActive(service)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: service.isActive ? '#4CAF50' : '#999', color: 'white' }}>
+                    <button type="button" onClick={() => handleToggleActive(service)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: service.isActive ? '#4CAF50' : '#999', color: 'white' }}>
                       {service.isActive ? 'Active' : 'Inactive'}
                     </button>
                   )}
                   {canDelete && (
-                    <button onClick={() => handleDelete(service)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: '#f44336', color: 'white' }}>Delete</button>
+                    <button type="button" onClick={() => handleDelete(service)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: '#f44336', color: 'white' }}>Delete</button>
                   )}
                 </div>
               </div>

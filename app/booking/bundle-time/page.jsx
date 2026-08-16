@@ -141,13 +141,17 @@ function BundleTimeContent() {
 
   // Build the confirmation URL based on selection mode
   const buildConfirmUrl = () => {
-    const baseParams = `${bundleId ? `bundleId=${bundleId}&` : ''}services=${serviceIds.join(',')}&date=${selectedDate.toISOString()}${people ? `&people=${people}` : ''}${quantitiesParam ? `&quantities=${quantitiesParam}` : ''}`
+    const bundlePart = bundleId ? `bundleId=${bundleId}&` : ''
+    const peoplePart = people ? `&people=${people}` : ''
+    const quantitiesPart = quantitiesParam ? `&quantities=${quantitiesParam}` : ''
+    const baseParams = `${bundlePart}services=${serviceIds.join(',')}&date=${selectedDate.toISOString()}${peoplePart}${quantitiesPart}`
 
     if (useTimeFrames) {
       return `/booking/confirm?${baseParams}&timeFrame=${selectedTimeFrame}`
     }
 
-    return `/booking/confirm?${baseParams}&time=${selectedTime}${selectedSchedule ? `&schedule=${encodeURIComponent(JSON.stringify(selectedSchedule))}` : ''}`
+    const schedulePart = selectedSchedule ? `&schedule=${encodeURIComponent(JSON.stringify(selectedSchedule))}` : ''
+    return `/booking/confirm?${baseParams}&time=${selectedTime}${schedulePart}`
   }
 
   // Determine if the proceed button should be enabled
@@ -265,6 +269,7 @@ function BundleTimeContent() {
       {useTimeFrames && selectedDate && !selectedTimeFrame && (
         <div style={{ marginTop: '2rem' }}>
           <button
+            type="button"
             className="cta"
             disabled
             aria-disabled="true"

@@ -654,9 +654,14 @@ function MonthView({ currentDate, appointments, onAppointmentClick }) {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                 {dayApts.map(apt => {
-                  const color = apt.paymentStatus === 'paid' ? '#4CAF50'
-                    : apt.status === 'confirmed' ? '#2196F3'
-                    : '#FF9800'
+                  let color
+                  if (apt.paymentStatus === 'paid') {
+                    color = '#4CAF50'
+                  } else if (apt.status === 'confirmed') {
+                    color = '#2196F3'
+                  } else {
+                    color = '#FF9800'
+                  }
                   const aptDate = parseAppointmentDate(apt.rawDateTime)
                   const timeStr = apt.timeFrame
                     ? apt.timeFrame.charAt(0).toUpperCase() + apt.timeFrame.slice(1)

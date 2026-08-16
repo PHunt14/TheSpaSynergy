@@ -62,7 +62,7 @@ export default function ServicesPage() {
   }
 
   const tabs = [
-    { key: 'services', label: '💆 Services', count: services.filter(s => !(s.parentServiceIds?.length > 0)).length },
+    { key: 'services', label: '💆 Services', count: services.filter(s => !s.parentServiceIds?.length).length },
     { key: 'addons', label: '🧩 Add-Ons', count: services.filter(s => s.parentServiceIds?.length > 0).length },
     { key: 'extras', label: '🧺 Extras' },
   ]

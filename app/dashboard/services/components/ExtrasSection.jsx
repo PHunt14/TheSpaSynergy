@@ -58,10 +58,10 @@ export default function ExtrasSection() {
       errors.name = 'Name must be 100 characters or fewer'
     }
 
-    const price = parseFloat(formData.price)
+    const price = Number.parseFloat(formData.price)
     if (!formData.price && formData.price !== 0) {
       errors.price = 'Price is required'
-    } else if (isNaN(price) || price < 0.01 || price > 99999.99) {
+    } else if (Number.isNaN(price) || price < 0.01 || price > 99999.99) {
       errors.price = 'Price must be between 0.01 and 99999.99'
     }
 
@@ -78,7 +78,7 @@ export default function ExtrasSection() {
     const payload = {
       name: formData.name.trim(),
       description: formData.description.trim() || undefined,
-      price: parseFloat(formData.price),
+      price: Number.parseFloat(formData.price),
       perPerson: formData.perPerson,
       groupOnly: formData.groupOnly,
       assignedBundleIds: formData.assignedBundleIds,
@@ -194,6 +194,7 @@ export default function ExtrasSection() {
           </p>
         </div>
         <button
+          type="button"
           onClick={() => {
             if (showAddForm || editingExtra) handleCancelForm()
             else { setShowAddForm(true); setEditingExtra(null); setFormData(emptyForm); setFormErrors({}) }
@@ -227,8 +228,9 @@ export default function ExtrasSection() {
           </h3>
 
           <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Name *</label>
+            <label htmlFor="extra-name" style={{ display: 'block', marginBottom: '0.5rem' }}>Name *</label>
             <input
+              id="extra-name"
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -241,8 +243,9 @@ export default function ExtrasSection() {
           </div>
 
           <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Description</label>
+            <label htmlFor="extra-description" style={{ display: 'block', marginBottom: '0.5rem' }}>Description</label>
             <textarea
+              id="extra-description"
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               rows="2"
@@ -251,8 +254,9 @@ export default function ExtrasSection() {
           </div>
 
           <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Price ($) *</label>
+            <label htmlFor="extra-price" style={{ display: 'block', marginBottom: '0.5rem' }}>Price ($) *</label>
             <input
+              id="extra-price"
               type="number"
               step="0.01"
               min="0.01"
@@ -281,8 +285,8 @@ export default function ExtrasSection() {
           </div>
 
           <div style={{ marginBottom: '1.5rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Assign to Bundles</label>
-            <div style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid var(--color-border)', borderRadius: '8px', padding: '0.75rem' }}>
+            <label htmlFor="extra-bundle-assignment" style={{ display: 'block', marginBottom: '0.5rem' }}>Assign to Bundles</label>
+            <div id="extra-bundle-assignment" style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid var(--color-border)', borderRadius: '8px', padding: '0.75rem' }}>
               {bundles.length === 0 ? (
                 <p style={{ color: 'var(--color-text-light)', fontSize: '0.9rem', margin: 0 }}>No bundles available</p>
               ) : (
@@ -349,8 +353,8 @@ export default function ExtrasSection() {
             </div>
 
             <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
-              <button onClick={() => handleEdit(extra)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: 'var(--color-primary)', color: 'white' }}>Edit</button>
-              <button onClick={() => handleToggleActive(extra)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: extra.isActive ? '#4CAF50' : '#999', color: 'white' }}>
+              <button type="button" onClick={() => handleEdit(extra)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: 'var(--color-primary)', color: 'white' }}>Edit</button>
+              <button type="button" onClick={() => handleToggleActive(extra)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', background: extra.isActive ? '#4CAF50' : '#999', color: 'white' }}>
                 {extra.isActive ? 'Active' : 'Inactive'}
               </button>
             </div>

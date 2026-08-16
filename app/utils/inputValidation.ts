@@ -150,6 +150,41 @@ export function validateCustomerNotes(notes: unknown): string | null {
 }
 
 /**
+ * Validates customer fields (name, notes) from a customer object.
+ * Returns any errors keyed by field name with 'customer.' prefix.
+ */
+function validateCustomerFields(customer: Record<string, unknown>): Record<string, string> {
+  const errors: Record<string, string> = {};
+  const nameError = validateCustomerName(customer.name);
+  if (nameError) errors['customer.name'] = nameError;
+
+  const notesError = validateCustomerNotes(customer.notes);
+  if (notesError) errors['customer.notes'] = notesError;
+
+  return errors;
+}
+
+/**
+ * Validates a required field: checks presence and ID format.
+ */
+function validateRequiredId(value: unknown, fieldName: string): string | null {
+  if (!value) {
+    return `${fieldName} is required`;
+  }
+  return validateId(value, fieldName);
+}
+
+/**
+ * Validates serviceId with special allowance for 'manual' and 'blocked' values.
+ */
+function validateServiceIdSpecial(serviceId: unknown): string | null {
+  if (serviceId && serviceId !== 'manual' && serviceId !== 'blocked') {
+    return validateId(serviceId, 'serviceId');
+  }
+  return null;
+}
+
+/**
  * Validates booking request fields for POST /api/appointments (customer booking).
  * Returns a ValidationResult with any errors keyed by field name.
  */
@@ -157,17 +192,19 @@ export function validateCustomerBookingInput(body: Record<string, unknown>): Val
   const errors: Record<string, string> = {};
 
   // dateTime is required for customer bookings
-  if (!body.dateTime) {
-    errors.dateTime = 'dateTime is required';
-  } else {
+  const dtRequiredError = validateRequiredId(body.dateTime, 'dateTime');
+  if (dtRequiredError === 'dateTime is required') {
+    errors.dateTime = dtRequiredError;
+  } else if (body.dateTime) {
     const dtError = validateDateTime(body.dateTime);
     if (dtError) errors.dateTime = dtError;
   }
 
   // serviceId is required
-  if (!body.serviceId) {
-    errors.serviceId = 'serviceId is required';
-  } else {
+  const svcRequiredError = validateRequiredId(body.serviceId, 'serviceId');
+  if (svcRequiredError === 'serviceId is required') {
+    errors.serviceId = svcRequiredError;
+  } else if (body.serviceId) {
     const idError = validateId(body.serviceId, 'serviceId');
     if (idError) errors.serviceId = idError;
   }
@@ -182,12 +219,7 @@ export function validateCustomerBookingInput(body: Record<string, unknown>): Val
 
   // customer fields
   if (body.customer && typeof body.customer === 'object') {
-    const customer = body.customer as Record<string, unknown>;
-    const nameError = validateCustomerName(customer.name);
-    if (nameError) errors['customer.name'] = nameError;
-
-    const notesError = validateCustomerNotes(customer.notes);
-    if (notesError) errors['customer.notes'] = notesError;
+    Object.assign(errors, validateCustomerFields(body.customer as Record<string, unknown>));
   }
 
   // duration (optional — service lookup provides it, but validate if sent)
@@ -228,10 +260,8 @@ export function validateManualBookingInput(body: Record<string, unknown>): Valid
   if (staffIdError) errors.staffId = staffIdError;
 
   // serviceId (optional for manual — can be 'manual' or 'blocked')
-  if (body.serviceId && body.serviceId !== 'manual' && body.serviceId !== 'blocked') {
-    const idError = validateId(body.serviceId, 'serviceId');
-    if (idError) errors.serviceId = idError;
-  }
+  const svcError = validateServiceIdSpecial(body.serviceId);
+  if (svcError) errors.serviceId = svcError;
 
   // duration (optional but validate if provided)
   const durationError = validateDuration(body.duration);
@@ -281,19 +311,12 @@ export function validateAppointmentUpdateInput(body: Record<string, unknown>): V
   if (vendorIdError) errors.vendorId = vendorIdError;
 
   // serviceId (optional but validate if provided)
-  if (body.serviceId && body.serviceId !== 'manual' && body.serviceId !== 'blocked') {
-    const idError = validateId(body.serviceId, 'serviceId');
-    if (idError) errors.serviceId = idError;
-  }
+  const svcError = validateServiceIdSpecial(body.serviceId);
+  if (svcError) errors.serviceId = svcError;
 
   // customer fields (if provided)
   if (body.customer && typeof body.customer === 'object') {
-    const customer = body.customer as Record<string, unknown>;
-    const nameError = validateCustomerName(customer.name);
-    if (nameError) errors['customer.name'] = nameError;
-
-    const notesError = validateCustomerNotes(customer.notes);
-    if (notesError) errors['customer.notes'] = notesError;
+    Object.assign(errors, validateCustomerFields(body.customer as Record<string, unknown>));
   }
 
   return {

@@ -98,6 +98,46 @@ export async function GET(request: Request) {
 }
 
 /**
+ * Validates extra name: required, 1-100 characters trimmed.
+ * Returns an error Response or null if valid.
+ */
+function validateExtraName(name: unknown): Response | null {
+  if (!name || typeof name !== 'string' || name.trim().length === 0) {
+    return Response.json(
+      { error: 'Name is required (1-100 characters)', field: 'name' },
+      { status: 400 }
+    )
+  }
+  if ((name as string).trim().length > 100) {
+    return Response.json(
+      { error: 'Name must be 100 characters or fewer', field: 'name' },
+      { status: 400 }
+    )
+  }
+  return null
+}
+
+/**
+ * Validates extra price: required number, 0.01-99999.99.
+ * Returns an error Response or null if valid.
+ */
+function validateExtraPrice(price: unknown): Response | null {
+  if (price === undefined || price === null || typeof price !== 'number') {
+    return Response.json(
+      { error: 'Price is required (0.01-99999.99)', field: 'price' },
+      { status: 400 }
+    )
+  }
+  if (price < 0.01 || price > 99999.99) {
+    return Response.json(
+      { error: 'Price must be between 0.01 and 99999.99', field: 'price' },
+      { status: 400 }
+    )
+  }
+  return null
+}
+
+/**
  * POST /api/extras
  *
  * Creates a new Extra record. Staff-only (Cognito auth).
@@ -119,33 +159,13 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { name, description, price, perPerson, groupOnly, assignedBundleIds } = body
 
-    // Validate name: required, 1-100 characters
-    if (!name || typeof name !== 'string' || name.trim().length === 0) {
-      return Response.json(
-        { error: 'Name is required (1-100 characters)', field: 'name' },
-        { status: 400 }
-      )
-    }
-    if (name.trim().length > 100) {
-      return Response.json(
-        { error: 'Name must be 100 characters or fewer', field: 'name' },
-        { status: 400 }
-      )
-    }
+    // Validate name
+    const nameError = validateExtraName(name)
+    if (nameError) return nameError
 
-    // Validate price: required, 0.01-99999.99
-    if (price === undefined || price === null || typeof price !== 'number') {
-      return Response.json(
-        { error: 'Price is required (0.01-99999.99)', field: 'price' },
-        { status: 400 }
-      )
-    }
-    if (price < 0.01 || price > 99999.99) {
-      return Response.json(
-        { error: 'Price must be between 0.01 and 99999.99', field: 'price' },
-        { status: 400 }
-      )
-    }
+    // Validate price
+    const priceError = validateExtraPrice(price)
+    if (priceError) return priceError
 
     const extraId = randomUUID()
 
