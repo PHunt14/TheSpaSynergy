@@ -51,7 +51,11 @@ export function sanitizeInput(text: unknown, maxLength: number = MAX_LENGTHS.not
     return '';
   }
 
-  let sanitized = String(text);
+  if (typeof text !== 'string') {
+    return '';
+  }
+
+  let sanitized = text;
 
   // 1. Encode HTML entities (must happen before whitespace normalization
   //    so that entity characters like & in &amp; aren't double-encoded)
@@ -61,7 +65,7 @@ export function sanitizeInput(text: unknown, maxLength: number = MAX_LENGTHS.not
   sanitized = sanitized.trim();
 
   // 3. Normalize internal whitespace: collapse multiple spaces/tabs to single space
-  sanitized = sanitized.replace(/[\s\t]+/g, ' ');
+  sanitized = sanitized.replace(/\s+/g, ' ');
 
   // 4. Truncate at max length
   if (sanitized.length > maxLength) {

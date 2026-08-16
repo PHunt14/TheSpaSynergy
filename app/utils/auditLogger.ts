@@ -9,7 +9,7 @@
  * Requirements: 11.8
  */
 
-import { createHash } from 'crypto';
+import { createHash } from 'node:crypto';
 
 export type RejectionReason =
   | 'conflict'        // 409 — time slot conflict

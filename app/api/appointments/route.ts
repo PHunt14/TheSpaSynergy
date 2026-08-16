@@ -15,7 +15,7 @@ import { validateCustomerBookingInput, validateAppointmentUpdateInput, buildVali
 import { sanitizeCustomerName, sanitizeNotes } from '@/app/utils/inputSanitization';
 import { checkBundleConflicts, queryAppointmentsAcrossVendors, buildServiceDurationMap, type BundleServiceAssignment } from '@/app/utils/bundleConflictCheck';
 import { checkRateLimit, getClientIp, rateLimitResponse } from '@/app/utils/rateLimiter';
-import { auditReject, safeErrorResponse, staffErrorResponse } from '@/app/utils/auditLogger';
+import { auditReject, safeErrorResponse } from '@/app/utils/auditLogger';
 
 const client = generateServerClientUsingCookies<Schema>({
   config,
@@ -199,7 +199,8 @@ export async function POST(request: Request) {
     const user = await getCurrentUser();
     const createdBy = user ? rawCreatedBy : undefined;
     const confirmOverlap = user ? rawConfirmOverlap : false;
-    const isManual = user ? rawIsManual : undefined;
+    // isManual stripped for unauthenticated users (Req 11.4) — not used directly, but must be removed from body
+    const _isManual = user ? rawIsManual : undefined;
     const status = user ? rawStatus : undefined;
 
     // Strip privileged fields from the body object itself so helper functions
@@ -238,7 +239,6 @@ export async function POST(request: Request) {
     }
 
     // Validate extras array if provided
-    let validatedExtras: any[] = [];
     let extrasMetadata: any = null;
     if (clientExtras && Array.isArray(clientExtras) && clientExtras.length > 0) {
       // Check max count first
@@ -263,7 +263,6 @@ export async function POST(request: Request) {
       const groupSize = customer?.people || customer?.groupSize || 1;
       const costResult = calculateExtrasCost(extrasValidation.validExtras, groupSize);
       extrasMetadata = costResult;
-      validatedExtras = extrasValidation.validExtras;
     }
 
     // Sanitize string inputs before persistence (Requirements 11.5)

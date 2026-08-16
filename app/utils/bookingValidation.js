@@ -62,7 +62,7 @@ export function sanitizeTextInput(text, maxLength = 500) {
   let sanitized = String(text)
 
   // Remove script tags and their content first
-  sanitized = sanitized.replace(/<script[\s\S]*?<\/script>/gi, '')
+  sanitized = sanitized.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
 
   // Remove all remaining HTML tags
   sanitized = sanitized.replace(/<[^>]*>/g, '')

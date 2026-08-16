@@ -16,9 +16,7 @@
 import {
   intervalsOverlap,
   detectConflict,
-  extractTimeFromDateTime,
   timeToMinutes,
-  extractDateFromDateTime,
   type ConflictResult,
 } from './overlapDetection';
 

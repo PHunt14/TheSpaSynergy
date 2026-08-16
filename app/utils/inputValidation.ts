@@ -20,7 +20,7 @@ export interface ValidationResult {
 /**
  * ID format: alphanumeric characters and dashes, non-empty
  */
-const ID_PATTERN = /^[a-zA-Z0-9\-]+$/;
+const ID_PATTERN = /^[a-zA-Z0-9-]+$/;
 
 /**
  * DateTime format: YYYY-MM-DDTHH:MM (ISO 8601 without seconds)
@@ -49,7 +49,7 @@ export function validateDateTime(dateTime: unknown): string | null {
 
   // Validate it parses to a real date
   const parsed = new Date(dateTime);
-  if (isNaN(parsed.getTime())) {
+  if (Number.isNaN(parsed.getTime())) {
     return 'Invalid date/time value';
   }
 

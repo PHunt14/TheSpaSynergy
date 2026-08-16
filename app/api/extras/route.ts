@@ -3,7 +3,7 @@ import type { Schema } from '@/amplify/data/resource'
 import { Amplify } from 'aws-amplify'
 import config from '@/amplify_outputs.json'
 import { getCurrentUser } from '@/lib/auth'
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 
 Amplify.configure(config, { ssr: true })
 const client = generateClient<Schema>()
