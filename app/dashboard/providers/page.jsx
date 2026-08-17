@@ -328,7 +328,7 @@ export default function Providers() {
                   <>
                     <input
                       type="time"
-                      value={newProvider.workingHours[day].start}
+                      value={newProvider.workingHours[day].start || ''}
                       onChange={(e) => setNewProvider({
                         ...newProvider,
                         workingHours: {
@@ -345,7 +345,7 @@ export default function Providers() {
                     <span>to</span>
                     <input
                       type="time"
-                      value={newProvider.workingHours[day].end}
+                      value={newProvider.workingHours[day].end || ''}
                       onChange={(e) => setNewProvider({
                         ...newProvider,
                         workingHours: {

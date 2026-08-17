@@ -187,7 +187,12 @@ function getEligibleStaff(staffSchedules, service, dayOfWeek, requestedDate, tim
 
   return staffSchedules.filter(staff => {
     if (!staff.isActive) return false
+    // If allowedStaff is explicitly set, only those staff are eligible
     if (allowedStaff.length > 0 && !allowedStaff.includes(staff.visibleId)) return false
+    // If allowedStaff is empty/null (any staff), exclude resource calendars
+    // Resource calendars (e.g. resource-sauna) should only be assigned when
+    // explicitly listed in allowedStaff
+    if (allowedStaff.length === 0 && staff.visibleId.startsWith('resource-')) return false
     if (!isWorkingAtTime(staff, dayOfWeek, requestedDate, time, duration)) return false
     if (hasConflict(staff.visibleId, appointments, time, duration, bufferMinutes)) return false
     return true

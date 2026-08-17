@@ -33,6 +33,9 @@ export function assignStaff({ service, staffSchedules, appointments, date, time,
   const eligible = staffSchedules.filter(staff => {
     if (!staff.isActive) return false
     if (allowedStaff.length > 0 && !allowedStaff.includes(staff.visibleId)) return false
+    // If allowedStaff is empty/null (any staff), exclude resource calendars
+    // Resource calendars should only be assigned when explicitly listed
+    if (allowedStaff.length === 0 && staff.visibleId.startsWith('resource-')) return false
     if (!isWorkingAtTime(staff, dayOfWeek, requestedDate, time, duration)) return false
     if (hasConflict(staff.visibleId, appointments, time, duration, bufferMinutes)) return false
     return true
