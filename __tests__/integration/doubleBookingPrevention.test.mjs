@@ -355,13 +355,26 @@ describe('Vendor/provider self-booking allows double-booking', () => {
 })
 
 describe('Edge cases', () => {
-  test('zero-duration blocked time still blocks via buffer', () => {
-    // Edge case: blocked time with 0 duration (marker) — buffer still applies
+  test('zero-duration blocked time throws strict duration error (Req 5.3)', () => {
+    // Per Requirement 5.3: blocked/manual appointments with zero duration must throw
     addBlockedTime('2025-07-15T12:00:00', 0)
 
-    // With 0 duration but 15 buffer: effective range is 12:00-12:15
-    // Trying to book at 12:00 — newStart(720) < existingEnd(720+0+15=735) = true
-    // newEnd(720+60+15=795) > existingStart(720) = true → CONFLICT
+    expect(() => detectConflict(
+      'staff-jane',
+      '2025-07-15T12:00:00',
+      60,
+      15,
+      mockAppointments,
+      {}
+    )).toThrow(/invalid duration/)
+  })
+
+  test('minimal-duration blocked time still blocks via buffer', () => {
+    // Blocked time with 1-min duration — buffer still applies
+    addBlockedTime('2025-07-15T12:00:00', 1)
+
+    // With 1-min duration + 15 buffer: effective range is 12:00-12:16
+    // Trying to book at 12:00 — overlap exists → CONFLICT
     const result = detectConflict(
       'staff-jane',
       '2025-07-15T12:00:00',

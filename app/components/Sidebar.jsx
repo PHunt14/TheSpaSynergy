@@ -9,7 +9,7 @@ const allNavItems = [
   { href: '/dashboard', label: 'Overview', icon: '📊' },
   { href: '/dashboard/calendar', label: 'Calendar', icon: '📅' },
   { href: '/dashboard/transactions', label: 'Transactions', icon: '💰' },
-  { href: '/dashboard/services', label: 'Services', icon: '💆' },
+  { href: '/dashboard/services', label: 'Services & Extras', icon: '💆' },
   { href: '/dashboard/bundles', label: 'Packages', icon: '📦' },
   { href: '/dashboard/providers', label: 'Providers', icon: '👤', adminOnly: true },
   { href: '/dashboard/staff', label: 'Staff', icon: '👥' },

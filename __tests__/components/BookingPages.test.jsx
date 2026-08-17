@@ -29,6 +29,11 @@ jest.mock('../../app/utils/bundleDiscount', () => ({
   validateBundleServices: () => ({ valid: true, error: null }),
 }))
 
+jest.mock('../../app/utils/extrasCalculator', () => ({
+  calculateExtrasCost: () => ({ items: [], grandTotal: 0 }),
+  filterAvailableExtras: (extras) => extras || [],
+}))
+
 jest.mock('aws-amplify/analytics', () => ({ record: jest.fn() }))
 
 jest.mock('../../app/components/BookingDisabled', () => {

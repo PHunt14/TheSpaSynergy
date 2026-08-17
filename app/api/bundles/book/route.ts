@@ -7,6 +7,13 @@ import { assignBundleStaff } from '../../../utils/bundleStaffAssigner.js';
 import { calculateBundlePrice, validateBundleServices } from '../../../utils/bundleDiscount.js';
 import { checkBookingBlackout, blackoutResponseFields } from '../../../utils/bookingBlackout';
 import { getCurrentUser } from '@/lib/auth';
+import {
+  checkBundleConflicts,
+  queryAppointmentsAcrossVendors,
+  buildServiceDurationMap,
+  type BundleServiceAssignment,
+} from '../../../utils/bundleConflictCheck';
+import { detectConflict } from '@/app/utils/overlapDetection';
 
 const client = generateServerClientUsingCookies<Schema>({
   config,
@@ -288,7 +295,60 @@ export async function POST(request: Request) {
       );
     }
 
-    // --- Create one appointment per service ---
+    // --- Pre-write conflict check for ALL bundle staff members (Requirements 9.1, 9.3, 9.4, 9.5) ---
+    // Before persisting ANY appointments, verify each staff member independently
+    // against existing appointments across all relevant vendors.
+    // Also detects intra-bundle conflicts and enforces sequential buffer.
+    if (!isVendorBooking || !confirmOverlap) {
+      // Build BundleServiceAssignment array with duration info
+      const bundleAssignments: BundleServiceAssignment[] = staffAssignments.map((a: any) => {
+        const serviceForAssignment = orderedServices.find((s: any) => s.serviceId === a.serviceId);
+        return {
+          serviceId: a.serviceId,
+          staffId: a.staffId,
+          vendorId: a.vendorId,
+          startTime: a.startTime,
+          endTime: a.endTime,
+          duration: serviceForAssignment?.duration || 60,
+        };
+      });
+
+      // Query appointments across ALL relevant vendors for multi-vendor bundles (Req 9.5)
+      const allVendorAppointments = await queryAppointmentsAcrossVendors(client, vendorIds, date);
+
+      // Build service duration map for existing appointments (resolve in parallel, Req 5.2)
+      const serviceDurationMap = await buildServiceDurationMap(client, allVendorAppointments);
+
+      // Run comprehensive bundle conflict check
+      const conflictResult = checkBundleConflicts(
+        bundleAssignments,
+        allVendorAppointments,
+        serviceDurationMap,
+        bufferMinutes,
+        date
+      );
+
+      if (conflictResult.hasConflict) {
+        if (isVendorBooking) {
+          // Vendor gets a warning they can override
+          return Response.json({
+            warning: 'Scheduling conflict detected',
+            conflictType: conflictResult.conflictType,
+            message: conflictResult.message || 'Bundle has a scheduling conflict. Resubmit with confirmOverlap=true to save anyway.',
+            serviceId: conflictResult.serviceId,
+            staffId: conflictResult.staffId,
+          }, { status: 409 });
+        }
+        // Customer bookings are hard-blocked — reject the entire bundle (Req 9.2)
+        return Response.json(
+          { error: conflictResult.message || 'This time slot is no longer available for the selected services.' },
+          { status: 409 }
+        );
+      }
+    }
+
+    // --- Create one appointment per service with shared groupId for atomic rollback (Req 9.2, 9.8) ---
+    const groupId = randomUUID();
     const appointmentIds: string[] = [];
     const creationErrors: any[] = [];
 
@@ -304,6 +364,7 @@ export async function POST(request: Request) {
         serviceId: assignment.serviceId,
         staffId: assignment.staffId,
         bundleId,
+        groupId, // Shared groupId for atomic bundle rollback (Req 9.2, 9.8)
         dateTime: serviceDateTime,
         customer: JSON.stringify({ ...customer, duration: assignmentDuration }),
         status: 'pending-confirmation',
@@ -318,17 +379,59 @@ export async function POST(request: Request) {
       }
     }
 
-    // If any appointment creation failed, roll back
+    // If any appointment creation failed, cancel ALL appointments in the bundle group (atomic rollback)
     if (creationErrors.length > 0) {
       for (const id of appointmentIds) {
         try {
           await client.models.Appointment.update({ appointmentId: id, status: 'cancelled' } as any);
         } catch (e) {
-          console.error('Rollback failed for appointment:', id, e);
+          console.error('Bundle atomic rollback failed for appointment:', id, e);
         }
       }
       console.error('Error creating bundle appointments:', creationErrors);
       return Response.json({ error: 'Failed to create appointments' }, { status: 500 });
+    }
+
+    // --- Post-write verification for bundle atomicity (Requirements 9.7, 9.8) ---
+    // Re-query appointments for EACH staff member in the bundle and verify no concurrent
+    // writes introduced conflicts. If ANY staff member has a conflict, cancel ALL appointments
+    // in the bundle group using the shared groupId.
+    if (!isVendorBooking) {
+      try {
+        const postWriteConflictDetected = await verifyBundlePostWrite(
+          client,
+          staffAssignments,
+          orderedServices,
+          date,
+          appointmentIds,
+          bufferMinutes
+        );
+
+        if (postWriteConflictDetected) {
+          // Atomic rollback: cancel ALL appointments in the bundle group
+          for (const id of appointmentIds) {
+            try {
+              await client.models.Appointment.update({ appointmentId: id, status: 'cancelled' } as any);
+            } catch (e) {
+              console.error('Bundle post-write rollback failed for appointment:', id, e);
+            }
+          }
+          return Response.json(
+            { error: 'This time slot is no longer available' },
+            { status: 409 }
+          );
+        }
+      } catch (postWriteError) {
+        // Fail-open: the writes themselves succeeded, but the post-write verification
+        // query failed due to a transient error. Log the error and allow the appointments
+        // to remain active (consistent with single-appointment post-write fail-open behavior).
+        console.error('Bundle post-write verification failed (non-fatal):', {
+          groupId,
+          bundleId,
+          appointmentIds,
+          error: postWriteError,
+        });
+      }
     }
 
     // --- Calculate bundle price ---
@@ -425,6 +528,7 @@ export async function POST(request: Request) {
     return Response.json({
       success: true,
       bundleId,
+      groupId, // Include groupId for client-side reference (Req 9.8)
       appointmentIds,
       schedule
     });
@@ -438,4 +542,90 @@ export async function POST(request: Request) {
 function timeToMin(timeStr: string): number {
   const [h, m] = timeStr.split(':').map(Number);
   return h * 60 + m;
+}
+
+/**
+ * Post-write verification for bundle bookings (Requirements 9.7, 9.8).
+ *
+ * After all appointments in a bundle are persisted, re-query appointments for
+ * EACH staff member involved and verify no concurrent writes introduced conflicts.
+ * Uses shared `detectConflict` from overlapDetection module for consistent logic.
+ *
+ * @param amplifyClient - Amplify data client
+ * @param staffAssignments - The staff assignments for each service in the bundle
+ * @param orderedServices - The ordered services in the bundle
+ * @param date - The booking date (YYYY-MM-DD)
+ * @param appointmentIds - The IDs of the newly created appointments (to exclude from conflict check)
+ * @param bufferMinutes - Buffer minutes to enforce
+ * @returns true if a conflict was detected (caller should cancel all appointments), false otherwise
+ */
+async function verifyBundlePostWrite(
+  amplifyClient: any,
+  staffAssignments: Array<{ serviceId: string; staffId: string; vendorId: string; startTime: string }>,
+  orderedServices: any[],
+  date: string,
+  appointmentIds: string[],
+  bufferMinutes: number
+): Promise<boolean> {
+  // Get unique staff members involved in the bundle
+  const uniqueStaff = new Map<string, { vendorId: string; assignments: typeof staffAssignments }>();
+  for (const assignment of staffAssignments) {
+    if (!uniqueStaff.has(assignment.staffId)) {
+      uniqueStaff.set(assignment.staffId, { vendorId: assignment.vendorId, assignments: [] });
+    }
+    uniqueStaff.get(assignment.staffId)!.assignments.push(assignment);
+  }
+
+  // For each unique staff member, re-query their appointments and run conflict detection
+  for (const [staffId, { vendorId, assignments }] of uniqueStaff) {
+    // Re-query all appointments for this staff member's vendor on the date
+    const postWriteResult = await amplifyClient.models.Appointment.listAppointmentByVendorIdAndDateTime({
+      vendorId,
+      dateTime: { beginsWith: date },
+    } as any);
+    const postWriteApts = (postWriteResult as any).data || [];
+
+    // Build service duration map for the re-queried appointments
+    const serviceIds = [...new Set(postWriteApts.map((a: any) => a.serviceId).filter(Boolean))] as string[];
+    const serviceDurationMap: Record<string, number> = {};
+    await Promise.all(
+      serviceIds.map(async (sid: string) => {
+        if (sid === 'blocked' || sid === 'manual') return;
+        const { data: svc } = await amplifyClient.models.Service.get({ serviceId: sid });
+        if (svc?.duration) serviceDurationMap[sid] = svc.duration as number;
+      })
+    );
+
+    // Check each of this staff member's bundle assignments for conflicts
+    for (const assignment of assignments) {
+      const serviceDateTime = `${date}T${assignment.startTime}`;
+      const serviceForAssignment = orderedServices.find((s: any) => s.serviceId === assignment.serviceId);
+      const assignmentDuration = serviceForAssignment?.duration || 60;
+
+      // Run detectConflict excluding ALL newly created appointment IDs in this bundle
+      // (they are our own writes and should not trigger a self-conflict)
+      const conflict = detectConflict(
+        staffId,
+        serviceDateTime,
+        assignmentDuration,
+        bufferMinutes,
+        postWriteApts.filter((a: any) => !appointmentIds.includes(a.appointmentId)),
+        serviceDurationMap,
+        undefined, // no single excludeAppointmentId — we filtered all bundle IDs above
+        false // customer booking path — no vendor override
+      );
+
+      if (conflict) {
+        console.error('Bundle post-write conflict detected:', {
+          staffId,
+          serviceId: assignment.serviceId,
+          dateTime: serviceDateTime,
+          conflictWith: conflict,
+        });
+        return true; // Conflict detected — caller should cancel all appointments
+      }
+    }
+  }
+
+  return false; // No conflicts found
 }

@@ -34,6 +34,7 @@ export async function POST(request: Request) {
       ...(body.allowedDays !== undefined && { allowedDays: body.allowedDays }),
       ...(body.addOns !== undefined && { addOns: body.addOns }),
       ...(body.contactOnly !== undefined && { contactOnly: body.contactOnly }),
+      ...(body.useTimeFrames !== undefined && { useTimeFrames: body.useTimeFrames }),
     })
     return Response.json({ bundle })
   } catch (error) {
@@ -42,7 +43,7 @@ export async function POST(request: Request) {
 }
 
 const BUNDLE_FIELDS = ['name', 'description', 'serviceIds', 'vendorIds', 'price', 'discountPercent',
-  'isActive', 'minPeople', 'maxPeople', 'allowedDays', 'addOns', 'contactOnly', 'status', 'appointmentIds', 'dateTime']
+  'isActive', 'minPeople', 'maxPeople', 'allowedDays', 'addOns', 'contactOnly', 'useTimeFrames', 'status', 'appointmentIds', 'dateTime']
 
 export async function PATCH(request: Request) {
   try {

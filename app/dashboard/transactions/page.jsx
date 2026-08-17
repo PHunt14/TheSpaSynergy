@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 
-function formatTime(dateTime) {
+function formatTime(dateTime, timeFrame) {
+  if (timeFrame) return timeFrame.charAt(0).toUpperCase() + timeFrame.slice(1)
   if (!dateTime) return ''
   try {
     const d = new Date(dateTime.includes('T') ? dateTime : dateTime.replace(' ', 'T'))
@@ -209,7 +210,7 @@ function TransactionRow({ txn, expandedId, setExpandedId }) {
             </div>
           </div>
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '0.85rem', color: 'var(--color-text-light)' }}>{formatTime(txn.dateTime)}</span>
+            <span style={{ fontSize: '0.85rem', color: 'var(--color-text-light)' }}>{formatTime(txn.dateTime, txn.timeFrame)}</span>
             <StatusBadge status={txn.status} />
             <PaymentBadge paymentId={txn.paymentId} paymentStatus={txn.paymentStatus} paymentAmount={txn.paymentAmount} />
             <span style={{ fontWeight: '700', fontSize: '1rem', minWidth: '60px', textAlign: 'right' }}>
@@ -257,7 +258,7 @@ function GroupRow({ group, expandedId, setExpandedId }) {
             </div>
           </div>
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '0.85rem', color: 'var(--color-text-light)' }}>{formatTime(firstMember?.dateTime)}</span>
+            <span style={{ fontSize: '0.85rem', color: 'var(--color-text-light)' }}>{formatTime(firstMember?.dateTime, firstMember?.timeFrame)}</span>
             {allPaid ? (
               <span style={{ padding: '0.2rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem', fontWeight: '600', background: '#d4edda', color: '#155724' }}>✓ All Paid</span>
             ) : anyPaid ? (

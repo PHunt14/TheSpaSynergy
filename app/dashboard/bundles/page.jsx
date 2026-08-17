@@ -55,6 +55,7 @@ export default function BundlesManagement() {
     discountPercent: 0,
     allowedDays: [],
     contactOnly: false,
+    useTimeFrames: false,
     minPeople: '',
     maxPeople: ''
   })
@@ -156,6 +157,7 @@ export default function BundlesManagement() {
       isActive: editingBundle ? editingBundle.isActive : true,
       allowedDays: newBundle.allowedDays.length > 0 ? newBundle.allowedDays : undefined,
       contactOnly: newBundle.contactOnly || undefined,
+      useTimeFrames: newBundle.useTimeFrames || undefined,
       ...(newBundle.minPeople && { minPeople: parseInt(newBundle.minPeople) }),
       ...(newBundle.maxPeople && { maxPeople: parseInt(newBundle.maxPeople) })
     }
@@ -176,7 +178,7 @@ export default function BundlesManagement() {
         alert(editingBundle ? 'Bundle updated!' : 'Bundle created!')
         setShowAddForm(false)
         setEditingBundle(null)
-        setNewBundle({ name: '', description: '', selectedServices: [], discountPercent: 0, allowedDays: [], contactOnly: false, minPeople: '', maxPeople: '' })
+        setNewBundle({ name: '', description: '', selectedServices: [], discountPercent: 0, allowedDays: [], contactOnly: false, useTimeFrames: false, minPeople: '', maxPeople: '' })
         await loadData()
       } else {
         console.error('Save failed:', result)
@@ -216,6 +218,7 @@ export default function BundlesManagement() {
       discountPercent: bundle.discountPercent || 0,
       allowedDays: bundle.allowedDays || [],
       contactOnly: bundle.contactOnly || false,
+      useTimeFrames: bundle.useTimeFrames || false,
       minPeople: bundle.minPeople || '',
       maxPeople: bundle.maxPeople || ''
     })
@@ -225,7 +228,7 @@ export default function BundlesManagement() {
   const handleCancelEdit = () => {
     setEditingBundle(null)
     setShowAddForm(false)
-    setNewBundle({ name: '', description: '', selectedServices: [], discountPercent: 0, allowedDays: [], contactOnly: false, minPeople: '', maxPeople: '' })
+    setNewBundle({ name: '', description: '', selectedServices: [], discountPercent: 0, allowedDays: [], contactOnly: false, useTimeFrames: false, minPeople: '', maxPeople: '' })
   }
 
   const handleDelete = async (bundle) => {
@@ -445,6 +448,18 @@ export default function BundlesManagement() {
             </label>
           </div>
 
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={newBundle.useTimeFrames}
+                onChange={(e) => setNewBundle({ ...newBundle, useTimeFrames: e.target.checked })}
+                style={{ width: '18px', height: '18px' }}
+              />
+              <span>Use Time Frames (customers select morning/afternoon/evening instead of specific time slots)</span>
+            </label>
+          </div>
+
           <div style={{ marginBottom: '1rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
             <div>
               <label style={{ display: 'block', marginBottom: '0.5rem' }}>Min People</label>
@@ -556,6 +571,7 @@ export default function BundlesManagement() {
                     {bundle.discountPercent}% discount • ${bundle.price?.toFixed(2)}
                     {bundle.vendorIds?.length > 1 && ` • 🔗 ${bundle.vendorIds.length} vendors`}
                     {bundle.contactOnly && ' • 📞 Contact only'}
+                    {bundle.useTimeFrames && ' • 🕐 Time frames'}
                     {(bundle.minPeople || bundle.maxPeople) && ` • 👥 ${bundle.minPeople || 1}–${bundle.maxPeople || '∞'} people`}
                     {bundle.allowedDays?.length > 0 && (
                       <> • {bundle.allowedDays.map(d => d.charAt(0).toUpperCase() + d.slice(0, 3)).join(', ')}</>
@@ -638,6 +654,14 @@ export default function BundlesManagement() {
                       <input type="checkbox" checked={newBundle.contactOnly} onChange={(e) => setNewBundle(prev => ({ ...prev, contactOnly: e.target.checked }))}
                         style={{ width: '18px', height: '18px' }} />
                       <span>Contact Only (customer must call/email to book this bundle)</span>
+                    </label>
+                  </div>
+
+                  <div style={{ marginBottom: '1rem' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={newBundle.useTimeFrames} onChange={(e) => setNewBundle(prev => ({ ...prev, useTimeFrames: e.target.checked }))}
+                        style={{ width: '18px', height: '18px' }} />
+                      <span>Use Time Frames (customers select morning/afternoon/evening instead of specific time slots)</span>
                     </label>
                   </div>
 

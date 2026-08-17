@@ -4,6 +4,7 @@ import type { Schema } from '../../../amplify/data/resource';
 import config from '../../../amplify_outputs.json' with { type: 'json' };
 import { DAY_NAMES, getDayHoursSync, resolveStaffSync, hasAnySlot, getRecurrenceHours } from '../../utils/availability.js';
 import { getEligibleStaff } from '../../utils/staffEligibility';
+import { checkRateLimit, getClientIp, rateLimitResponse } from '@/app/utils/rateLimiter';
 
 const client = generateServerClientUsingCookies<Schema>({
   config,
@@ -11,6 +12,13 @@ const client = generateServerClientUsingCookies<Schema>({
 });
 
 export async function GET(request: Request) {
+  // Rate limiting: 60 requests/min per IP for available-dates queries (Req 11.2)
+  const clientIp = getClientIp(request);
+  const rateCheck = checkRateLimit(`available-dates:${clientIp}`, 60, 60 * 1000);
+  if (!rateCheck.allowed) {
+    return rateLimitResponse(rateCheck.retryAfter!);
+  }
+
   const { searchParams } = new URL(request.url);
   const vendorId = searchParams.get('vendorId');
   const serviceId = searchParams.get('serviceId');
@@ -170,10 +178,12 @@ function buildAvailableDatesUnified(
       if (!hours || !hours.start || !hours.end) continue;
 
       // Get appointments for this staff member on this day
+      // Include appointments that match this staff member's ID OR have no staffId
+      // (general blocked-time entries without staffId apply to all staff) (Req 8.5, 8.3)
       const staffDayAppointments = monthAppointments.filter(apt =>
         apt.status !== 'cancelled' &&
         apt.dateTime.startsWith(dateStr) &&
-        apt.staffId === staff.visibleId
+        (!apt.staffId || apt.staffId === staff.visibleId)
       );
 
       if (hasAnySlot(hours.start, hours.end, duration, buffer, { appointments: staffDayAppointments, dateStr, date: d, staff })) {

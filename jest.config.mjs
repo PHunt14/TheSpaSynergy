@@ -13,7 +13,7 @@ const config = {
         }],
       },
       extensionsToTreatAsEsm: ['.ts', '.jsx'],
-      testMatch: ['**/__tests__/**/*.test.mjs'],
+      testMatch: ['**/__tests__/**/*.test.mjs', '**/__tests__/**/*.test.ts'],
       testPathIgnorePatterns: ['/node_modules/', '/services/'],
       transformIgnorePatterns: ['/node_modules/'],
     },

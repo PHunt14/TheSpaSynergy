@@ -246,7 +246,15 @@ export default function DashboardHome() {
                   <tbody>
                     {periodAppointments.map(a => (
                       <tr key={a.appointmentId} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                        <td style={{ padding: '0.75rem' }}>{a.dateTime}</td>
+                        <td style={{ padding: '0.75rem' }}>
+                          {a.timeFrame
+                            ? (() => {
+                                const d = parseDate(a.rawDateTime)
+                                const dateStr = d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''
+                                return `${dateStr} — ${a.timeFrame.charAt(0).toUpperCase() + a.timeFrame.slice(1)}`
+                              })()
+                            : a.dateTime}
+                        </td>
                         <td style={{ padding: '0.75rem' }}>{a.service?.name || 'N/A'}</td>
                         <td style={{ padding: '0.75rem' }}>{a.customer?.name || 'N/A'}</td>
                         <td style={{ padding: '0.75rem' }}>

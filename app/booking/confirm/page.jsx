@@ -1,11 +1,15 @@
 'use client'
 
 import { useSearchParams } from 'next/navigation'
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useMemo, Suspense } from 'react'
 import BookingDisabled, { isBookingEnabled } from '../../components/BookingDisabled'
+import NewClientCheckbox from '../../components/NewClientCheckbox'
+import ExtrasSelector from '../../components/ExtrasSelector'
+import { calculateExtrasCost } from '../../utils/extrasCalculator'
+import { calculateBundlePrice } from '../../utils/bundleDiscount'
 import PropTypes from 'prop-types'
 
-function AppointmentSummary({ allServiceDetails, totalPrice, totalDuration, date, time, staffName, people, getQty }) {
+function AppointmentSummary({ allServiceDetails, totalPrice, totalDuration, date, time, timeFrame, staffName, people, getQty }) {
   return (
     <div style={{ marginTop: '1.5rem', padding: '1rem', background: 'var(--color-accent)', borderRadius: '8px' }}>
       <h3>Appointment Summary</h3>
@@ -25,7 +29,7 @@ function AppointmentSummary({ allServiceDetails, totalPrice, totalDuration, date
         </div>
       )}
       <p style={{ marginTop: '0.75rem' }}><strong>Date:</strong> {date ? new Date(date).toLocaleDateString() : 'N/A'}</p>
-      <p><strong>Time:</strong> {time}</p>
+      <p><strong>Time:</strong> {timeFrame ? timeFrame.charAt(0).toUpperCase() + timeFrame.slice(1) : time}</p>
       {staffName && <p><strong>With:</strong> {decodeURIComponent(staffName)}</p>}
       {!!people && <p><strong>Group Size:</strong> {people} people</p>}
     </div>
@@ -38,6 +42,7 @@ AppointmentSummary.propTypes = {
   totalDuration: PropTypes.number.isRequired,
   date: PropTypes.string,
   time: PropTypes.string,
+  timeFrame: PropTypes.string,
   staffName: PropTypes.string,
   people: PropTypes.number,
   getQty: PropTypes.func,
@@ -63,6 +68,7 @@ function ConfirmPageContent() {
   const quantity = quantityParam ? parseInt(quantityParam) : 1
   const quantityMode = params.get('mode') || 'sequential'
   const quantitiesParam = params.get('quantities')
+  const timeFrame = params.get('timeFrame') // Time frame for useTimeFrames bundles
   // Parse per-service quantities (format: "svc-id:2,svc-id2:3")
   const perServiceQuantities = quantitiesParam
     ? Object.fromEntries(quantitiesParam.split(',').map(entry => { const [id, qty] = entry.split(':'); return [id, parseInt(qty)] }))
@@ -81,13 +87,45 @@ function ConfirmPageContent() {
   const [vendorDetails, setVendorDetails] = useState(null)
   const [staffSquareConnected, setStaffSquareConnected] = useState(null) // null=loading, true/false
   const [paymentMethod, setPaymentMethod] = useState('in-person')
+  const [isNewClient, setIsNewClient] = useState(false)
+  const [isReturningClient, setIsReturningClient] = useState(false)
+  const [showSuggestion, setShowSuggestion] = useState(false)
+  const [bundleExtras, setBundleExtras] = useState([]) // Extras available for the bundle
+  const [selectedExtras, setSelectedExtras] = useState([]) // Selected extra IDs
+  const [bundleDetails, setBundleDetails] = useState(null) // Bundle metadata (useTimeFrames, discountPercent, etc.)
 
   // For single service, use the first service detail
   const serviceDetails = allServiceDetails.length === 1 ? allServiceDetails[0] : null
   const getQty = (svc) => perServiceQuantities[svc.serviceId] || quantity || 1
-  const totalPrice = multiProvider
+
+  // Calculate base service price (before extras)
+  const baseServicePrice = multiProvider
     ? allServiceDetails.reduce((sum, s) => sum + (s?.price || 0), 0)
     : allServiceDetails.reduce((sum, s) => sum + (s?.price || 0) * getQty(s), 0) * (people || 1)
+
+  // Calculate extras cost using selected extras from the available list
+  const extrasCost = useMemo(() => {
+    if (selectedExtras.length === 0 || bundleExtras.length === 0) return { items: [], grandTotal: 0 }
+    const selected = bundleExtras.filter(e => selectedExtras.includes(e.extraId))
+    return calculateExtrasCost(selected, people || 1)
+  }, [selectedExtras, bundleExtras, people])
+
+  // Apply bundle discount to base services only, then add extras at full price
+  const bundleDiscountedBase = useMemo(() => {
+    if (!bundleDetails?.discountPercent || allServiceDetails.length === 0) {
+      return baseServicePrice
+    }
+    const result = calculateBundlePrice({
+      services: allServiceDetails.map(s => ({ price: (s?.price || 0) * getQty(s) * (people || 1) })),
+      predefinedBundle: bundleDetails.discountPercent > 0 ? bundleDetails : null,
+      bundleSettings: null,
+    })
+    return result.total
+  }, [bundleDetails, allServiceDetails, people, quantity, perServiceQuantities])
+
+  // Total = discounted base + extras at full price
+  const totalPrice = (bundleDetails?.discountPercent > 0 ? bundleDiscountedBase : baseServicePrice) + extrasCost.grandTotal
+
   const totalDuration = allServiceDetails.reduce((sum, s) => sum + (s?.duration || 0) * getQty(s), 0)
   const multiProviderGuests = multiProvider && allServiceDetails.length > 0
     ? (allServiceDetails[0]?.minPeople || 2)
@@ -96,11 +134,23 @@ function ConfirmPageContent() {
   useEffect(() => {
     if (serviceIds.length === 0) return
 
-    // Fetch all services to find the selected ones
-    fetch('/api/services')
-      .then(res => res.json())
-      .then(data => {
-        const selected = (data.services || []).filter(s => serviceIds.includes(s.serviceId))
+    // Parallel fetch: services, bundle details, and extras in a single Promise.all (Req 6.1)
+    const fetchPromises = [
+      fetch('/api/services').then(res => res.json()),
+    ]
+
+    // If this is a bundle booking, fetch bundle details and extras in parallel
+    if (bundleId) {
+      fetchPromises.push(
+        fetch(`/api/bundles`).then(res => res.json()),
+        fetch(`/api/extras?bundleId=${bundleId}`).then(res => res.json())
+      )
+    }
+
+    Promise.all(fetchPromises)
+      .then(([servicesData, bundlesData, extrasData]) => {
+        // Process services
+        const selected = (servicesData.services || []).filter(s => serviceIds.includes(s.serviceId))
         setAllServiceDetails(selected)
         if (selected.some(s => s.cardPaymentDisabled)) setPaymentMethod('in-person')
         if (typeof window !== 'undefined' && window.gtag && selected.length > 0) {
@@ -110,6 +160,20 @@ function ConfirmPageContent() {
             items: selected.map(s => ({ item_id: s.serviceId, item_name: s.name, price: s.price }))
           })
         }
+
+        // Process bundle details (retain in state for session - Req 6.4)
+        if (bundlesData) {
+          const bundle = (bundlesData.bundles || []).find(b => b.bundleId === bundleId)
+          if (bundle) setBundleDetails(bundle)
+        }
+
+        // Process extras - only set if there are active extras (Req 3.1, 3.2)
+        if (extrasData?.extras?.length > 0) {
+          setBundleExtras(extrasData.extras)
+        }
+      })
+      .catch(err => {
+        console.error('Error fetching booking data:', err)
       })
 
     // Fetch staff Square status if a staff member is assigned
@@ -180,6 +244,30 @@ function ConfirmPageContent() {
     return () => { isMounted = false }
   }, [paymentMethod, vendorDetails])
 
+  // Returning-client detection: query Client secondary indexes on phone/email blur
+  const handleClientLookup = async ({ phone, email }) => {
+    if (!phone && !email) return
+    try {
+      const params = new URLSearchParams()
+      if (phone) params.set('phone', phone)
+      if (email) params.set('email', email)
+      const res = await fetch(`/api/clients/lookup?${params}`)
+      if (!res.ok) return // Silently ignore failures
+      const data = await res.json()
+      if (data.found) {
+        setIsReturningClient(true)
+        setShowSuggestion(false)
+      } else {
+        setIsReturningClient(false)
+        if (!isNewClient) {
+          setShowSuggestion(true)
+        }
+      }
+    } catch {
+      // Silently ignore lookup failures without blocking booking
+    }
+  }
+
   if (!isBookingEnabled) return <BookingDisabled phone={vendorDetails?.phone} vendorName={vendorDetails?.name} />
 
   const initializeSquare = async () => {
@@ -220,6 +308,10 @@ function ConfirmPageContent() {
 
   const buildDateTimeISO = () => {
     const dateOnly = date.split('T')[0]
+    // For time frame bookings, use midnight placeholder (Req 1.2)
+    if (timeFrame && !time) {
+      return `${dateOnly}T00:00:00`
+    }
     const timeFormatted = time.replace(' AM', '').replace(' PM', '')
     const isPM = time.includes('PM')
     const [hours, minutes] = timeFormatted.split(':')
@@ -263,13 +355,27 @@ function ConfirmPageContent() {
    * 3. Updates appointments with payment info
    * 4. Navigates to success page
    */
-  const getCustomerData = () => ({ name: `${formData.firstName} ${formData.lastName}`.trim(), email: formData.email, phone: formData.phone, smsOptIn: formData.smsOptIn, notes: formData.notes })
+  const getCustomerData = () => ({ name: `${formData.firstName} ${formData.lastName}`.trim(), email: formData.email, phone: formData.phone, smsOptIn: formData.smsOptIn, notes: formData.notes, isNewClient })
+
+  // Handle toggling an extra selection
+  const handleExtraToggle = (extraId) => {
+    setSelectedExtras(prev =>
+      prev.includes(extraId)
+        ? prev.filter(id => id !== extraId)
+        : [...prev, extraId]
+    )
+  }
 
   const handleAnyAvailablePayment = async (token) => {
     const dateTimeISO = buildDateTimeISO()
     const customerData = getCustomerData()
     const isResource = allServiceDetails.every(s => s.resourceType === 'sauna' || s.resourceType === 'room')
     const status = isResource ? 'confirmed' : 'pending-confirmation'
+
+    // Build extras payload from selected extras
+    const extrasPayload = selectedExtras.length > 0
+      ? selectedExtras.map(id => ({ extraId: id }))
+      : undefined
 
     const appointmentResults = await Promise.all(
       allServiceDetails.map(svc => {
@@ -284,7 +390,10 @@ function ConfirmPageContent() {
             customer: customerData,
             status,
             ...(people ? { people } : {}),
-            ...(svcQty > 1 ? { quantity: svcQty, quantityMode } : {})
+            ...(svcQty > 1 ? { quantity: svcQty, quantityMode } : {}),
+            ...(timeFrame ? { timeFrame } : {}),
+            isNewClient,
+            ...(extrasPayload ? { extras: extrasPayload } : {}),
           })
         }).then(r => r.json())
       })
@@ -342,6 +451,11 @@ function ConfirmPageContent() {
     const isSauna = allServiceDetails.every(s => s.resourceType === 'sauna')
     const effectiveStaffId = isSauna ? 'resource-sauna' : (assignedStaffIdOverride || staffId)
 
+    // Build extras payload from selected extras
+    const extrasPayload = selectedExtras.length > 0
+      ? selectedExtras.map(id => ({ extraId: id }))
+      : undefined
+
     // Multi-provider booking: single API call creates all appointments
     if (multiProvider) {
       const response = await fetch('/api/appointments', {
@@ -355,7 +469,10 @@ function ConfirmPageContent() {
           status,
           multiProvider: true,
           providersRequired: allServiceDetails[0]?.providersRequired || 2,
-          ...(paymentId ? { paymentId, paymentStatus: 'paid', paymentAmount: totalPrice } : {})
+          ...(paymentId ? { paymentId, paymentStatus: 'paid', paymentAmount: totalPrice } : {}),
+          ...(timeFrame ? { timeFrame } : {}),
+          isNewClient,
+          ...(extrasPayload ? { extras: extrasPayload } : {}),
         })
       })
       const result = await response.json()
@@ -404,7 +521,10 @@ function ConfirmPageContent() {
             paymentId,
             ...(paymentId ? { paymentStatus: 'paid', paymentAmount: totalPrice } : {}),
             ...(people ? { people } : {}),
-            ...(svcQty > 1 ? { quantity: svcQty, quantityMode } : {})
+            ...(svcQty > 1 ? { quantity: svcQty, quantityMode } : {}),
+            ...(timeFrame ? { timeFrame } : {}),
+            isNewClient,
+            ...(extrasPayload ? { extras: extrasPayload } : {}),
           })
         }).then(r => r.json())
       })
@@ -553,10 +673,20 @@ function ConfirmPageContent() {
         totalDuration={totalDuration}
         date={date}
         time={time}
+        timeFrame={timeFrame}
         staffName={multiProvider ? null : staffName}
         people={multiProviderGuests || people}
         getQty={getQty}
       />
+
+      {/* Time frame booking notice (Req 1.5) */}
+      {timeFrame && (
+        <div style={{ marginTop: '1rem', padding: '1rem', background: '#e3f2fd', borderRadius: '8px', border: '1px solid #90caf9' }}>
+          <p style={{ margin: 0, fontSize: '0.9rem' }}>
+            🕐 You selected a <strong>{timeFrame.charAt(0).toUpperCase() + timeFrame.slice(1)}</strong> time frame. The vendor will contact you to confirm the exact appointment time.
+          </p>
+        </div>
+      )}
 
       {(Object.keys(perServiceQuantities).length > 0 || quantity > 1) && (
         <div style={{ marginTop: '1rem', padding: '1rem', background: '#e3f2fd', borderRadius: '8px', border: '1px solid #90caf9' }}>
@@ -574,6 +704,30 @@ function ConfirmPageContent() {
           <p style={{ margin: 0, fontSize: '0.9rem' }}>
             🎉 This is a couples/group service for <strong>{multiProviderGuests || 2} guests</strong>. Staff will be automatically assigned.
           </p>
+        </div>
+      )}
+
+      {/* Extras selector for bundle bookings (Req 3.1, 3.2) */}
+      {bundleExtras.length > 0 && (
+        <div style={{ marginTop: '1.5rem' }}>
+          <ExtrasSelector
+            extras={bundleExtras}
+            selectedExtras={selectedExtras}
+            onToggle={handleExtraToggle}
+            groupSize={people || 1}
+          />
+          {extrasCost.grandTotal > 0 && (
+            <div style={{ padding: '0.75rem 1rem', background: 'var(--color-accent)', borderRadius: '8px', marginTop: '0.5rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.95rem' }}>
+                <span>Extras Total:</span>
+                <span style={{ fontWeight: 600 }}>+${extrasCost.grandTotal.toFixed(2)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.05rem', fontWeight: 'bold', marginTop: '0.5rem', borderTop: '1px solid var(--color-border)', paddingTop: '0.5rem' }}>
+                <span>Booking Total:</span>
+                <span>${totalPrice.toFixed(2)}</span>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -598,6 +752,7 @@ function ConfirmPageContent() {
           <input type="email" value={formData.email}
             required={!formData.phone}
             onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+            onBlur={(e) => { if (e.target.value) handleClientLookup({ email: e.target.value, phone: formData.phone }) }}
             style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />
         </div>
 
@@ -606,6 +761,7 @@ function ConfirmPageContent() {
           <input type="tel" value={formData.phone}
             required={!formData.email}
             onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+            onBlur={(e) => { if (e.target.value) handleClientLookup({ phone: e.target.value, email: formData.email }) }}
             style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />
           {!formData.email && !formData.phone && (
             <p style={{ fontSize: '0.8rem', color: '#d32f2f', margin: '0.25rem 0 0' }}>Please provide at least an email or phone number</p>
@@ -635,6 +791,26 @@ function ConfirmPageContent() {
             style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem', resize: 'vertical' }}
           />
         </div>
+
+        <NewClientCheckbox
+          checked={isNewClient}
+          onChange={(checked) => {
+            setIsNewClient(checked)
+            if (checked) setShowSuggestion(false)
+          }}
+          isReturningClient={isReturningClient}
+          showSuggestion={showSuggestion}
+        />
+
+        {/* Consultation notice for new clients (Req 2.6) */}
+        {isNewClient && (
+          <div style={{
+            padding: '0.75rem 1rem', background: '#fff3cd', border: '1px solid #ffc107',
+            borderRadius: '8px', marginBottom: '1rem', fontSize: '0.9rem'
+          }}>
+            <strong>📋 Consultation Notice:</strong> As a first-time client, the vendor will schedule a consultation prior to your appointment.
+          </div>
+        )}
 
         <div style={{ marginTop: '2rem', marginBottom: '1rem' }}>
           <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600' }}>Payment Method *</label>

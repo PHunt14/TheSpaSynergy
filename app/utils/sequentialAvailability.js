@@ -282,16 +282,29 @@ function getMultiDayDistributions(services, maxDays) {
 
 /**
  * Validates that a proposed schedule slot is feasible:
- * each service has enough eligible staff available at its scheduled time.
+ * ALL required staff members are simultaneously available for their respective
+ * service durations. Uses greedy assignment to prevent the same staff member
+ * from being counted as available for multiple overlapping services within the bundle.
+ *
+ * This ensures that only time slots where ALL required staff can be simultaneously
+ * free (including buffer time) are displayed as available for bundle bookings.
  */
 function validateScheduleSlot(schedule, orderedServices, staffSchedulesByService, appointments, dayOfWeek, requestedDate, bufferMinutes) {
+  // Track staff members already committed to services in this bundle slot.
+  // Each entry records { staffId, startTime (minutes), endTime (minutes) }
+  const committedStaff = []
+
   for (let i = 0; i < schedule.length; i++) {
     const entry = schedule[i]
     const service = orderedServices[i]
     const providersRequired = service.providersRequired || 1
     const staffSchedules = staffSchedulesByService[service.serviceId] || []
 
-    const availableCount = countAvailableStaff(
+    const entryStartMin = timeToMinutes(entry.startTime)
+    const entryEndMin = entryStartMin + service.duration
+
+    // Get all staff who are working and free from external appointments
+    const availableStaff = getAvailableStaffForSlot(
       staffSchedules,
       dayOfWeek,
       requestedDate,
@@ -301,27 +314,57 @@ function validateScheduleSlot(schedule, orderedServices, staffSchedulesByService
       bufferMinutes
     )
 
-    if (availableCount < providersRequired) {
+    // Filter out staff already committed to other services in this bundle
+    // that would overlap with this service's time (including buffer)
+    const nonConflictingStaff = availableStaff.filter(staff => {
+      return !committedStaff.some(committed => {
+        if (committed.staffId !== staff.visibleId) return false
+        // Check if the committed slot overlaps with this service slot (including buffer)
+        const committedEnd = committed.endMinutes + bufferMinutes
+        const entryEnd = entryEndMin + bufferMinutes
+        return entryStartMin < committedEnd && entryEnd > committed.startMinutes
+      })
+    })
+
+    if (nonConflictingStaff.length < providersRequired) {
       return false
+    }
+
+    // Commit the required number of staff to this service
+    // (greedy: assign first available ones)
+    for (let p = 0; p < providersRequired; p++) {
+      committedStaff.push({
+        staffId: nonConflictingStaff[p].visibleId,
+        startMinutes: entryStartMin,
+        endMinutes: entryEndMin
+      })
     }
   }
   return true
 }
 
 /**
- * Counts how many staff members are available for a service at a given time.
+ * Gets available staff members for a service at a given time.
+ * Returns the list of staff objects that are working and free from external conflicts.
  */
-function countAvailableStaff(staffSchedules, dayOfWeek, requestedDate, time, duration, appointments, bufferMinutes) {
-  let count = 0
+function getAvailableStaffForSlot(staffSchedules, dayOfWeek, requestedDate, time, duration, appointments, bufferMinutes) {
+  const available = []
 
   for (const staff of staffSchedules) {
     if (!staff.isActive) continue
     if (!isWorkingAtTime(staff, dayOfWeek, requestedDate, time, duration)) continue
     if (hasConflict(staff.visibleId, appointments, time, duration, bufferMinutes)) continue
-    count++
+    available.push(staff)
   }
 
-  return count
+  return available
+}
+
+/**
+ * Counts how many staff members are available for a service at a given time.
+ */
+function countAvailableStaff(staffSchedules, dayOfWeek, requestedDate, time, duration, appointments, bufferMinutes) {
+  return getAvailableStaffForSlot(staffSchedules, dayOfWeek, requestedDate, time, duration, appointments, bufferMinutes).length
 }
 
 /**

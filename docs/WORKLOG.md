@@ -137,12 +137,82 @@ Consolidated tracking document for The Spa Synergy. Organized by month.
 
 ## August 2026
 
+### Sprint Items
 - ⬜ (#4) Event time frame selection (morning/afternoon/evening blocks for packages)
 - ⬜ (#6) New client flag at booking (checkbox, triggers consultation scheduling)
 - ⬜ (#8) Booking add-ons (optional add-ons with tiered pricing)
 - ⬜ (#24) Review and resolve SonarQube issues (blockers only)
 - ⬜ (#25) Optimize CI/CD pipeline and improve security posture
 - ⬜ (#26) No-show tracking (flag repeat offenders, require prepayment)
+
+### Client Feedback (August)
+
+Major feedback received outlining a vision for The Spa Synergy as a cohesive salon/spa management system. References Vagaro and GlossGenius for functionality benchmarks. Key themes: mobile-first provider experience, connected data, professional client management.
+
+**1. Simple Provider Dashboard**
+- Main screen on login: today's appointments, upcoming, calendar, clients, messages/notifications, quick actions
+- Frequently used features immediately accessible without navigating through multiple pages
+
+**2. Flexible Calendar & Availability System**
+- Two availability types: recurring schedule + date-specific overrides
+- Add one-off availability (e.g., open Saturday 12–4 without making it recurring)
+- Block partial days (e.g., leave at 2 PM one Friday only)
+- Blocked time must actually prevent online booking
+- Ideally tap a date on calendar to manage that day directly
+
+**3. Mobile-First Provider Experience**
+- Most providers manage from phones; current calendar is desktop-oriented on mobile
+- Provider side should feel like an app: Dashboard, Calendar, Clients, More/Settings in main nav
+- Quick actions between clients: change availability, block time, check appointment, look up client, add notes
+
+**4. Complete Client Profiles**
+- Professional client records beyond name/phone/email
+- Appointment/service history, provider notes, service notes, products used
+- Hair color/formulas, facial/skincare treatment notes
+- Allergies/contraindications, photos, intake/consent forms
+- Client preferences, future recommendations/rebooking notes
+- Example: stylist saves a hair-color formula → available at next appointment
+
+**5. Digital Intake & Consent Forms**
+- Create or upload intake/consent forms, associate with specific services
+- Auto-send form by text/email when a service is booked
+- Completed form stored on client profile for provider review before appointment
+- Different services trigger different forms
+
+**6. Services AND Add-ons**
+- Each provider maintains their own services and relevant add-ons
+- Keep customer-facing booking simple (e.g., pick pedicure → offered paraffin add-on)
+- Don't eliminate services, just organize them better
+
+**7. Individual Businesses Within The Spa Synergy**
+- Umbrella experience, but individual businesses keep their identity
+- Own services, pricing, providers, client info, and settings
+- Everything feels connected without losing individual business uniqueness
+
+**8. Packages, Couples Appointments, Multi-Provider Bookings**
+- One booking reserves time on BOTH providers' calendars
+- Prevent double-booking across providers in multi-provider transactions
+- Payment/service allocation must reflect which provider performed which part
+
+**9. Payments & Checkout**
+- Square integration, cohesive checkout
+- Appointment, provider, services, add-ons, tips, packages, payment stay correctly connected
+- Especially critical for multi-provider/multi-business transactions
+
+**10. Better Organization of Settings**
+- Clear sections: Dashboard, Calendar, Clients, Appointments, Services & Add-ons, Forms, Packages, Payments/Checkout, Reports, Messages/Notifications, Settings
+- Frequently used = immediately accessible; advanced = under More/Settings
+
+**11. Customer-Facing vs. Provider Side**
+- Two related but different experiences
+- Customer: Spa Synergy personality/aesthetic, colors, florals, elegant typography, visually appealing
+- Provider: cleaner, more functional, built for actually running businesses
+
+**12. Overall Goal — Connected System**
+- Appointment connects to: client profile, provider, calendar, intake forms, service notes, add-ons, payment, history
+- Everything communicates rather than feeling like separate pieces
+
+**Client also provided visual mockups** (not prescriptive on exact design, but showing desired level of organization, mobile usability, and functionality).
 
 ---
 
