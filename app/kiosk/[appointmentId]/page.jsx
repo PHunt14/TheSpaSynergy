@@ -107,6 +107,7 @@ function PaymentContent() {
             vendorId: appointment.vendorId,
             staffId: appointment.staffId || undefined,
             serviceIds: [appointment.serviceId],
+            appointmentId,
           })
         })
       }

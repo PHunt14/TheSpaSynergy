@@ -16,6 +16,9 @@ const config = {
       testMatch: ['**/__tests__/**/*.test.mjs'],
       testPathIgnorePatterns: ['/node_modules/', '/services/'],
       transformIgnorePatterns: ['/node_modules/'],
+      moduleNameMapper: {
+        '^@/(.*)$': '<rootDir>/$1',
+      },
     },
     // React component tests (jsdom environment)
     {
