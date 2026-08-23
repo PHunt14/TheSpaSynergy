@@ -9,14 +9,38 @@ import { calculateMultiProviderSplit } from '../../utils/payment.js';
 import { refreshSquareToken, isTokenExpiringSoon } from '../../../lib/square-token.js';
 import {
   resolvePaymentRoute,
+  resolveCredentialChain,
   PaymentRouteError,
+  type CredentialResolutionError,
 } from '../../utils/paymentRouting';
+import {
+  isTokenExpiringSoon as isTokenExpiringSoonEnhanced,
+  refreshSquareToken as refreshSquareTokenEnhanced,
+} from '../../../lib/square-token-enhanced';
+import {
+  validatePaymentAmount,
+  sanitizeNumericInput,
+  validateTipAmount,
+} from '../../../lib/payment/validator';
+import {
+  generateIdempotencyKey,
+  hashSourceToken,
+} from '../../../lib/payment/idempotency';
+import {
+  decideSplit,
+  executeSplitPayment,
+  SplitDecisionError,
+} from '../../../lib/payment/houseFee';
+import {
+  appendAuditRecord,
+  buildAuditRecord,
+} from '../../../lib/payment/audit';
 
 Amplify.configure(config, { ssr: true });
 
 export async function POST(request: Request) {
   try {
-    const { sourceId, amount, tipAmount, vendorId, staffId, bundlePayments, bundleId, serviceIds, people, multiProvider, paymentSplit } = await request.json();
+    const { sourceId, amount, tipAmount, vendorId, staffId, bundlePayments, bundleId, serviceIds, people, multiProvider, paymentSplit, appointmentId } = await request.json();
 
     if (!sourceId || !amount) {
       return Response.json({ error: 'Missing payment details' }, { status: 400 });
@@ -32,7 +56,7 @@ export async function POST(request: Request) {
 
     // Single payment — staff-based routing
     if ((vendorId || staffId) && !bundlePayments) {
-      return await processSinglePayment(sourceId, amount, vendorId, staffId, serviceIds, people, tip);
+      return await processSinglePayment(sourceId, amount, vendorId, staffId, serviceIds, people, tip, appointmentId);
     }
 
     // Multi-vendor bundle payment — when a bundleId is present we link the charge
@@ -119,13 +143,13 @@ async function resolveSquareCredentials(dataClient: any, vendorId: string, staff
  *
  * Requirements: 6.1, 6.2, 6.4, 6.5
  */
-async function processSinglePayment(sourceId: string, amount: number, vendorId: string, staffId: string, serviceIds: string[], people: number, tipAmount: number = 0) {
+async function processSinglePayment(sourceId: string, amount: number, vendorId: string, staffId: string, serviceIds: string[], people: number, tipAmount: number = 0, appointmentId?: string) {
   const dataClient = generateClient<Schema>();
 
   // If we have a staffId and serviceIds, attempt staff-based routing via Payment Routing Service
   if (staffId && serviceIds?.length > 0) {
     try {
-      return await processStaffRoutedPayment(dataClient, sourceId, amount, staffId, serviceIds, people, tipAmount);
+      return await processStaffRoutedPayment(dataClient, sourceId, amount, staffId, serviceIds, people, tipAmount, appointmentId);
     } catch (error: any) {
       if (error instanceof PaymentRouteError) {
         // No valid Square credentials available — in-person payment required (Req 6.4)
@@ -219,18 +243,20 @@ async function processSinglePayment(sourceId: string, amount: number, vendorId: 
 
 
 /**
- * Processes a payment using the Payment Routing Service for staff-based credential resolution
- * and house fee splitting.
+ * Processes a payment using the enhanced payment engine for staff-based credential
+ * resolution, house fee splitting, and full audit trail.
  *
- * Flow:
- * 1. Fetch staff, provider, service, and house provider records
- * 2. Call resolvePaymentRoute to determine credentials and amounts
- * 3. If house fee > 0, split payment: house fee → houseFeeCredentials, remainder → effectiveCredentials
- * 4. If house fee === 0, process single payment to effectiveCredentials
- *
- * Throws PaymentRouteError if no credentials are available (caught by caller).
- *
- * Requirements: 6.1, 6.2, 6.4, 6.5
+ * Enhanced flow (Requirements: 1.1–1.9, 2.1, 2.3, 2.4, 4.1–4.5, 5.1–5.3, 8.1, 8.3, 8.4):
+ * 1. Sanitize and validate inputs (amount, tipAmount)
+ * 2. Fetch appointment → check paymentStatus !== 'paid' (409 if already paid)
+ * 3. Fetch staff, service, house provider, sibling staff
+ * 4. resolveCredentialChain → if error, return 400 with inPersonRequired
+ * 5. Token refresh if needed
+ * 6. decideSplit → validate house fee
+ * 7. generateIdempotencyKey (deterministic)
+ * 8. executeSplitPayment or single charge
+ * 9. appendAuditRecord (success, failure, or partial)
+ * 10. Return response
  */
 async function processStaffRoutedPayment(
   dataClient: any,
@@ -239,24 +265,79 @@ async function processStaffRoutedPayment(
   staffId: string,
   serviceIds: string[],
   people: number,
-  tipAmount: number = 0
+  tipAmount: number = 0,
+  appointmentId?: string
 ) {
-  // Fetch assigned staff member
+  // --- Step 1: Sanitize and validate inputs ---
+  const sanitizedAmount = sanitizeNumericInput(amount);
+  if (sanitizedAmount === null) {
+    return Response.json({ error: 'Invalid payment amount', details: 'Amount must be a finite number' }, { status: 400 });
+  }
+
+  const sanitizedTip = sanitizeNumericInput(tipAmount) ?? 0;
+  if (tipAmount !== 0 && sanitizeNumericInput(tipAmount) === null) {
+    return Response.json({ error: 'Invalid tip amount', details: 'Tip must be a finite number' }, { status: 400 });
+  }
+
+  // --- Step 2: Fetch appointment and check payment status ---
+  let appointment: any = null;
+  if (appointmentId) {
+    const { data: appt } = await dataClient.models.Appointment.get({ appointmentId });
+    if (appt) {
+      appointment = appt;
+      // Requirement 5.2: Reject if already paid
+      if (appt.paymentStatus === 'paid') {
+        return Response.json(
+          { error: 'Already paid', details: 'This appointment has already been paid' },
+          { status: 409 }
+        );
+      }
+    }
+  }
+
+  // --- Step 3: Fetch staff, service, house provider, sibling staff ---
   const { data: staff } = await dataClient.models.StaffSchedule.get({ visibleId: staffId });
   if (!staff) {
     return Response.json({ error: 'Staff member not found', details: `No staff with id ${staffId}` }, { status: 404 });
   }
 
-  // Fetch the provider (vendor) associated with the staff member
-  const { data: provider } = await dataClient.models.Vendor.get({ vendorId: staff.vendorId });
-  if (!provider) {
-    return Response.json({ error: 'Provider not found', details: `No provider for staff ${staffId}` }, { status: 404 });
-  }
-
-  // Fetch the primary service for routing (use first service in the list)
   const { data: service } = await dataClient.models.Service.get({ serviceId: serviceIds[0] });
   if (!service) {
     return Response.json({ error: 'Service not found', details: `No service with id ${serviceIds[0]}` }, { status: 404 });
+  }
+
+  // Calculate expected total from all services (supports multi-service checkout)
+  let expectedTotal = service.price;
+  if (serviceIds.length > 1) {
+    for (let i = 1; i < serviceIds.length; i++) {
+      const { data: additionalService } = await dataClient.models.Service.get({ serviceId: serviceIds[i] });
+      if (additionalService) {
+        expectedTotal += additionalService.price;
+      }
+    }
+  }
+
+  // Validate amount matches total service price (Requirement 4.1, 4.2)
+  const amountValidation = validatePaymentAmount({
+    amount: sanitizedAmount,
+    expectedAmount: expectedTotal,
+  });
+  if (!amountValidation.valid) {
+    return Response.json(
+      { error: amountValidation.error!.message, details: amountValidation.error },
+      { status: 400 }
+    );
+  }
+
+  // Validate tip if provided (Requirement 4.4)
+  if (sanitizedTip > 0) {
+    const tipValidation = validateTipAmount(sanitizedTip, expectedTotal);
+    if (!tipValidation.valid) {
+      return Response.json(
+        { error: tipValidation.error!.message, details: tipValidation.error },
+        { status: 400 }
+      );
+    }
   }
 
   // Fetch the house provider (isHouse === true)
@@ -266,99 +347,264 @@ async function processStaffRoutedPayment(
     return Response.json({ error: 'House provider not configured' }, { status: 500 });
   }
 
-  // Resolve payment route using the Payment Routing Service
-  // This may throw PaymentRouteError if no credentials are available
-  const route = resolvePaymentRoute(
-    { appointmentId: '', vendorId: staff.vendorId, serviceId: serviceIds[0], staffId },
-    staff,
-    provider,
-    service,
-    houseProvider
+  // Fetch sibling staff on the same vendor
+  const { data: vendorStaffList } = await (dataClient.models as any).StaffSchedule.listStaffScheduleByVendorId({ vendorId: staff.vendorId });
+  const siblingStaff = (vendorStaffList || []).filter(
+    (s: any) => s.visibleId !== staffId && s.isActive !== false
   );
 
-  // Refresh token if needed for effective credentials
-  const effectiveCreds = await ensureFreshCredentials(dataClient, route.effectiveCredentials, staffId, staff.vendorId);
-  if (effectiveCreds.error) {
-    return Response.json({ error: effectiveCreds.error, details: effectiveCreds.details }, { status: 400 });
+  // --- Step 4: resolveCredentialChain ---
+  const resolution = resolveCredentialChain(staff, siblingStaff, houseProvider);
+
+  // Check if resolution is an error (CredentialResolutionError)
+  if ('code' in resolution && resolution.code === 'NO_CREDENTIALS') {
+    const credError = resolution as CredentialResolutionError;
+    return Response.json({
+      error: 'Card payment unavailable',
+      details: credError.message,
+      inPersonRequired: true,
+      staffName: credError.staffName,
+      vendorName: credError.vendorName,
+    }, { status: 400 });
   }
 
+  // We have valid credentials
+  const credResult = resolution as { credentials: { accessToken: string; locationId: string }; source: string; staffId?: string; vendorId?: string; resolutionPath: string[] };
+
+  // --- Step 5: Token refresh if needed ---
+  // Determine the staffId to use for token refresh based on resolution source
+  const resolvedStaffId = credResult.staffId || staffId;
+  const { data: resolvedStaffRecord } = await dataClient.models.StaffSchedule.get({ visibleId: resolvedStaffId });
+
+  let effectiveCredentials = credResult.credentials;
+
+  if (resolvedStaffRecord && isTokenExpiringSoonEnhanced(resolvedStaffRecord.squareTokenExpiresAt)) {
+    const refreshResult = await refreshSquareTokenEnhanced(resolvedStaffId);
+    if (refreshResult.success && refreshResult.newAccessToken) {
+      effectiveCredentials = {
+        accessToken: refreshResult.newAccessToken,
+        locationId: credResult.credentials.locationId,
+      };
+    } else if (!refreshResult.success) {
+      // Token refresh failed and token is expired — cannot proceed
+      return Response.json({
+        error: 'Card payment temporarily unavailable',
+        details: refreshResult.error || 'Square token expired. Please reconnect Square in Dashboard Settings.',
+      }, { status: 400 });
+    }
+  }
+
+  // Resolve house provider credentials for split decision
+  const houseCredentials = {
+    accessToken: houseProvider.squareAccessToken || '',
+    locationId: houseProvider.squareLocationId || '',
+  };
+
+  // If house fee requires house credentials, refresh house token if needed
+  if (houseProvider.squareAccessToken && houseProvider.squareLocationId) {
+    // Check house token expiry — house may be a staff record too
+    const { data: houseStaffList } = await (dataClient.models as any).StaffSchedule.listStaffScheduleByVendorId({ vendorId: houseProvider.vendorId });
+    const houseStaffWithCreds = (houseStaffList || []).find((s: any) =>
+      s.squareAccessToken === houseProvider.squareAccessToken
+    );
+    if (houseStaffWithCreds && isTokenExpiringSoonEnhanced(houseStaffWithCreds.squareTokenExpiresAt)) {
+      const houseRefresh = await refreshSquareTokenEnhanced(houseStaffWithCreds.visibleId);
+      if (houseRefresh.success && houseRefresh.newAccessToken) {
+        houseCredentials.accessToken = houseRefresh.newAccessToken;
+      }
+    }
+  }
+
+  // --- Step 6: decideSplit ---
+  let splitDecision;
+  try {
+    splitDecision = decideSplit(service, effectiveCredentials, houseCredentials);
+  } catch (error: any) {
+    if (error instanceof SplitDecisionError) {
+      return Response.json({
+        error: 'Payment configuration error',
+        details: error.message,
+      }, { status: 400 });
+    }
+    throw error;
+  }
+
+  // --- Step 7: generateIdempotencyKey (deterministic) ---
+  const effectiveAppointmentId = appointmentId || `staff-${staffId}-${serviceIds[0]}-${Date.now()}`;
+  const sourceTokenHash = hashSourceToken(sourceId);
+  const paymentType = splitDecision.shouldSplit ? 'house_fee' : 'full';
+  const idempotencyKeyBase = generateIdempotencyKey(effectiveAppointmentId, paymentType, sourceTokenHash);
+
+  // --- Step 8: executeSplitPayment or single charge ---
+  if (splitDecision.shouldSplit) {
+    // Execute split payment (or single charge optimization)
+    const splitResult = await executeSplitPayment(
+      sourceId,
+      splitDecision,
+      effectiveCredentials,
+      houseCredentials,
+      sanitizedTip,
+      idempotencyKeyBase
+    );
+
+    // --- Step 9: appendAuditRecord ---
+    if (splitResult.success) {
+      const auditRecord = buildAuditRecord({
+        type: 'success',
+        housePaymentId: splitResult.housePaymentId,
+        houseFeeAmount: splitResult.houseFeeAmount,
+        staffPaymentId: splitResult.staffPaymentId,
+        staffAmount: splitResult.staffAmount,
+        tipAmount: sanitizedTip,
+        routingMethod: credResult.source as 'staff' | 'sibling_staff' | 'house',
+        credentialResolutionPath: credResult.resolutionPath,
+      });
+
+      if (appointmentId) {
+        await appendAuditRecord(appointmentId, auditRecord);
+      }
+
+      return Response.json({
+        success: true,
+        paymentId: splitResult.staffPaymentId || splitResult.housePaymentId,
+        housePaymentId: splitResult.housePaymentId,
+        staffPaymentId: splitResult.staffPaymentId,
+        status: 'COMPLETED',
+        tipAmount: sanitizedTip,
+        houseFeeAmount: splitResult.houseFeeAmount,
+        staffAmount: splitResult.staffAmount,
+        routedTo: credResult.source,
+      });
+    } else if (splitResult.partial) {
+      // Partial: house succeeded, staff failed
+      const auditRecord = buildAuditRecord({
+        type: 'partial',
+        housePaymentId: splitResult.housePaymentId,
+        houseFeeAmount: splitResult.houseFeeAmount,
+        staffAmount: splitResult.staffAmount,
+        tipAmount: sanitizedTip,
+        routingMethod: credResult.source as 'staff' | 'sibling_staff' | 'house',
+        credentialResolutionPath: credResult.resolutionPath,
+        failureReason: splitResult.error,
+        idempotencyKey: idempotencyKeyBase,
+      });
+
+      if (appointmentId) {
+        await appendAuditRecord(appointmentId, auditRecord);
+      }
+
+      return Response.json({
+        error: 'Partial payment processed',
+        details: `Staff payment failed. House fee of $${splitResult.houseFeeAmount.toFixed(2)} was charged.`,
+        paymentCompleted: false,
+        partial: true,
+        housePaymentId: splitResult.housePaymentId,
+        houseFeeAmount: splitResult.houseFeeAmount,
+      }, { status: 500 });
+    } else {
+      // Total failure
+      const auditRecord = buildAuditRecord({
+        type: 'failure',
+        houseFeeAmount: splitResult.houseFeeAmount,
+        staffAmount: splitResult.staffAmount,
+        tipAmount: sanitizedTip,
+        routingMethod: credResult.source as 'staff' | 'sibling_staff' | 'house',
+        credentialResolutionPath: credResult.resolutionPath,
+        failureReason: splitResult.error,
+        attemptedAmountCents: Math.round((splitResult.houseFeeAmount + splitResult.staffAmount) * 100),
+        credentialSource: credResult.source,
+        idempotencyKey: idempotencyKeyBase,
+      });
+
+      if (appointmentId) {
+        await appendAuditRecord(appointmentId, auditRecord);
+      }
+
+      return Response.json({
+        error: 'Payment processing failed',
+        details: splitResult.error || 'Payment failed',
+        paymentCompleted: false,
+      }, { status: 500 });
+    }
+  }
+
+  // --- No split: single charge to effective credentials ---
   const squareEnvironment = process.env.NEXT_PUBLIC_SQUARE_ENVIRONMENT === 'production'
     ? Environment.Production
     : Environment.Sandbox;
 
-  // If house fee > 0, split the payment into two charges (Req 6.2)
-  if (route.houseFeeAmount > 0) {
-    return await processHouseFeeSplit(
-      dataClient,
-      sourceId,
-      amount,
-      route,
-      effectiveCreds,
-      staffId,
-      serviceIds,
-      people,
-      tipAmount,
-      squareEnvironment
-    );
-  }
-
-  // No house fee — process single payment to effective credentials (Req 6.1)
   const client = new Client({
-    accessToken: effectiveCreds.accessToken,
+    accessToken: effectiveCredentials.accessToken,
     environment: squareEnvironment,
   });
 
   try {
-    // Load service details for order line items
-    let orderId: string | undefined;
-    const serviceDetails: any[] = [];
-    for (const sid of serviceIds) {
-      const { data: svc } = await dataClient.models.Service.get({ serviceId: sid });
-      if (svc) serviceDetails.push(svc);
-    }
-    if (serviceDetails.length > 0) {
-      const lineItems = buildOrderLineItems(serviceDetails, people);
-      const { result: orderResult } = await client.ordersApi.createOrder({
-        order: {
-          locationId: effectiveCreds.locationId,
-          lineItems,
-        },
-        idempotencyKey: randomUUID(),
-      });
-      orderId = orderResult.order?.id;
-    }
+    const fullIdempotencyKey = `${idempotencyKeyBase}-staff`;
+    const amountCents = Math.round(sanitizedAmount * 100);
+    const tipCents = Math.round(sanitizedTip * 100);
 
     const paymentRequest: any = {
       sourceId,
-      idempotencyKey: randomUUID(),
+      idempotencyKey: fullIdempotencyKey,
       amountMoney: {
-        amount: BigInt(Math.round(amount * 100)),
+        amount: BigInt(amountCents),
         currency: 'USD',
       },
-      locationId: effectiveCreds.locationId,
-      orderId,
+      locationId: effectiveCredentials.locationId,
     };
 
-    if (tipAmount > 0) {
+    if (tipCents > 0) {
       paymentRequest.tipMoney = {
-        amount: BigInt(Math.round(tipAmount * 100)),
+        amount: BigInt(tipCents),
         currency: 'USD',
       };
     }
 
     const { result } = await client.paymentsApi.createPayment(paymentRequest);
+    const paymentId = result.payment?.id;
+
+    // Audit: success record
+    const auditRecord = buildAuditRecord({
+      type: 'success',
+      staffPaymentId: paymentId,
+      staffAmount: sanitizedAmount,
+      tipAmount: sanitizedTip,
+      routingMethod: credResult.source as 'staff' | 'sibling_staff' | 'house',
+      credentialResolutionPath: credResult.resolutionPath,
+    });
+
+    if (appointmentId) {
+      await appendAuditRecord(appointmentId, auditRecord);
+    }
 
     return Response.json({
       success: true,
-      paymentId: result.payment?.id,
+      paymentId,
       status: result.payment?.status,
-      tipAmount: tipAmount || 0,
-      routedTo: route.staffSquareCredentials ? 'staff' : 'provider',
+      tipAmount: sanitizedTip,
+      routedTo: credResult.source,
     });
   } catch (error: any) {
-    // Square API error — display error, don't mark as paid, retain booking (Req 6.5)
-    console.error('Square API error (staff-routed):', JSON.stringify(error, null, 2));
+    console.error('Square API error (staff-routed enhanced):', JSON.stringify(error, null, 2));
     const details = error?.errors?.[0]?.detail || error?.message || 'Unknown Square error';
+
+    // Audit: failure record
+    const auditRecord = buildAuditRecord({
+      type: 'failure',
+      staffAmount: sanitizedAmount,
+      tipAmount: sanitizedTip,
+      routingMethod: credResult.source as 'staff' | 'sibling_staff' | 'house',
+      credentialResolutionPath: credResult.resolutionPath,
+      failureReason: details,
+      attemptedAmountCents: Math.round(sanitizedAmount * 100),
+      credentialSource: credResult.source,
+      idempotencyKey: `${idempotencyKeyBase}-staff`,
+    });
+
+    if (appointmentId) {
+      await appendAuditRecord(appointmentId, auditRecord);
+    }
+
     return Response.json({
       error: 'Payment processing failed',
       details,

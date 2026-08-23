@@ -107,7 +107,8 @@ function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onEdit, 
     serviceId: '',
     staffId: '',
     status: '',
-    customerName: '',
+    customerFirstName: '',
+    customerLastName: '',
     customerPhone: '',
     customerEmail: '',
   })
@@ -137,7 +138,8 @@ function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onEdit, 
       serviceId: appointment.serviceId || '',
       staffId: appointment.staffId || '',
       status: appointment.status || '',
-      customerName: appointment.customer?.name || '',
+      customerFirstName: appointment.customer?.name ? appointment.customer.name.split(' ')[0] : '',
+      customerLastName: appointment.customer?.name ? appointment.customer.name.split(' ').slice(1).join(' ') : '',
       customerPhone: appointment.customer?.phone || '',
       customerEmail: appointment.customer?.email || '',
     })
@@ -224,12 +226,13 @@ function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onEdit, 
 
       // Check customer info changes
       const currentCustomer = appointment.customer || {}
-      if (editForm.customerName !== (currentCustomer.name || '') ||
+      const editFullName = `${editForm.customerFirstName} ${editForm.customerLastName}`.trim()
+      if (editFullName !== (currentCustomer.name || '') ||
           editForm.customerPhone !== (currentCustomer.phone || '') ||
           editForm.customerEmail !== (currentCustomer.email || '')) {
         updates.customer = JSON.stringify({
           ...currentCustomer,
-          name: editForm.customerName,
+          name: editFullName,
           phone: editForm.customerPhone,
           email: editForm.customerEmail,
         })
@@ -437,7 +440,7 @@ function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onEdit, 
                   style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem' }}
                 >
                   <option value="">Select a service</option>
-                  {services.map(s => <option key={s.serviceId} value={s.serviceId}>{s.name} ({s.duration} min — ${s.price})</option>)}
+                  {[...services].sort((a, b) => a.name.localeCompare(b.name)).map(s => <option key={s.serviceId} value={s.serviceId}>{s.name} ({s.duration} min — ${s.price})</option>)}
                 </select>
               </div>
 
@@ -471,15 +474,27 @@ function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onEdit, 
               </div>
 
               {/* Customer Name */}
-              <div>
-                <label htmlFor="edit-customer-name" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Customer Name</label>
-                <input
-                  id="edit-customer-name"
-                  type="text"
-                  value={editForm.customerName}
-                  onChange={(e) => setEditForm({ ...editForm, customerName: e.target.value })}
-                  style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', boxSizing: 'border-box' }}
-                />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div>
+                  <label htmlFor="edit-customer-fname" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>First Name</label>
+                  <input
+                    id="edit-customer-fname"
+                    type="text"
+                    value={editForm.customerFirstName}
+                    onChange={(e) => setEditForm({ ...editForm, customerFirstName: e.target.value })}
+                    style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="edit-customer-lname" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Last Name</label>
+                  <input
+                    id="edit-customer-lname"
+                    type="text"
+                    value={editForm.customerLastName}
+                    onChange={(e) => setEditForm({ ...editForm, customerLastName: e.target.value })}
+                    style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                  />
+                </div>
               </div>
 
               {/* Customer Phone */}
@@ -697,8 +712,11 @@ function MonthView({ currentDate, appointments, onAppointmentClick }) {
 function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServiceId, defaultCustomer, onClose, onCreated, currentUserStaffId }) {
   const [mode, setMode] = useState('appointment') // 'appointment' or 'block'
   const [blockType, setBlockType] = useState('single') // 'single' or 'multiday'
+  const defaultFirstName = defaultCustomer?.name ? defaultCustomer.name.split(' ')[0] : ''
+  const defaultLastName = defaultCustomer?.name ? defaultCustomer.name.split(' ').slice(1).join(' ') : ''
   const [form, setForm] = useState({
-    customerName: defaultCustomer?.name || '',
+    customerFirstName: defaultFirstName,
+    customerLastName: defaultLastName,
     customerPhone: defaultCustomer?.phone || '',
     customerEmail: defaultCustomer?.email || '',
     notes: '',
@@ -718,6 +736,7 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
   const [submitting, setSubmitting] = useState(false)
   const [overlapWarning, setOverlapWarning] = useState(null)
   const [pendingBody, setPendingBody] = useState(null)
+  const [formError, setFormError] = useState(null)
 
   const selectedService = services.find(s => s.serviceId === serviceId)
   const isMultiProvider = selectedService?.providersRequired > 1
@@ -739,14 +758,18 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
   }, [isMultiProvider])
 
   const handleSubmit = async (forceConfirmOverlap = false) => {
+    setFormError(null)
     if (mode === 'block' && blockType === 'multiday') {
-      if (!blockStartDate) { alert('Please select a start date'); return }
-      if (!blockEndDate) { alert('Please select an end date'); return }
+      if (!blockStartDate) { setFormError('Please select a start date'); return }
+      if (!blockEndDate) { setFormError('Please select an end date'); return }
     } else if (!form.dateTime) {
-      alert('Please select a date and time'); return
+      setFormError('Please select a date and time'); return
     }
-    if (isMultiProvider && (!staffId || !staffId2)) { alert('Please select both staff members for this service'); return }
-    if (isMultiProvider && staffId === staffId2) { alert('Please select two different staff members'); return }
+    if (isMultiProvider && (!staffId || !staffId2)) { setFormError('Please select both staff members for this service'); return }
+    if (isMultiProvider && staffId === staffId2) { setFormError('Please select two different staff members'); return }
+    // Ensure vendorId can be resolved (from prop or from selected staff)
+    const effectiveVendorId = vendorId || (staffId && [...staffList, ...allStaff].find(s => s.visibleId === staffId)?.vendorId) || ''
+    if (!effectiveVendorId) { setFormError('Please select a staff member so the vendor can be determined'); return }
     setSubmitting(true)
     setOverlapWarning(null)
     try {
@@ -763,6 +786,8 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
         }
 
         let failed = false
+        // Resolve vendorId from selected staff if the prop is missing
+        const resolvedBlockVendorId = vendorId || (staffId && [...staffList, ...allStaff].find(s => s.visibleId === staffId)?.vendorId) || ''
         for (const day of days) {
           // Block the full working day (use 6am start, 960 min = 16 hours as a full-day block)
           const year = day.getFullYear()
@@ -770,7 +795,7 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
           const dd = String(day.getDate()).padStart(2, '0')
           const dayDateTimeStr = `${year}-${month}-${dd}T06:00`
           const body = {
-            vendorId,
+            vendorId: resolvedBlockVendorId,
             staffId: staffId || undefined,
             dateTime: dayDateTimeStr,
             customerName: 'Blocked Time',
@@ -787,14 +812,16 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
           if (!res.ok) failed = true
         }
         if (failed) {
-          alert('Some days failed to block. Please check the calendar.')
+          setFormError('Some days failed to block. Please check the calendar.')
         }
         onCreated()
         onClose()
       } else {
+        // Resolve vendorId from selected staff if the prop is missing (e.g. "everyone" view)
+        const resolvedVendorId = vendorId || (staffId && [...staffList, ...allStaff].find(s => s.visibleId === staffId)?.vendorId) || ''
         const body = mode === 'block'
-          ? { vendorId, staffId: staffId || undefined, dateTime: form.dateTime, customerName: 'Blocked Time', notes: form.notes, isBlockedTime: true, duration, createdBy: currentUserStaffId || undefined }
-          : { vendorId, serviceId: serviceId || undefined, staffId: staffId || undefined, staffIds: isMultiProvider ? [staffId, staffId2] : undefined, dateTime: form.dateTime, customerName: form.customerName, customerPhone: form.customerPhone, customerEmail: form.customerEmail, notes: form.notes, createdBy: currentUserStaffId || undefined }
+          ? { vendorId: resolvedVendorId, staffId: staffId || undefined, dateTime: form.dateTime, customerName: 'Blocked Time', notes: form.notes, isBlockedTime: true, duration, createdBy: currentUserStaffId || undefined }
+          : { vendorId: resolvedVendorId, serviceId: serviceId || undefined, staffId: staffId || undefined, staffIds: isMultiProvider ? [staffId, staffId2] : undefined, dateTime: form.dateTime, customerName: `${form.customerFirstName} ${form.customerLastName}`.trim(), customerPhone: form.customerPhone, customerEmail: form.customerEmail, notes: form.notes, createdBy: currentUserStaffId || undefined }
 
         if (forceConfirmOverlap) {
           body.confirmOverlap = true
@@ -820,11 +847,11 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
           onClose()
         } else {
           const data = await res.json()
-          alert('Failed: ' + (data.error || 'Unknown error'))
+          setFormError('Failed: ' + (data.error || 'Unknown error'))
         }
       }
     } catch (error) {
-      alert('Error: ' + (error.message || 'Unknown error'))
+      setFormError('Error: ' + (error.message || 'Unknown error'))
     } finally { setSubmitting(false) }
   }
 
@@ -832,6 +859,7 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
     if (!pendingBody) return
     setSubmitting(true)
     setOverlapWarning(null)
+    setFormError(null)
     try {
       const res = await fetch('/api/appointments/manual', {
         method: 'POST',
@@ -843,10 +871,10 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
         onClose()
       } else {
         const data = await res.json()
-        alert('Failed: ' + (data.error || 'Unknown error'))
+        setFormError('Failed: ' + (data.error || 'Unknown error'))
       }
     } catch (error) {
-      alert('Error: ' + (error.message || 'Unknown error'))
+      setFormError('Error: ' + (error.message || 'Unknown error'))
     } finally {
       setSubmitting(false)
       setPendingBody(null)
@@ -936,14 +964,21 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
               <select id="new-apt-service" value={serviceId} onChange={(e) => setServiceId(e.target.value)}
                 style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem' }}>
                 <option value="">Select a service</option>
-                {services.map(s => <option key={s.serviceId} value={s.serviceId}>{s.name} ({s.duration} min — ${s.price})</option>)}
+                {[...services].sort((a, b) => a.name.localeCompare(b.name)).map(s => <option key={s.serviceId} value={s.serviceId}>{s.name} ({s.duration} min — ${s.price})</option>)}
               </select>
             </div>
             {/* Customer */}
-            <div style={{ marginBottom: '1rem' }}>
-              <label htmlFor="new-apt-name" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Customer Name</label>
-              <input id="new-apt-name" type="text" value={form.customerName} onChange={(e) => setForm({ ...form, customerName: e.target.value })}
-                style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', boxSizing: 'border-box' }} />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
+              <div>
+                <label htmlFor="new-apt-fname" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>First Name</label>
+                <input id="new-apt-fname" type="text" value={form.customerFirstName} onChange={(e) => setForm({ ...form, customerFirstName: e.target.value })}
+                  style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', boxSizing: 'border-box' }} />
+              </div>
+              <div>
+                <label htmlFor="new-apt-lname" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Last Name</label>
+                <input id="new-apt-lname" type="text" value={form.customerLastName} onChange={(e) => setForm({ ...form, customerLastName: e.target.value })}
+                  style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', boxSizing: 'border-box' }} />
+              </div>
             </div>
             <div style={{ marginBottom: '1rem' }}>
               <label htmlFor="new-apt-phone" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Phone</label>
@@ -1048,6 +1083,13 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
           <input id="new-apt-notes" type="text" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}
             style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', boxSizing: 'border-box' }} />
         </div>
+
+        {/* Error Message */}
+        {formError && (
+          <div style={{ background: '#f8d7da', border: '1px solid #f5c6cb', borderRadius: '8px', padding: '0.75rem 1rem', marginBottom: '1rem', color: '#721c24', fontSize: '0.9rem' }}>
+            {formError}
+          </div>
+        )}
 
         {/* Overlap Warning (Req 4.6) */}
         {overlapWarning && (

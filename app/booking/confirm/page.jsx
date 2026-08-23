@@ -583,13 +583,13 @@ function ConfirmPageContent() {
             <label style={{ display: 'block', marginBottom: '0.5rem' }}>First Name *</label>
             <input type="text" required value={formData.firstName}
               onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-              style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />
+              style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem', boxSizing: 'border-box' }} />
           </div>
           <div>
             <label style={{ display: 'block', marginBottom: '0.5rem' }}>Last Name *</label>
             <input type="text" required value={formData.lastName}
               onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-              style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem' }} />
+              style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '1rem', boxSizing: 'border-box' }} />
           </div>
         </div>
 

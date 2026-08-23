@@ -79,6 +79,10 @@ jest.unstable_mockModule('../../lib/square-token.js', () => ({
   refreshSquareToken: jest.fn(async () => true),
   isTokenExpiringSoon: jest.fn(() => false),
 }))
+jest.unstable_mockModule('../../lib/square-token-enhanced', () => ({
+  refreshSquareToken: jest.fn(async () => ({ success: true, newAccessToken: 'refreshed-token' })),
+  isTokenExpiringSoon: jest.fn(() => false),
+}))
 
 // ── Seeders ──────────────────────────────────────────────────
 

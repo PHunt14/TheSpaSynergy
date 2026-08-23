@@ -28,8 +28,10 @@ function BundlePaymentContent() {
   const [error, setError] = useState(null)
   const [tipAmount, setTipAmount] = useState(0)
   const [squareLocationId, setSquareLocationId] = useState(null)
-  const [paymentMode, setPaymentMode] = useState(null) // null | 'full' | 'split'
+  const [paymentMode, setPaymentMode] = useState(null) // null | 'full' | 'split' | 'custom'
   const [splitError, setSplitError] = useState(null)
+  const [customAmount, setCustomAmount] = useState('')
+  const [customAmountError, setCustomAmountError] = useState(null)
 
   // Initialize Square card as soon as we have a location — card-container is always in the DOM
   const { card } = useSquarePayment(squareLocationId, paid)
@@ -74,10 +76,21 @@ function BundlePaymentContent() {
   const discountAmount = subtotal - bundlePrice
   const houseVendor = vendors.find(v => v.isHouse)
 
-  const totalDue = bundlePrice + tipAmount
+  // Parse custom amount for the custom payment mode
+  const parsedCustomAmount = parseFloat(customAmount)
+  const isCustomAmountValid = !isNaN(parsedCustomAmount) &&
+    parsedCustomAmount >= 0.50 &&
+    parsedCustomAmount <= 9999.99 &&
+    /^\d+(\.\d{1,2})?$/.test(customAmount)
+
+  const baseAmount = paymentMode === 'custom' && isCustomAmountValid
+    ? parsedCustomAmount
+    : bundlePrice
+  const totalDue = baseAmount + tipAmount
 
   const handlePay = async () => {
     if (!card || appointments.length === 0) return
+    if (paymentMode === 'custom' && !isCustomAmountValid) return
     setPaying(true)
     setError(null)
 
@@ -86,6 +99,48 @@ function BundlePaymentContent() {
       if (tokenResult.status !== 'OK') {
         setError('Card error — please try again')
         setPaying(false)
+        return
+      }
+
+      // Custom amount payment — routes through the custom charge API
+      if (paymentMode === 'custom' && isCustomAmountValid) {
+        const customerName = appointments[0]?.customer?.name || 'Walk-in'
+        const serviceName = bundle?.name || appointments.map(a => a.service?.name).filter(Boolean).join(' + ')
+        const customPayRes = await fetch('/api/payment/custom', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sourceId: tokenResult.token,
+            amount: parsedCustomAmount,
+            description: `Custom charge for ${serviceName} — ${customerName}`,
+            clientName: customerName !== 'Walk-in' ? customerName : undefined,
+            tipAmount: tipAmount > 0 ? tipAmount : undefined,
+          })
+        })
+
+        const payData = await customPayRes.json()
+        if (!payData.success) {
+          setError(payData.error || 'Payment failed — please try again')
+          setPaying(false)
+          return
+        }
+
+        // Mark all appointments in bundle as paid
+        for (const apt of appointments) {
+          await fetch('/api/appointments', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              appointmentId: apt.appointmentId,
+              paymentId: payData.paymentId,
+              paymentStatus: 'paid',
+              paymentAmount: parsedCustomAmount / appointments.length,
+              status: 'confirmed',
+            })
+          })
+        }
+
+        setPaid(true)
         return
       }
 
@@ -262,7 +317,7 @@ function BundlePaymentContent() {
             Payment cannot be processed for this bundle.
           </p>
         )}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
           <button
             type="button"
             onClick={() => { setPaymentMode('full'); setSplitError(null) }}
@@ -278,7 +333,24 @@ function BundlePaymentContent() {
               opacity: (bundlePrice === 0 || appointments.length === 0) ? 0.5 : 1,
             }}
           >
-            💳 Pay Full Amount
+            Pay Full Amount
+          </button>
+          <button
+            type="button"
+            onClick={() => { setPaymentMode('custom'); setTipAmount(0); setSplitError(null) }}
+            disabled={bundlePrice === 0 || appointments.length === 0}
+            aria-pressed={paymentMode === 'custom'}
+            aria-label="Custom Amount"
+            style={{
+              padding: '1rem', borderRadius: '8px', cursor: (bundlePrice === 0 || appointments.length === 0) ? 'not-allowed' : 'pointer',
+              border: paymentMode === 'custom' ? '2px solid var(--color-primary)' : '2px solid var(--color-border)',
+              background: paymentMode === 'custom' ? 'var(--color-primary)' : 'white',
+              color: paymentMode === 'custom' ? 'white' : 'var(--color-text)',
+              fontWeight: '500', fontSize: '0.95rem',
+              opacity: (bundlePrice === 0 || appointments.length === 0) ? 0.5 : 1,
+            }}
+          >
+            Custom Amount
           </button>
           <button
             type="button"
@@ -295,22 +367,75 @@ function BundlePaymentContent() {
               opacity: (bundlePrice === 0 || appointments.length === 0) ? 0.5 : 1,
             }}
           >
-            👥 Split Payment
+            Split Payment
           </button>
         </div>
       </fieldset>
 
-      {/* Full Payment Flow — card form always rendered (hidden until 'full' selected) so Square can attach */}
-      <div style={paymentMode !== 'full' ? { position: 'absolute', left: '-9999px', opacity: 0, pointerEvents: 'none' } : undefined}>
-        {squareLocationId && (
+      {/* Custom Amount Input */}
+      {paymentMode === 'custom' && (
+        <div style={{ marginBottom: '1.5rem' }}>
+          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
+            Enter Amount
+          </label>
+          <div style={{ position: 'relative' }}>
+            <span style={{
+              position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)',
+              fontSize: '1.1rem', color: 'var(--color-text-light)', fontWeight: '500'
+            }}>$</span>
+            <input
+              type="text"
+              inputMode="decimal"
+              placeholder="0.00"
+              value={customAmount}
+              onChange={(e) => {
+                const val = e.target.value.replace(/[^0-9.]/g, '')
+                setCustomAmount(val)
+                if (customAmountError) setCustomAmountError(null)
+              }}
+              onBlur={() => {
+                if (!customAmount) { setCustomAmountError(null); return }
+                if (isNaN(parsedCustomAmount) || parsedCustomAmount < 0.50) {
+                  setCustomAmountError('Minimum charge is $0.50')
+                } else if (parsedCustomAmount > 9999.99) {
+                  setCustomAmountError('Maximum charge is $9,999.99')
+                } else if (!/^\d+(\.\d{1,2})?$/.test(customAmount)) {
+                  setCustomAmountError('Maximum 2 decimal places')
+                } else {
+                  setCustomAmountError(null)
+                }
+              }}
+              style={{
+                width: '100%',
+                padding: '1rem 1rem 1rem 2.5rem',
+                borderRadius: '8px',
+                border: customAmountError ? '2px solid #c33' : '2px solid var(--color-border)',
+                fontSize: '1.2rem',
+                fontWeight: '600',
+                boxSizing: 'border-box',
+              }}
+            />
+          </div>
+          {customAmountError && (
+            <p style={{ color: '#c33', fontSize: '0.85rem', margin: '0.25rem 0 0' }}>{customAmountError}</p>
+          )}
+          <p style={{ color: 'var(--color-text-light)', fontSize: '0.8rem', margin: '0.25rem 0 0' }}>
+            Package price: ${bundlePrice.toFixed(2)} — Enter any amount ($0.50 – $9,999.99)
+          </p>
+        </div>
+      )}
+
+      {/* Full Payment Flow — card form always rendered (hidden until 'full' or 'custom' selected) so Square can attach */}
+      <div style={paymentMode !== 'full' && paymentMode !== 'custom' ? { position: 'absolute', left: '-9999px', opacity: 0, pointerEvents: 'none' } : undefined}>
+        {squareLocationId && (paymentMode !== 'custom' || isCustomAmountValid) && (
           <TipSelection
-            servicePrice={bundlePrice}
+            servicePrice={paymentMode === 'custom' ? parsedCustomAmount : bundlePrice}
             tipAmount={tipAmount}
             onTipChange={setTipAmount}
           />
         )}
 
-        <TotalDueDisplay totalDue={totalDue} tipAmount={tipAmount} priceLabel="Package" priceAmount={bundlePrice} />
+        <TotalDueDisplay totalDue={totalDue} tipAmount={tipAmount} priceLabel={paymentMode === 'custom' ? 'Custom Amount' : 'Package'} priceAmount={baseAmount} />
 
         {!squareLocationId ? (
           <div style={{ padding: '1.5rem', background: '#fff3cd', borderRadius: '8px', border: '1px solid #ffc107', textAlign: 'center' }}>

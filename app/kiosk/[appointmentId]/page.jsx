@@ -24,8 +24,10 @@ function PaymentContent() {
   const [paid, setPaid] = useState(false)
   const [error, setError] = useState(null)
   const [tipAmount, setTipAmount] = useState(0)
-  const [paymentMode, setPaymentMode] = useState(null) // null | 'full' | 'split'
+  const [paymentMode, setPaymentMode] = useState(null) // null | 'full' | 'split' | 'custom'
   const [splitError, setSplitError] = useState(null)
+  const [customAmount, setCustomAmount] = useState('')
+  const [customAmountError, setCustomAmountError] = useState(null)
 
   // Initialize Square card as soon as we have a location — card-container is always in the DOM
   const { card } = useSquarePayment(squareLocationId, paid)
@@ -57,10 +59,21 @@ function PaymentContent() {
       .catch(() => { setError('Failed to load appointment'); setLoading(false) })
   }, [appointmentId])
 
-  const totalDue = (appointment?.service?.price || 0) + tipAmount
+  // Parse custom amount for the custom payment mode
+  const parsedCustomAmount = parseFloat(customAmount)
+  const isCustomAmountValid = !isNaN(parsedCustomAmount) &&
+    parsedCustomAmount >= 0.50 &&
+    parsedCustomAmount <= 9999.99 &&
+    /^\d+(\.\d{1,2})?$/.test(customAmount)
+
+  const baseAmount = paymentMode === 'custom' && isCustomAmountValid
+    ? parsedCustomAmount
+    : (appointment?.service?.price || 0)
+  const totalDue = baseAmount + tipAmount
 
   const handlePay = async () => {
     if (!card || !appointment) return
+    if (paymentMode === 'custom' && !isCustomAmountValid) return
     setPaying(true)
     setError(null)
 
@@ -74,8 +87,21 @@ function PaymentContent() {
 
       let payRes
 
-      // Multi-provider group payment (e.g., couples head bath)
-      if (appointment.isGroupPayment && appointment.groupId) {
+      // Custom amount payment — routes through the custom charge API but tied to this appointment
+      if (paymentMode === 'custom' && isCustomAmountValid) {
+        payRes = await fetch('/api/payment/custom', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sourceId: tokenResult.token,
+            amount: parsedCustomAmount,
+            description: `Custom charge for ${appointment.service?.name || 'appointment'} — ${appointment.customer?.name || 'Walk-in'}`,
+            clientName: appointment.customer?.name || undefined,
+            tipAmount: tipAmount > 0 ? tipAmount : undefined,
+          })
+        })
+      } else if (appointment.isGroupPayment && appointment.groupId) {
+        // Multi-provider group payment (e.g., couples head bath)
         payRes = await fetch('/api/payment', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -107,11 +133,38 @@ function PaymentContent() {
             vendorId: appointment.vendorId,
             staffId: appointment.staffId || undefined,
             serviceIds: [appointment.serviceId],
+            appointmentId,
           })
         })
       }
 
       const payData = await payRes.json()
+
+      if (paymentMode === 'custom') {
+        // Custom charge API returns { success, paymentId } or { success: false, error }
+        if (!payData.success) {
+          setError(payData.error || 'Payment failed — please try again')
+          setPaying(false)
+          return
+        }
+
+        // Update appointment as paid with custom amount
+        await fetch('/api/appointments', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            appointmentId,
+            paymentId: payData.paymentId,
+            paymentStatus: 'paid',
+            paymentAmount: parsedCustomAmount,
+            tipAmount: tipAmount > 0 ? tipAmount : undefined,
+            status: 'confirmed',
+          })
+        })
+
+        setPaid(true)
+        return
+      }
 
       if (!payData.success) {
         setError('Payment failed: ' + (payData.details || payData.error || 'Unknown error'))
@@ -249,60 +302,122 @@ function PaymentContent() {
         </div>
       </div>
 
-      {squareLocationId && (
+      {squareLocationId && (paymentMode !== 'custom' || isCustomAmountValid) && (
         <TipSelection
-          servicePrice={appointment.service?.price || 0}
+          servicePrice={paymentMode === 'custom' ? parsedCustomAmount : (appointment.service?.price || 0)}
           tipAmount={tipAmount}
           onTipChange={setTipAmount}
         />
       )}
 
-      <TotalDueDisplay totalDue={totalDue} tipAmount={tipAmount} priceLabel="Service" priceAmount={appointment.service?.price || 0} />
+      <TotalDueDisplay totalDue={totalDue} tipAmount={tipAmount} priceLabel={paymentMode === 'custom' ? 'Custom Amount' : 'Service'} priceAmount={baseAmount} />
 
       {/* Payment Mode Selector */}
       {canSplitPay && !paymentMode && (
         <fieldset style={{ border: 'none', padding: 0, margin: '0 0 1.5rem 0' }}>
           <legend style={{ fontWeight: '600', marginBottom: '0.75rem', fontSize: '1rem' }}>How would you like to pay?</legend>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
             <button
               type="button"
               onClick={() => { setPaymentMode('full'); setSplitError(null) }}
-              aria-pressed={paymentMode === 'full'}
               aria-label="Pay Full Amount"
               style={{
                 padding: '1rem', borderRadius: '8px', cursor: 'pointer',
                 border: '2px solid var(--color-border)',
-                background: 'white',
-                color: 'var(--color-text)',
+                background: 'white', color: 'var(--color-text)',
                 fontWeight: '500', fontSize: '0.95rem',
               }}
             >
-              💳 Pay Full Amount
+              Pay Full Amount
+            </button>
+            <button
+              type="button"
+              onClick={() => { setPaymentMode('custom'); setTipAmount(0); setSplitError(null) }}
+              aria-label="Custom Amount"
+              style={{
+                padding: '1rem', borderRadius: '8px', cursor: 'pointer',
+                border: '2px solid var(--color-border)',
+                background: 'white', color: 'var(--color-text)',
+                fontWeight: '500', fontSize: '0.95rem',
+              }}
+            >
+              Custom Amount
             </button>
             <button
               type="button"
               onClick={() => { setPaymentMode('split'); setTipAmount(0); setSplitError(null) }}
-              aria-pressed={paymentMode === 'split'}
               aria-label="Split Payment"
               style={{
                 padding: '1rem', borderRadius: '8px', cursor: 'pointer',
                 border: '2px solid var(--color-border)',
-                background: 'white',
-                color: 'var(--color-text)',
+                background: 'white', color: 'var(--color-text)',
                 fontWeight: '500', fontSize: '0.95rem',
               }}
             >
-              👥 Split Payment
+              Split Payment
             </button>
           </div>
         </fieldset>
       )}
 
-      {/* Full Payment Flow (default for non-group or when 'full' selected) */}
-      {/* Card form is always rendered so Square SDK can attach; hidden until user picks 'full' */}
-      <div style={canSplitPay && paymentMode !== 'full' ? { position: 'absolute', left: '-9999px', opacity: 0, pointerEvents: 'none' } : undefined}>
+      {/* Custom Amount Input */}
+      {paymentMode === 'custom' && (
+        <div style={{ marginBottom: '1.5rem' }}>
+          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
+            Enter Amount
+          </label>
+          <div style={{ position: 'relative' }}>
+            <span style={{
+              position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)',
+              fontSize: '1.1rem', color: 'var(--color-text-light)', fontWeight: '500'
+            }}>$</span>
+            <input
+              type="text"
+              inputMode="decimal"
+              placeholder="0.00"
+              value={customAmount}
+              onChange={(e) => {
+                const val = e.target.value.replace(/[^0-9.]/g, '')
+                setCustomAmount(val)
+                if (customAmountError) setCustomAmountError(null)
+              }}
+              onBlur={() => {
+                if (!customAmount) { setCustomAmountError(null); return }
+                if (isNaN(parsedCustomAmount) || parsedCustomAmount < 0.50) {
+                  setCustomAmountError('Minimum charge is $0.50')
+                } else if (parsedCustomAmount > 9999.99) {
+                  setCustomAmountError('Maximum charge is $9,999.99')
+                } else if (!/^\d+(\.\d{1,2})?$/.test(customAmount)) {
+                  setCustomAmountError('Maximum 2 decimal places')
+                } else {
+                  setCustomAmountError(null)
+                }
+              }}
+              style={{
+                width: '100%',
+                padding: '1rem 1rem 1rem 2.5rem',
+                borderRadius: '8px',
+                border: customAmountError ? '2px solid #c33' : '2px solid var(--color-border)',
+                fontSize: '1.2rem',
+                fontWeight: '600',
+                boxSizing: 'border-box',
+              }}
+            />
+          </div>
+          {customAmountError && (
+            <p style={{ color: '#c33', fontSize: '0.85rem', margin: '0.25rem 0 0' }}>{customAmountError}</p>
+          )}
+          <p style={{ color: 'var(--color-text-light)', fontSize: '0.8rem', margin: '0.25rem 0 0' }}>
+            Service price: ${appointment?.service?.price?.toFixed(2)} · Enter any amount ($0.50 – $9,999.99)
+          </p>
+        </div>
+      )}
+
+      {/* Full Payment Flow (default for non-group or when 'full' or 'custom' selected) */}
+      {/* Card form is always rendered so Square SDK can attach; hidden until user picks 'full' or 'custom' */}
+      <div style={canSplitPay && paymentMode !== 'full' && paymentMode !== 'custom' ? { position: 'absolute', left: '-9999px', opacity: 0, pointerEvents: 'none' } : undefined}>
         {!squareLocationId ? (
-          (!canSplitPay || paymentMode === 'full') ? (
+          (!canSplitPay || paymentMode === 'full' || paymentMode === 'custom') ? (
             <div style={{ padding: '1.5rem', background: '#fff3cd', borderRadius: '8px', border: '1px solid #ffc107', textAlign: 'center' }}>
               <strong>Card payment not available</strong>
               <p style={{ margin: '0.5rem 0 0', fontSize: '0.9rem' }}>This vendor has not connected Square.</p>

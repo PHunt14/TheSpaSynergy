@@ -126,6 +126,151 @@ function extractCredentials(
   };
 }
 
+// --- New credential resolution types and functions (Requirement 2.1–2.4, 2.7) ---
+
+export interface CredentialResolutionResult {
+  credentials: SquareCredentials;
+  source: 'staff' | 'sibling_staff' | 'house';
+  staffId?: string;
+  vendorId?: string;
+  resolutionPath: string[]; // e.g., ['staff:invalid', 'sibling:none', 'house:resolved']
+}
+
+export interface CredentialResolutionError {
+  code: 'NO_CREDENTIALS';
+  message: string;
+  inPersonRequired: true;
+  staffName: string;
+  vendorName: string;
+}
+
+/**
+ * Checks whether an entity has valid Square credentials.
+ * Valid means:
+ * - squareAccessToken is non-empty and non-whitespace
+ * - squareLocationId is non-empty and non-whitespace
+ * - squareOAuthStatus is NOT 'error'
+ */
+export function hasValidCredentials(entity: {
+  squareAccessToken?: string;
+  squareLocationId?: string;
+  squareOAuthStatus?: string;
+}): boolean {
+  const tokenValid = !!entity.squareAccessToken && entity.squareAccessToken.trim() !== '';
+  const locationValid = !!entity.squareLocationId && entity.squareLocationId.trim() !== '';
+  const statusValid = entity.squareOAuthStatus !== 'error';
+  return tokenValid && locationValid && statusValid;
+}
+
+/**
+ * Checks whether two credential sets are identical (same accessToken and locationId).
+ */
+export function credentialsMatch(a: SquareCredentials, b: SquareCredentials): boolean {
+  return a.accessToken === b.accessToken && a.locationId === b.locationId;
+}
+
+/**
+ * Resolves Square credentials via the three-level fallback chain:
+ * 1. Staff's own credentials (if valid: non-error status, non-empty token+locationId)
+ * 2. Sibling staff on same vendor (first with squareOAuthStatus === 'connected' and valid token+locationId)
+ * 3. House provider's credentials (just needs non-empty token+locationId, regardless of status)
+ *
+ * Special case: if staff.vendorId === houseProvider.vendorId (house-is-vendor),
+ * skip sibling check and resolve directly to house.
+ *
+ * Returns CredentialResolutionResult on success or CredentialResolutionError when
+ * no valid credentials exist at any level.
+ */
+export function resolveCredentialChain(
+  staff: StaffSchedule,
+  siblingStaff: StaffSchedule[],
+  houseProvider: Vendor
+): CredentialResolutionResult | CredentialResolutionError {
+  const resolutionPath: string[] = [];
+
+  // House-is-vendor case: skip sibling check, go straight to house if staff invalid
+  const houseIsVendor = staff.vendorId === houseProvider.vendorId;
+
+  // Step (a): Check staff's own credentials
+  if (hasValidCredentials(staff)) {
+    resolutionPath.push('staff:resolved');
+    return {
+      credentials: {
+        accessToken: staff.squareAccessToken!,
+        locationId: staff.squareLocationId!,
+      },
+      source: 'staff',
+      staffId: staff.visibleId,
+      vendorId: staff.vendorId,
+      resolutionPath,
+    };
+  }
+
+  resolutionPath.push('staff:invalid');
+
+  // Step (b): Check sibling staff on same vendor (skip if house-is-vendor)
+  if (!houseIsVendor) {
+    const sibling = siblingStaff.find(
+      (s) =>
+        s.squareOAuthStatus === 'connected' &&
+        !!s.squareAccessToken &&
+        s.squareAccessToken.trim() !== '' &&
+        !!s.squareLocationId &&
+        s.squareLocationId.trim() !== ''
+    );
+
+    if (sibling) {
+      resolutionPath.push('sibling:resolved');
+      return {
+        credentials: {
+          accessToken: sibling.squareAccessToken!,
+          locationId: sibling.squareLocationId!,
+        },
+        source: 'sibling_staff',
+        staffId: sibling.visibleId,
+        vendorId: sibling.vendorId,
+        resolutionPath,
+      };
+    }
+
+    resolutionPath.push('sibling:none');
+  } else {
+    resolutionPath.push('sibling:skipped_house_is_vendor');
+  }
+
+  // Step (c): Check house provider credentials
+  // For house provider, we do NOT require squareOAuthStatus !== 'error' —
+  // just check that token and locationId are non-empty.
+  const houseTokenValid = !!houseProvider.squareAccessToken && houseProvider.squareAccessToken.trim() !== '';
+  const houseLocationValid = !!houseProvider.squareLocationId && houseProvider.squareLocationId.trim() !== '';
+
+  if (houseTokenValid && houseLocationValid) {
+    resolutionPath.push('house:resolved');
+    return {
+      credentials: {
+        accessToken: houseProvider.squareAccessToken!,
+        locationId: houseProvider.squareLocationId!,
+      },
+      source: 'house',
+      vendorId: houseProvider.vendorId,
+      resolutionPath,
+    };
+  }
+
+  resolutionPath.push('house:invalid');
+
+  // No valid credentials found at any level
+  return {
+    code: 'NO_CREDENTIALS',
+    message: `Cannot process online payment: no valid Square credentials found for staff "${staff.staffName || staff.visibleId}" (vendor "${houseProvider.name}") at any level. In-person payment is required.`,
+    inPersonRequired: true,
+    staffName: staff.staffName || staff.visibleId,
+    vendorName: houseProvider.name,
+  };
+}
+
+// --- Existing payment route resolution (kept for backward compatibility) ---
+
 /**
  * Resolves the payment route for a booking.
  *

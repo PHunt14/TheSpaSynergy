@@ -70,7 +70,10 @@ function BundleTimeContent() {
     const month = date.getMonth() + 1
     const year = date.getFullYear()
     const daysParam = allowedDays ? `&allowedDays=${allowedDays.join(',')}` : ''
-    fetch(`/api/available-dates?serviceId=${serviceIds[0]}&month=${month}&year=${year}${daysParam}`)
+    const serviceParam = serviceIds.length > 1
+      ? `serviceIds=${serviceIds.join(',')}`
+      : `serviceId=${serviceIds[0]}`
+    fetch(`/api/available-dates?${serviceParam}&month=${month}&year=${year}${daysParam}`)
       .then(res => res.json())
       .then(data => setAvailableDates(new Set(data.availableDates || [])))
       .catch(() => {})

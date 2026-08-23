@@ -679,7 +679,7 @@ VendorSplitSummary.propTypes = {
 function CustomerForm({ formData, setFormData }) {
   const inputStyle = {
     width: '100%', padding: '0.75rem', borderRadius: '8px',
-    border: '1px solid var(--color-border)', fontSize: '1rem'
+    border: '1px solid var(--color-border)', fontSize: '1rem', boxSizing: 'border-box'
   }
   return (
     <section>
