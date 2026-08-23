@@ -20,7 +20,7 @@ const FORBIDDEN_PATTERNS: RegExp[] = [
   /square/i,                                                          // Third-party vendor name
   /stack/i,                                                           // Stack traces
   /Error:/,                                                           // Raw error prefixes
-  /\{.*".*":.*\}/s,                                                   // Raw JSON objects
+  /\{[\s\S]*"[\s\S]*":[\s\S]*\}/,                                    // Raw JSON objects
   /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i, // UUIDs
   /staff-[a-zA-Z0-9]+/i,                                              // staffIds
   /vendor-[a-zA-Z0-9]+/i,                                             // vendorIds
