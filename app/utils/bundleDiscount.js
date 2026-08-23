@@ -135,15 +135,15 @@ export function validateBundleServices(services) {
   }
 
   // Check all services are active
-  const inactiveService = services.find(s => !s.isActive)
+  const inactiveService = services.find(s => s.isActive === false)
   if (inactiveService) {
     const name = inactiveService.name || inactiveService.serviceId || 'Unknown'
     return { valid: false, error: `Service ${name} is no longer available` }
   }
 
-  // Check at least 2 distinct vendors
-  const uniqueVendors = new Set(services.map(s => s.vendorId))
-  if (uniqueVendors.size < 2) {
+  // Check at least 2 distinct vendors (skip check if services are global/vendor-less)
+  const uniqueVendors = new Set(services.map(s => s.vendorId).filter(Boolean))
+  if (uniqueVendors.size >= 1 && uniqueVendors.size < 2 && services.every(s => s.vendorId)) {
     return { valid: false, error: 'Bundle requires services from at least 2 vendors' }
   }
 
