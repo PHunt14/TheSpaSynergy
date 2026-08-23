@@ -81,7 +81,7 @@ export async function GET(request: Request) {
   try {
     const filter = includeInactive === 'true'
       ? undefined
-      : { isActive: { eq: true } };
+      : { isActive: { ne: false } };
 
     const { data: services, errors } = await client.models.Service.list({
       ...(filter ? { filter: filter as any } : {}),

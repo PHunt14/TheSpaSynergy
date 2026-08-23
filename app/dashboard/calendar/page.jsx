@@ -437,7 +437,7 @@ function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onEdit, 
                   style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem' }}
                 >
                   <option value="">Select a service</option>
-                  {services.map(s => <option key={s.serviceId} value={s.serviceId}>{s.name} ({s.duration} min — ${s.price})</option>)}
+                  {[...services].sort((a, b) => a.name.localeCompare(b.name)).map(s => <option key={s.serviceId} value={s.serviceId}>{s.name} ({s.duration} min — ${s.price})</option>)}
                 </select>
               </div>
 
@@ -747,6 +747,9 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
     }
     if (isMultiProvider && (!staffId || !staffId2)) { alert('Please select both staff members for this service'); return }
     if (isMultiProvider && staffId === staffId2) { alert('Please select two different staff members'); return }
+    // Ensure vendorId can be resolved (from prop or from selected staff)
+    const effectiveVendorId = vendorId || (staffId && [...staffList, ...allStaff].find(s => s.visibleId === staffId)?.vendorId) || ''
+    if (!effectiveVendorId) { alert('Please select a staff member so the vendor can be determined'); return }
     setSubmitting(true)
     setOverlapWarning(null)
     try {
@@ -763,6 +766,8 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
         }
 
         let failed = false
+        // Resolve vendorId from selected staff if the prop is missing
+        const resolvedBlockVendorId = vendorId || (staffId && [...staffList, ...allStaff].find(s => s.visibleId === staffId)?.vendorId) || ''
         for (const day of days) {
           // Block the full working day (use 6am start, 960 min = 16 hours as a full-day block)
           const year = day.getFullYear()
@@ -770,7 +775,7 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
           const dd = String(day.getDate()).padStart(2, '0')
           const dayDateTimeStr = `${year}-${month}-${dd}T06:00`
           const body = {
-            vendorId,
+            vendorId: resolvedBlockVendorId,
             staffId: staffId || undefined,
             dateTime: dayDateTimeStr,
             customerName: 'Blocked Time',
@@ -792,9 +797,11 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
         onCreated()
         onClose()
       } else {
+        // Resolve vendorId from selected staff if the prop is missing (e.g. "everyone" view)
+        const resolvedVendorId = vendorId || (staffId && [...staffList, ...allStaff].find(s => s.visibleId === staffId)?.vendorId) || ''
         const body = mode === 'block'
-          ? { vendorId, staffId: staffId || undefined, dateTime: form.dateTime, customerName: 'Blocked Time', notes: form.notes, isBlockedTime: true, duration, createdBy: currentUserStaffId || undefined }
-          : { vendorId, serviceId: serviceId || undefined, staffId: staffId || undefined, staffIds: isMultiProvider ? [staffId, staffId2] : undefined, dateTime: form.dateTime, customerName: form.customerName, customerPhone: form.customerPhone, customerEmail: form.customerEmail, notes: form.notes, createdBy: currentUserStaffId || undefined }
+          ? { vendorId: resolvedVendorId, staffId: staffId || undefined, dateTime: form.dateTime, customerName: 'Blocked Time', notes: form.notes, isBlockedTime: true, duration, createdBy: currentUserStaffId || undefined }
+          : { vendorId: resolvedVendorId, serviceId: serviceId || undefined, staffId: staffId || undefined, staffIds: isMultiProvider ? [staffId, staffId2] : undefined, dateTime: form.dateTime, customerName: form.customerName, customerPhone: form.customerPhone, customerEmail: form.customerEmail, notes: form.notes, createdBy: currentUserStaffId || undefined }
 
         if (forceConfirmOverlap) {
           body.confirmOverlap = true
@@ -936,7 +943,7 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
               <select id="new-apt-service" value={serviceId} onChange={(e) => setServiceId(e.target.value)}
                 style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem' }}>
                 <option value="">Select a service</option>
-                {services.map(s => <option key={s.serviceId} value={s.serviceId}>{s.name} ({s.duration} min — ${s.price})</option>)}
+                {[...services].sort((a, b) => a.name.localeCompare(b.name)).map(s => <option key={s.serviceId} value={s.serviceId}>{s.name} ({s.duration} min — ${s.price})</option>)}
               </select>
             </div>
             {/* Customer */}
