@@ -306,10 +306,21 @@ async function processStaffRoutedPayment(
     return Response.json({ error: 'Service not found', details: `No service with id ${serviceIds[0]}` }, { status: 404 });
   }
 
-  // Validate amount matches service price (Requirement 4.1, 4.2)
+  // Calculate expected total from all services (supports multi-service checkout)
+  let expectedTotal = service.price;
+  if (serviceIds.length > 1) {
+    for (let i = 1; i < serviceIds.length; i++) {
+      const { data: additionalService } = await dataClient.models.Service.get({ serviceId: serviceIds[i] });
+      if (additionalService) {
+        expectedTotal += additionalService.price;
+      }
+    }
+  }
+
+  // Validate amount matches total service price (Requirement 4.1, 4.2)
   const amountValidation = validatePaymentAmount({
     amount: sanitizedAmount,
-    expectedAmount: service.price,
+    expectedAmount: expectedTotal,
   });
   if (!amountValidation.valid) {
     return Response.json(
@@ -320,7 +331,7 @@ async function processStaffRoutedPayment(
 
   // Validate tip if provided (Requirement 4.4)
   if (sanitizedTip > 0) {
-    const tipValidation = validateTipAmount(sanitizedTip, service.price);
+    const tipValidation = validateTipAmount(sanitizedTip, expectedTotal);
     if (!tipValidation.valid) {
       return Response.json(
         { error: tipValidation.error!.message, details: tipValidation.error },
