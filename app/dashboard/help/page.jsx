@@ -58,7 +58,7 @@ const sections = [
 const platformUpdates = [
   {
     version: 'v1.6.0',
-    date: 'August 2025',
+    date: 'August 2026',
     title: 'Kiosk & Payment Engine Overhaul',
     changes: [
       'New payment routing engine — staff-level Square credential resolution with sibling and house fallback',
@@ -80,7 +80,7 @@ const platformUpdates = [
   },
   {
     version: 'v1.5.0',
-    date: 'July 2025',
+    date: 'July 2026',
     title: 'Staff Schedule Date Overrides',
     changes: [
       'Staff schedules now support date-specific overrides — open or close your books for any individual date',
@@ -93,7 +93,7 @@ const platformUpdates = [
   },
   {
     version: 'v1.4.0',
-    date: 'July 2025',
+    date: 'July 2026',
     title: 'Split Payments & Group Booking Enhancements',
     changes: [
       'Added split payment sessions — groups can now divide payment equally or with custom amounts',
@@ -104,7 +104,7 @@ const platformUpdates = [
   },
   {
     version: 'v1.3.0',
-    date: 'June 2025',
+    date: 'June 2026',
     title: 'Client Management & Notes',
     changes: [
       'New Clients page with search, add, and edit functionality',
@@ -115,7 +115,7 @@ const platformUpdates = [
   },
   {
     version: 'v1.2.0',
-    date: 'May 2025',
+    date: 'June 2026',
     title: 'Calendar Overhaul & Multi-Staff Views',
     changes: [
       'Multi-staff day view — see all practitioners\' schedules side by side',
@@ -127,7 +127,7 @@ const platformUpdates = [
   },
   {
     version: 'v1.1.0',
-    date: 'April 2025',
+    date: 'May 2026',
     title: 'Square Integration & Staff Payments',
     changes: [
       'Full Square OAuth integration for vendors and individual staff members',
@@ -139,7 +139,7 @@ const platformUpdates = [
   },
   {
     version: 'v1.0.0',
-    date: 'March 2025',
+    date: 'May 2026',
     title: 'Platform Launch',
     changes: [
       'Multi-vendor spa marketplace with service booking',
