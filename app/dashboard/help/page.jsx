@@ -57,6 +57,28 @@ const sections = [
 
 const platformUpdates = [
   {
+    version: 'v1.6.0',
+    date: 'August 2025',
+    title: 'Kiosk & Payment Engine Overhaul',
+    changes: [
+      'New payment routing engine — staff-level Square credential resolution with sibling and house fallback',
+      'House fee split payments — automatic two-charge flow when services have house fees enabled',
+      'Payment amount validation with $0.01 tolerance and multi-service total support',
+      'Idempotency keys for all Square charges to prevent duplicate payments',
+      'Payment audit trail — every payment attempt (success, failure, partial) is recorded on the appointment',
+      'Kiosk PIN authentication with timing-safe comparison',
+      'Multi-vendor bundle payments — each vendor charged separately with correct paymentId tracking',
+      'Calendar service dropdown now sorted alphabetically',
+      'Calendar booking form split into First Name / Last Name fields (matching customer booking flow)',
+      'Fixed calendar modal becoming unresponsive after error messages',
+      'Fixed vendorId resolution when booking from "All Staff" calendar view',
+      'Bundle booking calendar now only shows green days when ALL services have staff available',
+      'Fixed bundle availability for "All Staff" services in dev/sandbox environments',
+      'Services with unset isActive field no longer hidden from dropdowns',
+      'Token refresh handling for expired Square credentials during payment',
+    ],
+  },
+  {
     version: 'v1.5.0',
     date: 'July 2025',
     title: 'Staff Schedule Date Overrides',
