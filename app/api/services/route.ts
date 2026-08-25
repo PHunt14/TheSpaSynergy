@@ -10,6 +10,7 @@ import type { Role } from '../../utils/accessControl';
 import { validateCategoryName } from '../../utils/categoryValidator';
 import { syncAllowedStaffChanges } from '../../utils/squareCatalogSync';
 import type { Service as SyncService } from '../../utils/squareCatalogSync';
+import { withErrorLogging } from '@/lib/logger/middleware';
 
 Amplify.configure(config, { ssr: true });
 
@@ -73,7 +74,7 @@ async function getExistingCategoryNames(client: ReturnType<typeof getClient>): P
  * Supports `includeInactive=true` query param to return all services.
  * No vendor filtering — services are global entities.
  */
-export async function GET(request: Request) {
+export const GET = withErrorLogging(async function GET(request: Request) {
   const client = getClient();
   const { searchParams } = new URL(request.url);
   const includeInactive = searchParams.get('includeInactive');
@@ -105,7 +106,7 @@ export async function GET(request: Request) {
     console.error('Error fetching services:', error);
     return Response.json({ error: 'Failed to fetch services' }, { status: 500 });
   }
-}
+})
 
 /**
  * POST /api/services
@@ -115,7 +116,7 @@ export async function GET(request: Request) {
  * Integrates access control (admin can create; staff cannot).
  * Validates new categories inline via categoryValidator.
  */
-export async function POST(request: Request) {
+export const POST = withErrorLogging(async function POST(request: Request) {
   const client = getClient();
 
   try {
@@ -217,7 +218,7 @@ export async function POST(request: Request) {
     console.error('Error creating service:', error);
     return Response.json({ error: 'Failed to create service' }, { status: 500 });
   }
-}
+})
 
 /**
  * PATCH /api/services
@@ -229,7 +230,7 @@ export async function POST(request: Request) {
  * Validates new categories inline via categoryValidator.
  * Triggers Square catalog sync when allowedStaff changes (Req 3.5, 3.6, 3.8).
  */
-export async function PATCH(request: Request) {
+export const PATCH = withErrorLogging(async function PATCH(request: Request) {
   const client = getClient();
 
   try {
@@ -335,7 +336,7 @@ export async function PATCH(request: Request) {
     console.error('Error updating service:', error);
     return Response.json({ error: 'Failed to update service' }, { status: 500 });
   }
-}
+})
 
 /**
  * DELETE /api/services
@@ -345,7 +346,7 @@ export async function PATCH(request: Request) {
  * - Admin can delete any service.
  * - Staff cannot delete services.
  */
-export async function DELETE(request: Request) {
+export const DELETE = withErrorLogging(async function DELETE(request: Request) {
   const client = getClient();
 
   try {
@@ -371,4 +372,4 @@ export async function DELETE(request: Request) {
     console.error('Error deleting service:', error);
     return Response.json({ error: 'Failed to delete service' }, { status: 500 });
   }
-}
+})

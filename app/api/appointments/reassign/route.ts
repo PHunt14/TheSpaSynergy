@@ -1,6 +1,7 @@
 import { client } from '@/lib/appointment-notifications';
+import { withErrorLogging } from '@/lib/logger/middleware';
 
-export async function POST(request: Request) {
+export const POST = withErrorLogging(async function POST(request: Request) {
   try {
     const { appointmentId, newStaffId, requestingVendorId, role } = await request.json();
 
@@ -108,7 +109,7 @@ export async function POST(request: Request) {
     console.error('Error reassigning appointment:', error);
     return Response.json({ error: 'Failed to reassign appointment' }, { status: 500 });
   }
-}
+})
 
 /**
  * Checks if a staff member has a conflicting appointment at the given dateTime.

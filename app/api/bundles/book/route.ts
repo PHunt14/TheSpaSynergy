@@ -7,6 +7,7 @@ import { assignBundleStaff } from '../../../utils/bundleStaffAssigner.js';
 import { calculateBundlePrice, validateBundleServices } from '../../../utils/bundleDiscount.js';
 import { checkBookingBlackout, blackoutResponseFields } from '../../../utils/bookingBlackout';
 import { getCurrentUser } from '@/lib/auth';
+import { withErrorLogging } from '@/lib/logger/middleware';
 
 const client = generateServerClientUsingCookies<Schema>({
   config,
@@ -26,7 +27,7 @@ const client = generateServerClientUsingCookies<Schema>({
  * Body: { serviceIds, bundleId?, date, startTime, serviceOrder, customer, staffOverrides? }
  * Returns: { success, bundleId, appointmentIds, schedule }
  */
-export async function POST(request: Request) {
+export const POST = withErrorLogging(async function POST(request: Request) {
   try {
     const body = await request.json();
     const { serviceIds, bundleId: existingBundleId, date, startTime, serviceOrder, customer, staffOverrides, createdBy: rawCreatedBy, confirmOverlap: rawConfirmOverlap } = body;
@@ -432,7 +433,7 @@ export async function POST(request: Request) {
     console.error('Error creating bundle booking:', error);
     return Response.json({ error: 'Failed to create bundle booking' }, { status: 500 });
   }
-}
+})
 
 /** Converts "HH:MM" to minutes since midnight. */
 function timeToMin(timeStr: string): number {

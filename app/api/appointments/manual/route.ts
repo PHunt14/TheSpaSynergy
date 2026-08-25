@@ -2,6 +2,7 @@ import { client, getCurrentUser } from '@/lib/auth';
 import { randomUUID } from 'crypto';
 import { sendEmail } from '@/lib/email';
 import { sendSms } from '@/lib/sms';
+import { withErrorLogging } from '@/lib/logger/middleware';
 
 const emailWrapper = (content: string) => `
   <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -120,7 +121,7 @@ function sendManualApptNotifications(ctx: ManualApptContext): Promise<void>[] {
   return notifications;
 }
 
-export async function POST(request: Request) {
+export const POST = withErrorLogging(async function POST(request: Request) {
   try {
     const user = await getCurrentUser();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
@@ -227,7 +228,7 @@ export async function POST(request: Request) {
     console.error('Error creating manual appointment:', error);
     return Response.json({ error: 'Failed to create appointment' }, { status: 500 });
   }
-}
+})
 
 /**
  * Overlap detection helper for manual appointments (Req 4.6)

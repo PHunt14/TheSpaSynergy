@@ -2,10 +2,11 @@ import { generateServerClientUsingCookies } from '@aws-amplify/adapter-nextjs/da
 import { cookies } from 'next/headers';
 import type { Schema } from '../../../../amplify/data/resource';
 import config from '../../../../amplify_outputs.json' with { type: 'json' };
+import { withErrorLogging } from '@/lib/logger/middleware';
 
 const client = generateServerClientUsingCookies<Schema>({ config, cookies });
 
-export async function GET(request: Request) {
+export const GET = withErrorLogging(async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const appointmentId = searchParams.get('appointmentId');
   const bundleId = searchParams.get('bundleId');
@@ -136,4 +137,4 @@ export async function GET(request: Request) {
     console.error('Kiosk appointments error:', error);
     return Response.json({ error: 'Failed to fetch appointments' }, { status: 500 });
   }
-}
+})

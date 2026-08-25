@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { cookies } from 'next/headers'
+import { withErrorLogging } from '@/lib/logger/middleware';
 
-export async function GET(request: NextRequest) {
+export const GET = withErrorLogging(async function GET(request: Request) {
+  const nextRequest = request as unknown as NextRequest;
   try {
-    const vendorId = request.nextUrl.searchParams.get('vendorId')
-    const staffId = request.nextUrl.searchParams.get('staffId')
+    const vendorId = nextRequest.nextUrl.searchParams.get('vendorId')
+    const staffId = nextRequest.nextUrl.searchParams.get('staffId')
     if (!vendorId || !staffId) {
       return Response.json({ error: 'vendorId and staffId required' }, { status: 400 })
     }
@@ -53,4 +55,4 @@ export async function GET(request: NextRequest) {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
     return NextResponse.redirect(new URL('/dashboard/settings?error=oauth_failed', baseUrl))
   }
-}
+})

@@ -5,6 +5,7 @@ import config from '../../../amplify_outputs.json' with { type: 'json' };
 import { fetchAuthSession } from 'aws-amplify/auth/server';
 import { Amplify } from 'aws-amplify';
 import { createServerRunner } from '@aws-amplify/adapter-nextjs';
+import { withErrorLogging } from '@/lib/logger/middleware';
 
 Amplify.configure(config, { ssr: true });
 
@@ -36,7 +37,7 @@ const getCurrentUser = async () => {
   }
 };
 
-export async function GET(request: Request) {
+export const GET = withErrorLogging(async function GET(request: Request) {
   const client = getClient();
   const { searchParams } = new URL(request.url);
   const vendorId = searchParams.get('vendorId');
@@ -235,4 +236,4 @@ export async function GET(request: Request) {
     console.error('Error fetching appointments:', error);
     return Response.json({ error: 'Failed to fetch appointments' }, { status: 500 });
   }
-}
+})

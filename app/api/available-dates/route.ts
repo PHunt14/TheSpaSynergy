@@ -4,13 +4,14 @@ import type { Schema } from '../../../amplify/data/resource';
 import config from '../../../amplify_outputs.json' with { type: 'json' };
 import { DAY_NAMES, getDayHoursSync, resolveStaffSync, hasAnySlot, getRecurrenceHours } from '../../utils/availability.js';
 import { getEligibleStaff } from '../../utils/staffEligibility';
+import { withErrorLogging } from '@/lib/logger/middleware';
 
 const client = generateServerClientUsingCookies<Schema>({
   config,
   cookies,
 });
 
-export async function GET(request: Request) {
+export const GET = withErrorLogging(async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const vendorId = searchParams.get('vendorId');
   const serviceId = searchParams.get('serviceId');
@@ -146,7 +147,7 @@ export async function GET(request: Request) {
     console.error('Error fetching available dates:', error);
     return Response.json({ error: 'Failed to fetch available dates' }, { status: 500 });
   }
-}
+})
 
 /**
  * Unified flow: determine available dates based on eligible staff schedules.

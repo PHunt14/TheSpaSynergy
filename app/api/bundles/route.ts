@@ -2,11 +2,12 @@ import { generateClient } from 'aws-amplify/data'
 import type { Schema } from '@/amplify/data/resource'
 import { Amplify } from 'aws-amplify'
 import config from '@/amplify_outputs.json'
+import { withErrorLogging } from '@/lib/logger/middleware';
 
 Amplify.configure(config, { ssr: true })
 const client = generateClient<Schema>()
 
-export async function GET() {
+export const GET = withErrorLogging(async function GET() {
   try {
     const { data: bundles } = await client.models.Bundle.list()
     return Response.json({ bundles })
@@ -14,9 +15,9 @@ export async function GET() {
     console.error('Bundle fetch error:', error)
     return Response.json({ error: 'Failed to fetch bundles' }, { status: 500 })
   }
-}
+})
 
-export async function POST(request: Request) {
+export const POST = withErrorLogging(async function POST(request: Request) {
   try {
     const body = await request.json()
     const bundleId = `bundle-${Date.now()}`
@@ -39,12 +40,12 @@ export async function POST(request: Request) {
   } catch (error) {
     return Response.json({ error: 'Failed to create bundle' }, { status: 500 })
   }
-}
+})
 
 const BUNDLE_FIELDS = ['name', 'description', 'serviceIds', 'vendorIds', 'price', 'discountPercent',
   'isActive', 'minPeople', 'maxPeople', 'allowedDays', 'addOns', 'contactOnly', 'status', 'appointmentIds', 'dateTime']
 
-export async function PATCH(request: Request) {
+export const PATCH = withErrorLogging(async function PATCH(request: Request) {
   try {
     const body = await request.json()
     const updateData: any = { bundleId: body.bundleId as any }
@@ -60,9 +61,9 @@ export async function PATCH(request: Request) {
     console.error('Bundle update error:', error)
     return Response.json({ error: 'Failed to update bundle' }, { status: 500 })
   }
-}
+})
 
-export async function DELETE(request: Request) {
+export const DELETE = withErrorLogging(async function DELETE(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const bundleId = searchParams.get('bundleId')
@@ -71,4 +72,4 @@ export async function DELETE(request: Request) {
   } catch (error) {
     return Response.json({ error: 'Failed to delete bundle' }, { status: 500 })
   }
-}
+})

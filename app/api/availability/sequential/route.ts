@@ -5,6 +5,7 @@ import config from '../../../../amplify_outputs.json' with { type: 'json' };
 import { getSequentialBundleSlots, calculateTotalBundleDuration } from '../../../utils/sequentialAvailability.js';
 import { validateBundleServices } from '../../../utils/bundleDiscount.js';
 import { checkBookingBlackout, blackoutResponseFields } from '../../../utils/bookingBlackout';
+import { withErrorLogging } from '@/lib/logger/middleware';
 
 const client = generateServerClientUsingCookies<Schema>({
   config,
@@ -39,7 +40,7 @@ function buildStaffSchedulesByService(services: any[], staffSchedules: any[]): R
   return map;
 }
 
-export async function GET(request: Request) {
+export const GET = withErrorLogging(async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const serviceIdsParam = searchParams.get('serviceIds');
   const date = searchParams.get('date');
@@ -173,4 +174,4 @@ export async function GET(request: Request) {
     console.error('Error fetching sequential availability:', error);
     return Response.json({ error: 'Failed to fetch availability' }, { status: 500 });
   }
-}
+})

@@ -35,10 +35,11 @@ import {
   appendAuditRecord,
   buildAuditRecord,
 } from '../../../lib/payment/audit';
+import { withErrorLogging } from '@/lib/logger/middleware';
 
 Amplify.configure(config, { ssr: true });
 
-export async function POST(request: Request) {
+export const POST = withErrorLogging(async function POST(request: Request) {
   try {
     const { sourceId, amount, tipAmount, vendorId, staffId, bundlePayments, bundleId, serviceIds, people, multiProvider, paymentSplit, appointmentId } = await request.json();
 
@@ -79,7 +80,7 @@ export async function POST(request: Request) {
       details: error.message 
     }, { status: 500 });
   }
-}
+})
 
 
 /**

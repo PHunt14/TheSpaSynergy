@@ -4,14 +4,16 @@ import type { Schema } from '@/amplify/data/resource'
 import { Amplify } from 'aws-amplify'
 import config from '@/amplify_outputs.json'
 import { verifyWebhookSignature, processPaymentEvent } from '@/lib/square/core.js'
+import { withErrorLogging } from '@/lib/logger/middleware'
 
 Amplify.configure(config, { ssr: true })
 const client = generateClient<Schema>()
 
-export async function POST(request: NextRequest) {
+export const POST = withErrorLogging(async function POST(request: Request) {
+  const nextRequest = request as unknown as NextRequest
   try {
-    const body = await request.text()
-    const signature = request.headers.get('x-square-hmacsha256-signature')
+    const body = await nextRequest.text()
+    const signature = nextRequest.headers.get('x-square-hmacsha256-signature')
     const webhookUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/square`
     const sigKey = process.env.SQUARE_WEBHOOK_SIGNATURE_KEY || ''
 
@@ -44,4 +46,4 @@ export async function POST(request: NextRequest) {
     console.error('Webhook error:', error)
     return Response.json({ error: 'Webhook processing failed' }, { status: 500 })
   }
-}
+})

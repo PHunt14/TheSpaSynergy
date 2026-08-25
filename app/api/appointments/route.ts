@@ -7,13 +7,14 @@ import { resolveAppointmentDetails, sendAppointmentNotifications, sendStaffBooki
 import { assignStaff } from '@/app/utils/staffAssigner.js';
 import { detectConflict, extractDateFromDateTime } from '@/app/utils/overlapDetection';
 import { getCurrentUser } from '@/lib/auth';
+import { withErrorLogging } from '@/lib/logger/middleware';
 
 const client = generateServerClientUsingCookies<Schema>({
   config,
   cookies,
 });
 
-export async function PATCH(request: Request) {
+export const PATCH = withErrorLogging(async function PATCH(request: Request) {
   try {
     const currentUser = await getCurrentUser();
     if (!currentUser) {
@@ -108,9 +109,9 @@ export async function PATCH(request: Request) {
     console.error('Error updating appointment:', error);
     return Response.json({ error: 'Failed to update appointment' }, { status: 500 });
   }
-}
+})
 
-export async function POST(request: Request) {
+export const POST = withErrorLogging(async function POST(request: Request) {
   try {
     const body = await request.json();
     const { serviceId, bundleId, dateTime, customer, status, paymentId, paymentStatus, paymentAmount, staffId, createdBy: rawCreatedBy, confirmOverlap: rawConfirmOverlap } = body;
@@ -425,7 +426,7 @@ export async function POST(request: Request) {
     console.error('Error creating appointment:', error);
     return Response.json({ error: 'Failed to create appointment' }, { status: 500 });
   }
-}
+})
 
 /**
  * Overlap detection helper (Req 4.6)

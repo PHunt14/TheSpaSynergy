@@ -1,6 +1,7 @@
 import { client, getCurrentUser } from '@/lib/auth';
+import { withErrorLogging } from '@/lib/logger/middleware';
 
-export async function GET(request: Request) {
+export const GET = withErrorLogging(async function GET(request: Request) {
   try {
     const user = await getCurrentUser();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
@@ -24,9 +25,9 @@ export async function GET(request: Request) {
     console.error('Error fetching blackout settings:', error);
     return Response.json({ error: 'Failed to fetch settings' }, { status: 500 });
   }
-}
+});
 
-export async function POST(request: Request) {
+export const POST = withErrorLogging(async function POST(request: Request) {
   try {
     const user = await getCurrentUser();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
@@ -58,4 +59,4 @@ export async function POST(request: Request) {
     console.error('Error setting blackout:', error);
     return Response.json({ error: 'Failed to update blackout' }, { status: 500 });
   }
-}
+});

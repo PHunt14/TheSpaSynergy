@@ -5,13 +5,14 @@ import config from '../../../amplify_outputs.json' with { type: 'json' };
 import { getRecurrenceHours, generateTimeSlots, getMultiProviderSlots, getScheduleOverride } from '../../utils/availability.js';
 import { getParallelQuantitySlots, getSequentialQuantitySlots } from '../../utils/quantityAvailability.js';
 import { getEligibleStaff } from '../../utils/staffEligibility';
+import { withErrorLogging } from '@/lib/logger/middleware';
 
 const client = generateServerClientUsingCookies<Schema>({
   config,
   cookies,
 });
 
-export async function GET(request: Request) {
+export const GET = withErrorLogging(async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const vendorId = searchParams.get('vendorId');
   const serviceId = searchParams.get('serviceId');
@@ -254,7 +255,7 @@ export async function GET(request: Request) {
     console.error('Error fetching availability:', error);
     return Response.json({ error: 'Failed to fetch availability' }, { status: 500 });
   }
-}
+})
 
 /**
  * Computes time slots for one or more staff members, merging results.

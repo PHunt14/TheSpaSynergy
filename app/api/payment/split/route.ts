@@ -8,10 +8,11 @@ import { calculateEqualSplit, validateCustomSplit, dollarsToCents } from '../../
 import { calculateBundlePaymentSplit } from '../../../utils/bundlePaymentSplit';
 import { calculateMultiProviderSplit } from '../../../utils/payment';
 import { scaleVendorAllocations } from '../../../utils/vendorRevenueScaler';
+import { withErrorLogging } from '@/lib/logger/middleware';
 
 Amplify.configure(config, { ssr: true });
 
-export async function POST(request: Request) {
+export const POST = withErrorLogging(async function POST(request: Request) {
   try {
     const body = await request.json();
     const { action } = body;
@@ -35,7 +36,7 @@ export async function POST(request: Request) {
       details: error.message,
     }, { status: 500 });
   }
-}
+})
 
 // --- Extracted helpers to reduce cognitive complexity ---
 

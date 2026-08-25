@@ -3,13 +3,14 @@ import { cookies } from 'next/headers';
 import type { Schema } from '../../../../amplify/data/resource';
 import config from '../../../../amplify_outputs.json' with { type: 'json' };
 import { randomUUID, timingSafeEqual } from 'crypto';
+import { withErrorLogging } from '@/lib/logger/middleware';
 
 const client = generateServerClientUsingCookies<Schema>({ config, cookies });
 
 const COOKIE_NAME = 'kiosk_session';
 
 // POST — validate PIN, generate a session token, store it in SiteSettings
-export async function POST(request: Request) {
+export const POST = withErrorLogging(async function POST(request: Request) {
   try {
     const { pin } = await request.json();
     if (!pin) return Response.json({ error: 'PIN required' }, { status: 400 });
@@ -49,17 +50,17 @@ export async function POST(request: Request) {
     console.error('Kiosk auth error:', error);
     return Response.json({ error: 'Authentication failed' }, { status: 500 });
   }
-}
+})
 
 // DELETE — clear session cookie (sign out)
-export async function DELETE() {
+export const DELETE = withErrorLogging(async function DELETE() {
   const cookieStore = await cookies();
   cookieStore.set(COOKIE_NAME, '', { path: '/kiosk', maxAge: 0 });
   return Response.json({ success: true });
-}
+})
 
 // GET — check if session is valid
-export async function GET() {
+export const GET = withErrorLogging(async function GET() {
   try {
     const cookieStore = await cookies();
     const token = cookieStore.get(COOKIE_NAME)?.value;
@@ -70,4 +71,4 @@ export async function GET() {
   } catch {
     return Response.json({ authenticated: false });
   }
-}
+})

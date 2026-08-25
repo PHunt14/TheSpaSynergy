@@ -1,7 +1,8 @@
 import { client, getCurrentUser } from '@/lib/auth';
+import { withErrorLogging } from '@/lib/logger/middleware';
 import { randomUUID } from 'crypto';
 
-export async function GET(request: Request) {
+export const GET = withErrorLogging(async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const vendorId = searchParams.get('vendorId');
   const visibleId = searchParams.get('visibleId');
@@ -53,9 +54,9 @@ export async function GET(request: Request) {
   } catch (error) {
     return Response.json({ error: 'Failed to fetch staff schedules' }, { status: 500 });
   }
-}
+});
 
-export async function POST(request: Request) {
+export const POST = withErrorLogging(async function POST(request: Request) {
   try {
     const currentUser = await getCurrentUser();
     if (!currentUser) return Response.json({ error: 'Unauthorized' }, { status: 401 });
@@ -96,7 +97,7 @@ export async function POST(request: Request) {
   } catch (error) {
     return Response.json({ error: 'Failed to create staff schedule' }, { status: 500 });
   }
-}
+});
 
 function buildScheduleUpdateData(visibleId: string, body: any): any {
   const updateData: any = { visibleId };
@@ -117,7 +118,7 @@ function buildScheduleUpdateData(visibleId: string, body: any): any {
   return updateData;
 }
 
-export async function PATCH(request: Request) {
+export const PATCH = withErrorLogging(async function PATCH(request: Request) {
   try {
     const currentUser = await getCurrentUser();
     if (!currentUser) return Response.json({ error: 'Unauthorized' }, { status: 401 });
@@ -161,9 +162,9 @@ export async function PATCH(request: Request) {
     console.error('Staff schedule PATCH error:', error?.message || error);
     return Response.json({ error: 'Failed to update staff schedule', details: error?.message }, { status: 500 });
   }
-}
+});
 
-export async function DELETE(request: Request) {
+export const DELETE = withErrorLogging(async function DELETE(request: Request) {
   try {
     const currentUser = await getCurrentUser();
     if (!currentUser) return Response.json({ error: 'Unauthorized' }, { status: 401 });
@@ -189,4 +190,4 @@ export async function DELETE(request: Request) {
   } catch (error) {
     return Response.json({ error: 'Failed to delete staff schedule' }, { status: 500 });
   }
-}
+});
