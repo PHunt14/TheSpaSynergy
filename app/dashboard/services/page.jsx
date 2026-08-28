@@ -1044,9 +1044,15 @@ export default function Services() {
           )
         }
 
-        // Sort services
+        // Sort services — "Head Bath" services always first, then alphabetical
         filtered = [...filtered].sort((a, b) => {
-          if (sortBy === 'name') return (a.name || '').localeCompare(b.name || '')
+          if (sortBy === 'name') {
+            const aIsHeadBath = (a.name || '').toLowerCase().startsWith('head bath')
+            const bIsHeadBath = (b.name || '').toLowerCase().startsWith('head bath')
+            if (aIsHeadBath && !bIsHeadBath) return -1
+            if (!aIsHeadBath && bIsHeadBath) return 1
+            return (a.name || '').localeCompare(b.name || '')
+          }
           if (sortBy === 'price') return (a.price || 0) - (b.price || 0)
           if (sortBy === 'duration') return (a.duration || 0) - (b.duration || 0)
           return 0
