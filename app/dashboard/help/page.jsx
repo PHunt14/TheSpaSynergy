@@ -57,6 +57,19 @@ const sections = [
 
 const platformUpdates = [
   {
+    version: 'v1.7.0',
+    date: 'August 2026',
+    title: 'Improved Logging, Blocked Time & Calendar Corrections',
+    changes: [
+      'Structured error logging with CloudWatch integration for better observability and debugging',
+      'Fixed blocked time dialog showing wrong times when selecting a slot from the calendar (UTC conversion bug)',
+      'Block Time dialog now defaults end time to 1 hour after selected start',
+      'Clicking an existing time block now opens a dedicated Time Block view/edit dialog (start time, end time, staff, notes)',
+      'Added "Remove Block" button for quick time block deletion',
+      'Service lists sorted with "Head Bath" services first, then alphabetically (services page and all calendar pickers)',
+    ],
+  },
+  {
     version: 'v1.6.0',
     date: 'August 2026',
     title: 'Kiosk & Payment Engine Overhaul',
