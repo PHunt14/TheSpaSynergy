@@ -47,7 +47,8 @@ describe('getScheduleOverride', () => {
 
   test('accepts a Date object as well as a string', () => {
     const overrides = { '2025-07-12': { start: '09:00', end: '17:00' } }
-    expect(getScheduleOverride(overrides, new Date('2025-07-12T00:00:00Z'))).toEqual({ start: '09:00', end: '17:00' })
+    // Use local midnight to match how dates flow through the system
+    expect(getScheduleOverride(overrides, new Date(2025, 6, 12))).toEqual({ start: '09:00', end: '17:00' })
   })
 })
 
@@ -575,5 +576,304 @@ describe('getMultiProviderSlots', () => {
       bufferMinutes: 15,
     })
     expect(slotsOff).toEqual([])
+  })
+})
+
+
+// ── getDayHoursSync with schedule overrides ───────────────────
+
+describe('getDayHoursSync with schedule overrides', () => {
+  const vendor = { workingHours: '{}' }
+  const workingHours = { monday: { start: '08:00', end: '18:00' } }
+
+  test('returns override hours when staff has override for this date (open on normally-closed day)', () => {
+    const service = { resourceType: 'staff' }
+    // Staff does NOT work Saturday normally, but has an override opening Saturday July 12
+    const staffList = [{
+      visibleId: 's1',
+      isActive: true,
+      autoAssignRules: null,
+      schedule: JSON.stringify({
+        overrides: { '2025-07-12': { start: '10:00', end: '15:00' } },
+      }),
+    }]
+    // July 12 2025 is a Saturday
+    const date = new Date(2025, 6, 12)
+    const result = getDayHoursSync(vendor, service, 'saturday', date, { staffList, workingHours, saunaHours: null, allowedStaffIds: null })
+    expect(result).toEqual({ start: '10:00', end: '15:00' })
+  })
+
+  test('returns null when staff has override closing them on a normally-open day', () => {
+    const service = { resourceType: 'staff' }
+    // Staff works Monday normally, but override closes this specific Monday
+    const staffList = [{
+      visibleId: 's1',
+      isActive: true,
+      autoAssignRules: null,
+      schedule: JSON.stringify({
+        monday: { start: '09:00', end: '17:00' },
+        overrides: { '2025-07-14': null },
+      }),
+    }]
+    // July 14 2025 is a Monday
+    const date = new Date(2025, 6, 14)
+    const result = getDayHoursSync(vendor, service, 'monday', date, { staffList, workingHours, saunaHours: null, allowedStaffIds: null })
+    expect(result).toBeNull()
+  })
+
+  test('override does not affect a different date on the same day-of-week', () => {
+    const service = { resourceType: 'staff' }
+    const staffList = [{
+      visibleId: 's1',
+      isActive: true,
+      autoAssignRules: null,
+      schedule: JSON.stringify({
+        monday: { start: '09:00', end: '17:00' },
+        overrides: { '2025-07-14': null }, // This specific Monday is closed
+      }),
+    }]
+    // July 7 2025 is a Monday — different date, should still use weekly schedule
+    const date = new Date(2025, 6, 7)
+    const result = getDayHoursSync(vendor, service, 'monday', date, { staffList, workingHours, saunaHours: null, allowedStaffIds: null })
+    expect(result).toEqual({ start: '09:00', end: '17:00' })
+  })
+
+  test('override with custom hours replaces weekly schedule hours', () => {
+    const service = { resourceType: 'staff' }
+    const staffList = [{
+      visibleId: 's1',
+      isActive: true,
+      autoAssignRules: null,
+      schedule: JSON.stringify({
+        monday: { start: '09:00', end: '17:00' },
+        overrides: { '2025-07-14': { start: '12:00', end: '16:00' } },
+      }),
+    }]
+    const date = new Date(2025, 6, 14)
+    const result = getDayHoursSync(vendor, service, 'monday', date, { staffList, workingHours, saunaHours: null, allowedStaffIds: null })
+    expect(result).toEqual({ start: '12:00', end: '16:00' })
+  })
+
+  test('falls back to vendor hours when no staff and no override', () => {
+    const service = { resourceType: 'staff' }
+    const result = getDayHoursSync(vendor, service, 'monday', new Date(2025, 6, 7), { staffList: [], workingHours, saunaHours: null, allowedStaffIds: null })
+    expect(result).toEqual({ start: '08:00', end: '18:00' })
+  })
+})
+
+// ── hasAnySlot — edge cases with overrides and boundaries ─────
+
+describe('hasAnySlot — boundary conditions', () => {
+  const futureDate = '2099-03-15'
+
+  test('returns false when start equals end (zero-length window)', () => {
+    expect(hasAnySlot('09:00', '09:00', 30, 0, { appointments: [], dateStr: futureDate, staff: null })).toBe(false)
+  })
+
+  test('returns true for minimum viable window (exactly fits service)', () => {
+    // 30-min service, window from 09:00 to 09:30 (exactly 30 min)
+    expect(hasAnySlot('09:00', '09:30', 30, 0, { appointments: [], dateStr: futureDate, staff: null })).toBe(true)
+  })
+
+  test('buffer only affects conflict detection, not raw window fit', () => {
+    // 30-min service + 15 buffer: buffer doesn't shrink the bookable window,
+    // it only extends the conflict zone of existing appointments.
+    // With no appointments, a 30-min service fits in a 30-min window regardless of buffer.
+    expect(hasAnySlot('09:00', '09:30', 30, 15, { appointments: [], dateStr: futureDate, staff: null })).toBe(true)
+  })
+
+  test('respects appointment duration from customer.duration field', () => {
+    // Window: 09:00-11:00, service: 30 min, no buffer
+    // Existing appointment at 09:00 with 90 min duration — blocks 09:00-10:30
+    const appointments = [
+      {
+        dateTime: `${futureDate}T09:00:00`,
+        staffId: null,
+        customer: JSON.stringify({ duration: 90 }),
+      },
+    ]
+    // 09:00 blocked (by 90-min apt), 09:30 blocked, 10:00 blocked, 10:30 is free
+    expect(hasAnySlot('09:00', '11:00', 30, 0, { appointments, dateStr: futureDate, staff: null })).toBe(true)
+    // But if window ends at 10:30, all slots are blocked
+    expect(hasAnySlot('09:00', '10:30', 30, 0, { appointments, dateStr: futureDate, staff: null })).toBe(false)
+  })
+
+  test('ignores appointments for different staff', () => {
+    const staff = { visibleId: 'staff-A' }
+    const appointments = [
+      { dateTime: `${futureDate}T09:00:00`, staffId: 'staff-B' },
+      { dateTime: `${futureDate}T09:30:00`, staffId: 'staff-B' },
+      { dateTime: `${futureDate}T10:00:00`, staffId: 'staff-B' },
+    ]
+    // Even though many appointments exist, they're for a different staff member
+    expect(hasAnySlot('09:00', '11:00', 60, 15, { appointments, dateStr: futureDate, staff })).toBe(true)
+  })
+})
+
+// ── generateTimeSlots — override-aware duration handling ──────
+
+describe('generateTimeSlots — varied appointment durations', () => {
+  const futureDate = '2099-06-01'
+
+  test('longer existing appointment blocks multiple subsequent slots', () => {
+    // 120-min appointment at 09:00, 15-min buffer → blocks until 11:15
+    const booked = [{
+      dateTime: `${futureDate}T09:00:00`,
+      customer: JSON.stringify({ duration: 120 }),
+    }]
+    const slots = generateTimeSlots('09:00', '12:00', 30, 15, booked, futureDate)
+    const times = slots.map(s => s.time)
+    // 09:00 through 11:00 should all be blocked (120 min apt + 15 buffer = blocks until 11:15)
+    expect(times).not.toContain('09:00')
+    expect(times).not.toContain('09:30')
+    expect(times).not.toContain('10:00')
+    expect(times).not.toContain('10:30')
+    expect(times).not.toContain('11:00')
+    // 11:30 should be free (starts after 11:15 end of blocked period)
+    expect(times).toContain('11:30')
+  })
+
+  test('adjacent bookings with buffer create correct gaps', () => {
+    const booked = [
+      { dateTime: `${futureDate}T09:00:00`, customer: JSON.stringify({ duration: 60 }) },
+      { dateTime: `${futureDate}T10:30:00`, customer: JSON.stringify({ duration: 60 }) },
+    ]
+    // Service: 30 min, buffer: 15 min
+    // Booking 1: 09:00-10:15 (60 + 15 buffer)
+    // Booking 2: 10:30-11:45 (60 + 15 buffer)
+    const slots = generateTimeSlots('09:00', '12:00', 30, 15, booked, futureDate)
+    const times = slots.map(s => s.time)
+    // Should not have any slots within the blocked windows
+    expect(times).not.toContain('09:00')
+    expect(times).not.toContain('09:30')
+    expect(times).not.toContain('10:00')
+    expect(times).not.toContain('10:30')
+    expect(times).not.toContain('11:00')
+    expect(times).not.toContain('11:30')
+  })
+
+  test('cancelled appointments (missing from list) do not block slots', () => {
+    // If no appointments are passed, all slots should be available
+    const slots = generateTimeSlots('09:00', '12:00', 60, 15, [], futureDate)
+    expect(slots.length).toBeGreaterThan(0)
+    expect(slots[0].time).toBe('09:00')
+  })
+})
+
+// ── resolveStaffSync — multiple staff, override tiebreaking ───
+
+describe('resolveStaffSync — multi-staff override scenarios', () => {
+  const makeStaffWithOverrides = (id, weeklySchedule, overrides) => ({
+    visibleId: id,
+    isActive: true,
+    autoAssignRules: null,
+    schedule: JSON.stringify({ ...weeklySchedule, overrides }),
+  })
+
+  test('when first staff is closed via override, second staff is resolved', () => {
+    const staff1 = makeStaffWithOverrides('s1',
+      { monday: { start: '09:00', end: '17:00' } },
+      { '2025-07-14': null } // s1 closed this Monday
+    )
+    const staff2 = makeStaffWithOverrides('s2',
+      { monday: { start: '10:00', end: '16:00' } },
+      {} // s2 has no overrides
+    )
+    const result = resolveStaffSync([staff1, staff2], 'monday', new Date(2025, 6, 14), null)
+    expect(result?.visibleId).toBe('s2')
+  })
+
+  test('when all staff are closed via override, returns null', () => {
+    const staff1 = makeStaffWithOverrides('s1',
+      { monday: { start: '09:00', end: '17:00' } },
+      { '2025-07-14': null }
+    )
+    const staff2 = makeStaffWithOverrides('s2',
+      { monday: { start: '10:00', end: '16:00' } },
+      { '2025-07-14': null }
+    )
+    const result = resolveStaffSync([staff1, staff2], 'monday', new Date(2025, 6, 14), null)
+    expect(result).toBeNull()
+  })
+
+  test('staff with override open on normally-off day is resolved before staff with weekly schedule', () => {
+    // s1 doesn't work Saturday normally but has override
+    const staff1 = makeStaffWithOverrides('s1', {},
+      { '2025-07-12': { start: '10:00', end: '15:00' } }
+    )
+    // s2 works Saturday normally
+    const staff2 = makeStaffWithOverrides('s2',
+      { saturday: { start: '09:00', end: '14:00' } },
+      {}
+    )
+    const result = resolveStaffSync([staff1, staff2], 'saturday', new Date(2025, 6, 12), null)
+    // Either staff could be resolved (first match wins), but both should be valid
+    expect(result).not.toBeNull()
+  })
+})
+
+// ── getScheduleOverride — local date formatting ──────────────
+
+describe('getScheduleOverride — date formatting consistency', () => {
+  test('formats single-digit months and days with leading zeros', () => {
+    // January 5 → should produce '2025-01-05'
+    const overrides = { '2025-01-05': { start: '09:00', end: '12:00' } }
+    const date = new Date(2025, 0, 5) // Jan 5, local time
+    expect(getScheduleOverride(overrides, date)).toEqual({ start: '09:00', end: '12:00' })
+  })
+
+  test('handles December 31 correctly', () => {
+    const overrides = { '2025-12-31': null }
+    const date = new Date(2025, 11, 31)
+    expect(getScheduleOverride(overrides, date)).toBeNull()
+  })
+
+  test('handles Feb 28 / leap year boundary', () => {
+    const overrides = { '2024-02-29': { start: '08:00', end: '16:00' } }
+    const date = new Date(2024, 1, 29) // Feb 29, 2024 (leap year)
+    expect(getScheduleOverride(overrides, date)).toEqual({ start: '08:00', end: '16:00' })
+  })
+})
+
+// ── Integration: hasAnySlot used by available-dates logic ─────
+
+describe('hasAnySlot — simulates available-dates computation', () => {
+  // This simulates what buildAvailableDatesUnified does: for each day, check
+  // if a staff member has any open slot given their working hours and appointments.
+
+  test('fully booked day returns false', () => {
+    const futureDate = '2099-04-01'
+    // Staff works 09:00–11:00 (2h window), service = 60 min + 15 buffer
+    // Only possible starts: 09:00 (ends 10:15), can't fit another in 10:15-11:00
+    // So only 1 slot exists at 09:00. If it's booked, day should be unavailable.
+    const appointments = [
+      { dateTime: `${futureDate}T09:00:00`, staffId: 's1', customer: JSON.stringify({ duration: 60 }) },
+    ]
+    const staff = { visibleId: 's1' }
+    expect(hasAnySlot('09:00', '11:00', 60, 15, { appointments, dateStr: futureDate, staff })).toBe(false)
+  })
+
+  test('partially booked day with remaining slot returns true', () => {
+    const futureDate = '2099-04-01'
+    // Staff works 09:00–13:00, service = 60 min + 15 buffer
+    // Appointment at 09:00 blocks 09:00-10:15. 10:30 should still fit.
+    const appointments = [
+      { dateTime: `${futureDate}T09:00:00`, staffId: 's1', customer: JSON.stringify({ duration: 60 }) },
+    ]
+    const staff = { visibleId: 's1' }
+    expect(hasAnySlot('09:00', '13:00', 60, 15, { appointments, dateStr: futureDate, staff })).toBe(true)
+  })
+
+  test('day with multiple short appointments still has gaps', () => {
+    const futureDate = '2099-04-01'
+    // 09:00-17:00 window, 30-min service, 15-min buffer
+    // Scattered appointments — plenty of gaps should remain
+    const appointments = [
+      { dateTime: `${futureDate}T09:00:00`, staffId: 's1', customer: JSON.stringify({ duration: 30 }) },
+      { dateTime: `${futureDate}T11:00:00`, staffId: 's1', customer: JSON.stringify({ duration: 30 }) },
+      { dateTime: `${futureDate}T14:00:00`, staffId: 's1', customer: JSON.stringify({ duration: 30 }) },
+    ]
+    const staff = { visibleId: 's1' }
+    expect(hasAnySlot('09:00', '17:00', 30, 15, { appointments, dateStr: futureDate, staff })).toBe(true)
   })
 })

@@ -9,7 +9,15 @@ export { DAY_NAMES }
  */
 export function getScheduleOverride(overrides, date) {
   if (!overrides) return undefined
-  const dateStr = typeof date === 'string' ? date : date.toISOString().split('T')[0]
+  let dateStr
+  if (typeof date === 'string') {
+    dateStr = date
+  } else {
+    const y = date.getFullYear()
+    const m = String(date.getMonth() + 1).padStart(2, '0')
+    const d = String(date.getDate()).padStart(2, '0')
+    dateStr = `${y}-${m}-${d}`
+  }
   if (!(dateStr in overrides)) return undefined
   return overrides[dateStr] // null = closed, { start, end } = open with custom hours
 }
@@ -84,6 +92,15 @@ export function getDayHoursSync(vendor, service, dayOfWeek, date, ctx) {
     const staff = resolveStaffSync(staffList, dayOfWeek, date, allowedStaffIds)
     if (staff) {
       const schedule = JSON.parse(staff.schedule)
+      // Check date-specific override first — the staff may only be available
+      // because of an override (e.g. open on a normally-closed day)
+      if (schedule.overrides) {
+        const dateStr = typeof date === 'string' ? date : `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+        if (dateStr in schedule.overrides) {
+          const override = schedule.overrides[dateStr]
+          return override ? { start: override.start, end: override.end } : null
+        }
+      }
       const daySchedule = schedule[dayOfWeek]
       if (daySchedule?.recurrence) {
         return getRecurrenceHours(daySchedule, date)
@@ -108,7 +125,8 @@ export function hasAnySlot(startTime, endTime, duration, buffer, ctx) {
   const end = endHour * 60 + endMin
 
   const now = new Date()
-  const isToday = dateStr === now.toISOString().split('T')[0]
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  const isToday = dateStr === todayStr
   const currentTimeMin = isToday ? now.getHours() * 60 + now.getMinutes() : 0
 
   while (current + duration <= end) {
@@ -156,7 +174,7 @@ export function generateTimeSlots(startTime, endTime, serviceDuration, bufferMin
   const endMinutes = endHour * 60 + endMin
 
   const now = new Date()
-  const today = now.toISOString().split('T')[0]
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
   const isToday = date === today
   const currentTimeMinutes = isToday ? now.getHours() * 60 + now.getMinutes() : 0
 
