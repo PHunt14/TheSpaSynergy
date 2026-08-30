@@ -233,7 +233,7 @@ function MultiPaymentContent() {
       {initError || squareReason === 'config_error' ? (
         <SquareConfigError
           code={initError?.code || 'config_error'}
-          message={initError?.message || 'Square is misconfigured for this deployment.'}
+          message={initError?.message || 'Card payments are temporarily unavailable due to a configuration issue.'}
         />
       ) : !squareLocationId ? (
         squareReason === null ? (
