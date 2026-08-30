@@ -92,6 +92,80 @@ export function extractCorrelationId(request: Request): {
  * @param handler - The original route handler to wrap
  * @returns A wrapped route handler with error logging
  */
+/**
+ * Safely converts an unknown error value into a message string,
+ * avoiding "[object Object]" stringification for non-Error values.
+ */
+function errorToMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'string') return error;
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return 'Unknown error';
+  }
+}
+
+/**
+ * Extracts the domain and pathname from a request URL, tolerating mock
+ * requests that lack a valid `url` property.
+ */
+function resolveRequestRoute(request: Request): { domain: DomainTag; pathname: string } {
+  try {
+    const url = new URL(request.url);
+    return { domain: inferDomain(url.pathname), pathname: url.pathname };
+  } catch {
+    // request.url may be missing in test mocks — use default domain
+    return { domain: DEFAULT_DOMAIN, pathname: '' };
+  }
+}
+
+/**
+ * Reads and sanitizes the request body for error logging.
+ * Returns an empty string if the body cannot be read.
+ */
+async function readSanitizedBody(request: Request): Promise<string> {
+  try {
+    const bodyText = await request.clone().text();
+    const truncatedBody = bodyText.slice(0, MAX_REQUEST_BODY_LENGTH);
+    if (!truncatedBody) return '';
+
+    try {
+      const parsedBody = JSON.parse(truncatedBody);
+      const sanitizeResult = sanitize(
+        typeof parsedBody === 'object' && parsedBody !== null
+          ? parsedBody
+          : { body: truncatedBody }
+      );
+      return JSON.stringify(sanitizeResult.context);
+    } catch {
+      // Body is not JSON — return the raw (truncated) text
+      return truncatedBody;
+    }
+  } catch {
+    // Unable to read body
+    return '';
+  }
+}
+
+/**
+ * Wraps a successful handler response, adding the X-Correlation-ID header.
+ * Falls back to the original response for non-standard (mock) responses.
+ */
+function withCorrelationHeader(response: Response, correlationId: string): Response {
+  try {
+    const newResponse = new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: new Headers(response.headers),
+    });
+    newResponse.headers.set('X-Correlation-ID', correlationId);
+    return newResponse;
+  } catch {
+    return response;
+  }
+}
+
 export function withErrorLogging(handler: RouteHandler): RouteHandler {
   return async (request: Request, routeContext?: any): Promise<Response> => {
     // Extract or generate correlation ID
@@ -102,65 +176,19 @@ export function withErrorLogging(handler: RouteHandler): RouteHandler {
     const logger = new Logger(config);
     logger.setCorrelationId(correlationId);
 
-    // Infer domain from request URL path (handle mock requests without .url)
-    let domain: DomainTag = DEFAULT_DOMAIN;
-    let pathname = '';
-    try {
-      const url = new URL(request.url);
-      pathname = url.pathname;
-      domain = inferDomain(pathname);
-    } catch {
-      // request.url may be missing in test mocks — use default domain
-    }
+    const { domain, pathname } = resolveRequestRoute(request);
 
     try {
-      // Call the original handler
       const response = await handler(request, routeContext);
-
-      // Add correlation ID header to the successful response
-      // Guard against mock responses that don't have standard Response properties
-      try {
-        const newResponse = new Response(response.body, {
-          status: response.status,
-          statusText: response.statusText,
-          headers: new Headers(response.headers),
-        });
-        newResponse.headers.set('X-Correlation-ID', correlationId);
-        return newResponse;
-      } catch {
-        return response;
-      }
+      return withCorrelationHeader(response, correlationId);
     } catch (error: unknown) {
-      // Build error context
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
+      const errorMessage = errorToMessage(error);
       const stackTrace =
         error instanceof Error && error.stack
           ? error.stack.slice(0, MAX_STACK_TRACE_LENGTH)
           : '';
 
-      // Read and sanitize the request body
-      let sanitizedBody = '';
-      try {
-        const bodyText = await request.clone().text();
-        const truncatedBody = bodyText.slice(0, MAX_REQUEST_BODY_LENGTH);
-        if (truncatedBody) {
-          try {
-            const parsedBody = JSON.parse(truncatedBody);
-            const sanitizeResult = sanitize(
-              typeof parsedBody === 'object' && parsedBody !== null
-                ? parsedBody
-                : { body: truncatedBody }
-            );
-            sanitizedBody = JSON.stringify(sanitizeResult.context);
-          } catch {
-            // Body is not JSON — sanitize as a plain string
-            sanitizedBody = truncatedBody;
-          }
-        }
-      } catch {
-        // Unable to read body — leave empty
-      }
+      const sanitizedBody = await readSanitizedBody(request);
 
       // Build log context
       const httpMethod = request?.method || 'UNKNOWN';
@@ -183,7 +211,7 @@ export function withErrorLogging(handler: RouteHandler): RouteHandler {
       logger.error(domain, `Unhandled exception in ${httpMethod} ${pathname}: ${errorMessage}`, logContext);
 
       // Return HTTP 500 response
-      const errorResponse = new Response(
+      return new Response(
         JSON.stringify({
           error: 'Internal Server Error',
           correlationId,
@@ -196,8 +224,6 @@ export function withErrorLogging(handler: RouteHandler): RouteHandler {
           },
         }
       );
-
-      return errorResponse;
     }
   };
 }

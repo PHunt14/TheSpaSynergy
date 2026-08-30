@@ -132,7 +132,7 @@ export function createConfigFromEnv(): LoggerConfig {
  * domain validation, context constraints, and correlation ID tracking.
  */
 export class Logger {
-  private config: LoggerConfig;
+  private readonly config: LoggerConfig;
   private correlationId: string;
 
   constructor(config: LoggerConfig) {
@@ -220,15 +220,16 @@ export class Logger {
 
     // 3. Enforce message constraints
     let sanitizedMessage = message ?? '';
-    // Escape newlines as literal \n sequences
-    sanitizedMessage = sanitizedMessage.replaceAll('\r\n', '\\n').replaceAll('\n', '\\n').replaceAll('\r', '\\n');
+    // Escape newlines as the literal two-character sequence "\n"
+    const LITERAL_NEWLINE = String.raw`\n`;
+    sanitizedMessage = sanitizedMessage.replaceAll('\r\n', LITERAL_NEWLINE).replaceAll('\n', LITERAL_NEWLINE).replaceAll('\r', LITERAL_NEWLINE);
     // Truncate to max length
     if (sanitizedMessage.length > MAX_MESSAGE_LENGTH) {
       sanitizedMessage = sanitizedMessage.slice(0, MAX_MESSAGE_LENGTH);
     }
 
     // 4. Enforce context constraints and merge additions
-    const rawContext: LogContext = { ...(context ?? {}), ...contextAdditions };
+    const rawContext: LogContext = { ...context, ...contextAdditions };
     const constrainedContext = this.constrainContext(rawContext);
 
     // 5. Apply sanitizer

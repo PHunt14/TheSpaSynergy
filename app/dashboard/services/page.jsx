@@ -4,6 +4,13 @@ import { useState, useEffect, useRef, Fragment } from 'react'
 import { fetchAuthSession } from 'aws-amplify/auth'
 import useIsMobile from '../../hooks/useIsMobile'
 
+// A service is treated as a "Head Bath" service if its name contains "head bath"
+// or "headbath" (case-insensitive, spacing-insensitive). This catches variants
+// like "Head Bath", "Couples Head Bath", and "Couple Headbath".
+function isHeadBathService(name) {
+  return (name || '').toLowerCase().replace(/\s+/g, '').includes('headbath')
+}
+
 export default function Services() {
   const [services, setServices] = useState([])
   const [staffSchedules, setStaffSchedules] = useState([])
@@ -1047,8 +1054,8 @@ export default function Services() {
         // Sort services — "Head Bath" services always first, then alphabetical
         filtered = [...filtered].sort((a, b) => {
           if (sortBy === 'name') {
-            const aIsHeadBath = (a.name || '').toLowerCase().startsWith('head bath')
-            const bIsHeadBath = (b.name || '').toLowerCase().startsWith('head bath')
+            const aIsHeadBath = isHeadBathService(a.name)
+            const bIsHeadBath = isHeadBathService(b.name)
             if (aIsHeadBath && !bIsHeadBath) return -1
             if (!aIsHeadBath && bIsHeadBath) return 1
             return (a.name || '').localeCompare(b.name || '')

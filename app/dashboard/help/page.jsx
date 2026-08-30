@@ -57,7 +57,7 @@ const sections = [
 
 const platformUpdates = [
   {
-    version: 'v1.7.0',
+    version: 'v1.6.1',
     date: 'August 2026',
     title: 'Improved Logging, Blocked Time & Calendar Corrections',
     changes: [

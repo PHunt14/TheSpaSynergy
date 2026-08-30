@@ -12,7 +12,6 @@
 
 import type {
   CloudWatchLogsClient as CloudWatchLogsClientType,
-  PutLogEventsCommand as PutLogEventsCommandType,
 } from '@aws-sdk/client-cloudwatch-logs';
 
 /**
@@ -55,7 +54,7 @@ const BACKOFF_INTERVAL_MS = 30000;
  * is "production" or "staging".
  */
 export class BatchWriter {
-  private config: BatchWriterConfig;
+  private readonly config: BatchWriterConfig;
   private buffer: string[] = [];
   private flushTimer: ReturnType<typeof setInterval> | null = null;
   private client: CloudWatchLogsClientType | null = null;

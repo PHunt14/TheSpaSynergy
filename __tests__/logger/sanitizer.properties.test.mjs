@@ -56,10 +56,19 @@ describe('Feature: structured-error-logging, Property 10: Redacted fields tracki
     fc.string({ minLength: 2, maxLength: 4, unit: 'grapheme-ascii' }).filter((s) => !s.includes('@') && !s.includes(' ') && !s.includes('.') && s.length >= 2)
   ).map(([local, domain, tld]) => `${local}@${domain}.${tld}`).filter((email) => EMAIL_REGEX.test(email));
 
-  // Generate a phone-like value (7+ digits with optional separators)
-  const phoneValueArb = fc.tuple(
-    fc.array(fc.integer({ min: 0, max: 9 }), { minLength: 7, maxLength: 12 })
-  ).map(([digits]) => digits.join(''));
+  // Generate a phone-like value. The sanitizer treats a string as a phone number
+  // when it is unambiguously phone-shaped: 10+ pure digits, OR 7+ digits that
+  // include phone-formatting separators (dashes/parens/plus/spaces). Bare 7-9
+  // digit strings are treated as IDs, not phones, to avoid false positives.
+  const purePhoneArb = fc.array(fc.integer({ min: 0, max: 9 }), { minLength: 10, maxLength: 12 })
+    .map((digits) => digits.join(''));
+  const formattedPhoneArb = fc.array(fc.integer({ min: 0, max: 9 }), { minLength: 7, maxLength: 10 })
+    .map((digits) => {
+      // Insert dashes to make it unambiguously phone-formatted, e.g. "867-5309"
+      const s = digits.join('');
+      return `${s.slice(0, 3)}-${s.slice(3)}`;
+    });
+  const phoneValueArb = fc.oneof(purePhoneArb, formattedPhoneArb);
 
   it('redactedFields contains exactly the paths of all modified fields (1:1 correspondence)', () => {
     // Generate an object with a guaranteed mix of sensitive and non-sensitive fields
@@ -200,7 +209,7 @@ describe('Feature: structured-error-logging, Property 10: Redacted fields tracki
 
         const result = sanitize(input);
 
-        // All phone keys should be in redactedFields (they have 7+ digits so they get masked)
+        // All phone keys should be in redactedFields (they are unambiguously phone-shaped)
         for (const key of phoneKeys) {
           if (!result.redactedFields.includes(key)) return false;
         }

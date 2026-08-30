@@ -22,7 +22,6 @@ import {
   MAX_KEY_LENGTH,
   MAX_MESSAGE_LENGTH,
   MAX_VALUE_LENGTH,
-  SEVERITY_HIERARCHY,
   VALID_SEVERITY_LEVELS,
 } from './constants';
 
@@ -166,12 +165,13 @@ export class LambdaLogger {
         return;
       }
 
-      // 2. Enforce message constraints
+      // 2. Enforce message constraints — escape CR/LF as the literal sequence "\n"
+      const LITERAL_NEWLINE = String.raw`\n`;
       let sanitizedMessage = message ?? '';
       sanitizedMessage = sanitizedMessage
-        .replaceAll('\r\n', '\\n')
-        .replaceAll('\n', '\\n')
-        .replaceAll('\r', '\\n');
+        .replaceAll('\r\n', LITERAL_NEWLINE)
+        .replaceAll('\n', LITERAL_NEWLINE)
+        .replaceAll('\r', LITERAL_NEWLINE);
       if (sanitizedMessage.length > MAX_MESSAGE_LENGTH) {
         sanitizedMessage = sanitizedMessage.slice(0, MAX_MESSAGE_LENGTH);
       }
@@ -274,13 +274,29 @@ export class LambdaLogger {
     try {
       const entries: string[] = [];
       for (const [key, value] of Object.entries(event)) {
-        const valueLength = value != null ? String(value).length : 0;
-        entries.push(`${key}(${valueLength})`);
+        entries.push(`${key}(${this.valueLength(value)})`);
       }
       return entries.join(', ');
     } catch {
       return '(unable to summarize event)';
     }
+  }
+
+  /**
+   * Computes a rough character length for a value without producing
+   * "[object Object]" for objects.
+   */
+  private valueLength(value: unknown): number {
+    if (value == null) return 0;
+    if (typeof value === 'string') return value.length;
+    if (typeof value === 'object') {
+      try {
+        return JSON.stringify(value).length;
+      } catch {
+        return 0;
+      }
+    }
+    return String(value as number | boolean | bigint | symbol).length;
   }
 
   /**
@@ -302,7 +318,7 @@ export class LambdaLogger {
       if (recipient.length <= 2) {
         return '***';
       }
-      return recipient[0] + '***' + recipient[recipient.length - 1];
+      return recipient[0] + '***' + recipient.at(-1);
     } catch {
       return '***';
     }

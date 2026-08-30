@@ -119,6 +119,37 @@ function isPhoneLike(value: string): boolean {
  * @param maxDepth - Maximum recursion depth (default 10)
  * @returns SanitizeResult with sanitized flat context and redactedFields array
  */
+/**
+ * Sanitizes a single string value, masking emails and phone numbers.
+ * Returns the (possibly masked) value and whether it was redacted.
+ */
+function sanitizeStringValue(value: string): { value: string; redacted: boolean } {
+  if (isEmailLike(value)) {
+    return { value: sanitizeEmail(value), redacted: true };
+  }
+  if (isPhoneLike(value)) {
+    return { value: sanitizePhone(value), redacted: true };
+  }
+  return { value, redacted: false };
+}
+
+/**
+ * Converts a non-string, non-object primitive to its string representation.
+ */
+function stringifyPrimitive(value: unknown): string {
+  if (value === null || value === undefined) return String(value);
+  // number, boolean, bigint, symbol — safe to String()
+  return String(value as number | boolean | bigint | symbol);
+}
+
+/**
+ * Recursively scans a context object, redacting sensitive fields and masking PII.
+ * Returns a flat LogContext (dot-notation keys) and an array of redacted field paths.
+ *
+ * @param context - The raw context object to sanitize
+ * @param maxDepth - Maximum recursion depth (default 10)
+ * @returns SanitizeResult with sanitized flat context and redactedFields array
+ */
 export function sanitize(
   context: Record<string, unknown>,
   maxDepth: number = DEFAULT_MAX_DEPTH
@@ -126,51 +157,47 @@ export function sanitize(
   const flatContext: LogContext = {};
   const redactedFields: string[] = [];
 
+  const handleValue = (path: string, value: unknown, depth: number): void => {
+    // Nested objects — recurse
+    if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+      walk(value as Record<string, unknown>, path, depth + 1);
+      return;
+    }
+
+    // Arrays — serialize to string
+    if (Array.isArray(value)) {
+      flatContext[path] = JSON.stringify(value);
+      return;
+    }
+
+    // Strings — mask email/phone
+    if (typeof value === 'string') {
+      const { value: sanitized, redacted } = sanitizeStringValue(value);
+      flatContext[path] = sanitized;
+      if (redacted) redactedFields.push(path);
+      return;
+    }
+
+    // Other primitives (number, boolean, null, undefined, etc.)
+    flatContext[path] = stringifyPrimitive(value);
+  };
+
   function walk(obj: Record<string, unknown>, prefix: string, depth: number): void {
     if (depth > maxDepth) {
       return;
     }
 
-    const keys = Object.keys(obj);
-    for (const key of keys) {
+    for (const key of Object.keys(obj)) {
       const path = prefix ? `${prefix}.${key}` : key;
-      const value = obj[key];
 
-      // Check if the key itself is sensitive
+      // Redact sensitive keys outright
       if (isSensitiveKey(key)) {
         flatContext[path] = REDACTED_PLACEHOLDER;
         redactedFields.push(path);
         continue;
       }
 
-      // Handle nested objects
-      if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
-        walk(value as Record<string, unknown>, path, depth + 1);
-        continue;
-      }
-
-      // Handle arrays — serialize to string
-      if (Array.isArray(value)) {
-        flatContext[path] = JSON.stringify(value);
-        continue;
-      }
-
-      // Handle string values — check for email/phone patterns
-      if (typeof value === 'string') {
-        if (isEmailLike(value)) {
-          flatContext[path] = sanitizeEmail(value);
-          redactedFields.push(path);
-        } else if (isPhoneLike(value)) {
-          flatContext[path] = sanitizePhone(value);
-          redactedFields.push(path);
-        } else {
-          flatContext[path] = value;
-        }
-        continue;
-      }
-
-      // Handle other primitive types (including null/undefined) — convert to string
-      flatContext[path] = String(value);
+      handleValue(path, obj[key], depth);
     }
   }
 

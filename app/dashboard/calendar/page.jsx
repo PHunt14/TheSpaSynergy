@@ -32,6 +32,45 @@ function formatTime(date) {
   return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
 }
 
+// A service is treated as a "Head Bath" service if its name contains "head bath"
+// or "headbath" (case-insensitive, spacing-insensitive). Catches variants like
+// "Head Bath", "Couples Head Bath", and "Couple Headbath".
+function isHeadBathService(name) {
+  return (name || '').toLowerCase().replace(/\s+/g, '').includes('headbath')
+}
+
+// Sort comparator: Head Bath services first, then alphabetical by name.
+function compareServicesHeadBathFirst(a, b) {
+  const aHB = isHeadBathService(a.name)
+  const bHB = isHeadBathService(b.name)
+  if (aHB && !bHB) return -1
+  if (!aHB && bHB) return 1
+  return (a.name || '').localeCompare(b.name || '')
+}
+
+// Format a duration in minutes as "1h 30m", "45m", or "2h"
+function formatDuration(minutes) {
+  if (minutes < 60) return `${minutes}m`
+  const hours = Math.floor(minutes / 60)
+  const mins = minutes % 60
+  const minsPart = mins > 0 ? ` ${mins}m` : ''
+  return `${hours}h${minsPart}`
+}
+
+// Shared local datetime formatter (YYYY-MM-DDTHH:MM) for datetime-local inputs.
+// Avoids UTC shift from toISOString().
+function formatLocalDateTimeValue(dt) {
+  if (!dt) return ''
+  const d = dt instanceof Date ? dt : new Date(dt)
+  if (Number.isNaN(d.getTime())) return ''
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  const hours = String(d.getHours()).padStart(2, '0')
+  const minutes = String(d.getMinutes()).padStart(2, '0')
+  return `${year}-${month}-${day}T${hours}:${minutes}`
+}
+
 // ── Appointment Block Component ───────────────────────────────
 
 function AppointmentBlock({ appointment, startHour, onClick, column = 0, totalColumns = 1 }) {
@@ -125,17 +164,7 @@ function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onEdit, 
   const isBlockedTime = appointment.customer?.isBlockedTime || appointment.status === 'blocked'
 
   // Format dateTime as local YYYY-MM-DDTHH:MM for datetime-local input
-  const formatLocalDT = (dt) => {
-    if (!dt) return ''
-    const d = dt instanceof Date ? dt : new Date(dt)
-    if (Number.isNaN(d.getTime())) return ''
-    const year = d.getFullYear()
-    const month = String(d.getMonth() + 1).padStart(2, '0')
-    const day = String(d.getDate()).padStart(2, '0')
-    const hours = String(d.getHours()).padStart(2, '0')
-    const minutes = String(d.getMinutes()).padStart(2, '0')
-    return `${year}-${month}-${day}T${hours}:${minutes}`
-  }
+  const formatLocalDT = formatLocalDateTimeValue
 
   // Initialize edit form when entering edit mode
   const startEditing = () => {
@@ -461,16 +490,9 @@ function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onEdit, 
                   {appointment.staffName && <p style={{ margin: 0 }}><strong>Staff:</strong> {appointment.staffName}</p>}
                   {aptDate && <p style={{ margin: 0 }}><strong>Date:</strong> {aptDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>}
                   {aptDate && (
-                    <p style={{ margin: 0 }}><strong>Time:</strong> {formatTime(aptDate)} – {(() => {
-                      const blockDur = appointment.customer?.duration || 60
-                      const endDate = new Date(aptDate.getTime() + blockDur * 60000)
-                      return formatTime(endDate)
-                    })()}</p>
+                    <p style={{ margin: 0 }}><strong>Time:</strong> {formatTime(aptDate)} – {formatTime(new Date(aptDate.getTime() + (appointment.customer?.duration || 60) * 60000))}</p>
                   )}
-                  <p style={{ margin: 0 }}><strong>Duration:</strong> {(() => {
-                    const d = appointment.customer?.duration || 60
-                    return d >= 60 ? `${Math.floor(d / 60)}h ${d % 60 > 0 ? `${d % 60}m` : ''}` : `${d}m`
-                  })()}</p>
+                  <p style={{ margin: 0 }}><strong>Duration:</strong> {formatDuration(appointment.customer?.duration || 60)}</p>
                   {appointment.customer?.notes && <p style={{ margin: 0 }}><strong>Notes:</strong> {appointment.customer.notes}</p>}
                 </div>
 
@@ -520,10 +542,12 @@ function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onEdit, 
                     />
                     {blockEditForm.dateTime && blockEditForm.endTime && (() => {
                       const diffMin = Math.round((new Date(blockEditForm.endTime).getTime() - new Date(blockEditForm.dateTime).getTime()) / 60000)
-                      if (diffMin > 0) return <p style={{ fontSize: '0.8rem', color: 'var(--color-text-light)', marginTop: '0.25rem', marginBottom: 0 }}>
-                        Duration: {diffMin >= 60 ? `${Math.floor(diffMin / 60)}h ${diffMin % 60 > 0 ? `${diffMin % 60}m` : ''}` : `${diffMin}m`}
-                      </p>
-                      return null
+                      if (diffMin <= 0) return null
+                      return (
+                        <p style={{ fontSize: '0.8rem', color: 'var(--color-text-light)', marginTop: '0.25rem', marginBottom: 0 }}>
+                          Duration: {formatDuration(diffMin)}
+                        </p>
+                      )
                     })()}
                   </div>
 
@@ -689,7 +713,7 @@ function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onEdit, 
                       style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem' }}
                     >
                       <option value="">Select a service</option>
-                      {[...services].sort((a, b) => { const aHB = a.name.toLowerCase().startsWith('head bath'); const bHB = b.name.toLowerCase().startsWith('head bath'); if (aHB && !bHB) return -1; if (!aHB && bHB) return 1; return a.name.localeCompare(b.name); }).map(s => <option key={s.serviceId} value={s.serviceId}>{s.name} ({s.duration} min — ${s.price})</option>)}
+                      {[...services].sort(compareServicesHeadBathFirst).map(s => <option key={s.serviceId} value={s.serviceId}>{s.name} ({s.duration} min — ${s.price})</option>)}
                     </select>
                   </div>
 
@@ -967,17 +991,7 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
   const defaultLastName = defaultCustomer?.name ? defaultCustomer.name.split(' ').slice(1).join(' ') : ''
 
   // Format dateTime as local YYYY-MM-DDTHH:MM for datetime-local input (avoid UTC shift from toISOString)
-  const formatLocalDateTime = (dt) => {
-    if (!dt) return ''
-    const d = dt instanceof Date ? dt : new Date(dt)
-    if (Number.isNaN(d.getTime())) return ''
-    const year = d.getFullYear()
-    const month = String(d.getMonth() + 1).padStart(2, '0')
-    const day = String(d.getDate()).padStart(2, '0')
-    const hours = String(d.getHours()).padStart(2, '0')
-    const minutes = String(d.getMinutes()).padStart(2, '0')
-    return `${year}-${month}-${day}T${hours}:${minutes}`
-  }
+  const formatLocalDateTime = formatLocalDateTimeValue
 
   const [form, setForm] = useState({
     customerFirstName: defaultFirstName,
@@ -1234,7 +1248,7 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
               <select id="new-apt-service" value={serviceId} onChange={(e) => setServiceId(e.target.value)}
                 style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem' }}>
                 <option value="">Select a service</option>
-                {[...services].sort((a, b) => { const aHB = a.name.toLowerCase().startsWith('head bath'); const bHB = b.name.toLowerCase().startsWith('head bath'); if (aHB && !bHB) return -1; if (!aHB && bHB) return 1; return a.name.localeCompare(b.name); }).map(s => <option key={s.serviceId} value={s.serviceId}>{s.name} ({s.duration} min — ${s.price})</option>)}
+                {[...services].sort(compareServicesHeadBathFirst).map(s => <option key={s.serviceId} value={s.serviceId}>{s.name} ({s.duration} min — ${s.price})</option>)}
               </select>
             </div>
             {/* Customer */}
@@ -1303,7 +1317,7 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
                     style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', boxSizing: 'border-box' }} />
                     {duration > 0 && form.dateTime && blockEndTime && (
                       <p style={{ fontSize: '0.8rem', color: 'var(--color-text-light)', marginTop: '0.25rem' }}>
-                        {duration >= 60 ? `${Math.floor(duration / 60)}h ${duration % 60 > 0 ? `${duration % 60}m` : ''}` : `${duration}m`}
+                        {formatDuration(duration)}
                       </p>
                     )}
                   </div>
@@ -1332,7 +1346,7 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
                     </div>
                     {duration > 0 && (
                       <p style={{ fontSize: '0.8rem', color: 'var(--color-text-light)', marginTop: '0.25rem' }}>
-                        Total: {duration >= 60 ? `${Math.floor(duration / 60)}h ${duration % 60 > 0 ? `${duration % 60}m` : ''}` : `${duration}m`}
+                        Total: {formatDuration(duration)}
                       </p>
                     )}
                   </div>

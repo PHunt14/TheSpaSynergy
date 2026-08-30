@@ -1,4 +1,3 @@
-import { NextRequest } from 'next/server'
 import { Client, Environment } from 'square'
 import { generateClient } from 'aws-amplify/data'
 import type { Schema } from '@/amplify/data/resource'
