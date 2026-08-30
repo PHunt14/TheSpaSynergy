@@ -1,33 +1,38 @@
 /**
- * Guard test: keep the Amplify backend module graph free of `.js` extensions
- * on relative imports that point at TypeScript source files.
+ * Guard test: keep files under `lib/` free of `.js` extensions on relative
+ * imports that point at TypeScript source files.
  *
  * History / why this matters:
- * - `amplify/tsconfig.json` uses `moduleResolution: Bundler` (the Lambda
- *   functions are bundled by esbuild, which resolves extensionless TS imports).
- * - The Next.js app (Turbopack, `moduleResolution: bundler`) shares several of
- *   these files (e.g. lib/logger/*). Turbopack does NOT rewrite `./constants.js`
- *   to `constants.ts`, so a `.js` extension on a relative import that actually
- *   points at a `.ts` file breaks the app build (this happened once and took
- *   down the homepage).
- * - Therefore the correct, portable convention for shared TS is EXTENSIONLESS
- *   relative imports. This test enforces that across the backend graph so a
- *   well-meaning "add .js for NodeNext" change can't silently break the app.
+ * - The Lambda handlers and `amplify/backend.ts` import from `lib/` (e.g.
+ *   lib/logger/*). Those same `lib/` files are ALSO imported by the Next.js app.
+ * - Next.js/Turbopack (`moduleResolution: bundler`) does NOT rewrite
+ *   `./constants.js` to `constants.ts`, so a `.js` extension on a relative
+ *   import that actually points at a `.ts` file breaks the app build. This
+ *   happened once and took down the homepage.
+ * - Therefore the portable convention for SHARED TypeScript (under `lib/`) is
+ *   EXTENSIONLESS relative imports. This test enforces that so a well-meaning
+ *   "add .js for NodeNext" change can't silently break the app again.
  *
- * Note: importing a real `.js`/`.json` file by its actual extension is fine —
- * we only flag a `.js` (or `.ts`) extension whose target on disk is a `.ts`
- * source file.
+ * Scope note: this rule applies only to importing files under `lib/`. The
+ * `amplify/**` backend files (backend.ts, resource.ts, handlers) are compiled
+ * ONLY by the Amplify toolchain (esbuild/ampx), never by Turbopack, and follow
+ * Amplify Gen 2's convention of `.js` extensions (e.g. './auth/resource.js').
+ * Those are intentionally NOT flagged. We still traverse through them to reach
+ * the `lib/` files.
+ *
+ * We only flag a `.js`/`.ts` extension whose target on disk is a `.ts` source;
+ * importing a real `.js`/`.json` file by its actual extension is fine.
  */
 
 import { readFileSync, existsSync } from 'node:fs'
-import { dirname, resolve, relative } from 'node:path'
+import { dirname, resolve, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(__dirname, '../..')
 
-// Entry points that are bundled into Lambda functions / evaluated by the
-// Amplify backend, plus everything they transitively import from lib/.
+// Entry points into the backend graph, plus everything they transitively
+// import. Traversal continues through amplify/** in order to reach lib/**.
 const ENTRY_POINTS = [
   'amplify/functions/send-sms/handler.ts',
   'amplify/functions/send-email/handler.ts',
@@ -76,12 +81,21 @@ function resolveSourceFile(fromFile, spec) {
   return candidates.find((c) => existsSync(c.path)) || null
 }
 
+/** True if the file lives under the repo's shared `lib/` directory. */
+function isSharedLibFile(absPath) {
+  const rel = relative(repoRoot, absPath)
+  return rel === 'lib' || rel.startsWith(`lib${sep}`)
+}
+
 /**
- * A specifier is a violation when it carries an explicit extension AND that
- * extension's target on disk is a TypeScript source file. Extensionless
- * imports are the desired convention; importing a real .js/.json is fine.
+ * A specifier is a violation when:
+ *  - the IMPORTING file is under lib/ (shared with the Next.js app), AND
+ *  - the specifier carries an explicit extension, AND
+ *  - that extension's target on disk is a TypeScript source file.
+ * Extensionless imports are the desired convention for shared lib/ code.
  */
-function hasBadExtension(spec, resolved) {
+function isViolation(importingFile, spec, resolved) {
+  if (!isSharedLibFile(importingFile)) return false
   const carriesExtension = /\.(js|mjs|cjs|jsx|ts|tsx)$/.test(spec)
   return carriesExtension && resolved?.isTs === true
 }
@@ -108,11 +122,11 @@ function collectViolations() {
 
       const resolved = resolveSourceFile(file, spec)
 
-      if (hasBadExtension(spec, resolved)) {
+      if (isViolation(file, spec, resolved)) {
         violations.push({ file: relative(repoRoot, file), spec })
       }
 
-      // Follow the import to keep walking the graph.
+      // Follow the import to keep walking the graph (into amplify/** and lib/**).
       if (resolved) queue.push(resolved.path)
     }
   }
@@ -120,7 +134,7 @@ function collectViolations() {
   return { violations, visitedCount: visited.size }
 }
 
-describe('Amplify backend import extensions (Bundler resolution)', () => {
+describe('Shared lib/ import extensions (Turbopack-safe)', () => {
   const { violations, visitedCount } = collectViolations()
 
   test('the backend module graph was actually traversed', () => {
@@ -129,12 +143,12 @@ describe('Amplify backend import extensions (Bundler resolution)', () => {
     expect(visitedCount).toBeGreaterThan(1)
   })
 
-  test('no relative import in the backend graph uses a .js/.ts extension for a TS source file', () => {
+  test('no relative import under lib/ uses a .js/.ts extension for a TS source file', () => {
     const message =
       violations.length === 0
         ? ''
-        : 'Relative imports must be EXTENSIONLESS (they point at .ts sources; a ' +
-          '.js extension breaks the Next.js/Turbopack build that shares these files):\n' +
+        : 'Relative imports under lib/ must be EXTENSIONLESS (they point at .ts ' +
+          'sources; a .js extension breaks the Next.js/Turbopack build that shares these files):\n' +
           violations.map((v) => `  ${v.file}: '${v.spec}' (use '${stripExtension(v.spec)}')`).join('\n')
 
     expect(message).toBe('')
