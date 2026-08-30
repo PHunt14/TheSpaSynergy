@@ -25,8 +25,8 @@ const SENSITIVE_KEY_PATTERNS = ['token', 'secret', 'password', 'credential'];
 /** Simple email regex for detection */
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/** Phone regex: matches strings that contain at least 4 digits (may have separators) */
-const PHONE_REGEX = /(?:\+?\d[\d\s\-().]{6,}\d|\d{4,})/;
+/** Phone regex: matches a run of at least 4 consecutive digits (no backtracking). */
+const PHONE_REGEX = /\d{4,}/;
 
 /**
  * Determines if a key is sensitive based on whether it contains
@@ -169,12 +169,8 @@ export function sanitize(
         continue;
       }
 
-      // Handle other primitive types — convert to string
-      if (value === null || value === undefined) {
-        flatContext[path] = String(value);
-      } else {
-        flatContext[path] = String(value);
-      }
+      // Handle other primitive types (including null/undefined) — convert to string
+      flatContext[path] = String(value);
     }
   }
 

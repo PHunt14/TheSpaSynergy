@@ -169,9 +169,9 @@ export class LambdaLogger {
       // 2. Enforce message constraints
       let sanitizedMessage = message ?? '';
       sanitizedMessage = sanitizedMessage
-        .replace(/\r\n/g, '\\n')
-        .replace(/\n/g, '\\n')
-        .replace(/\r/g, '\\n');
+        .replaceAll('\r\n', '\\n')
+        .replaceAll('\n', '\\n')
+        .replaceAll('\r', '\\n');
       if (sanitizedMessage.length > MAX_MESSAGE_LENGTH) {
         sanitizedMessage = sanitizedMessage.slice(0, MAX_MESSAGE_LENGTH);
       }

@@ -221,7 +221,7 @@ export class Logger {
     // 3. Enforce message constraints
     let sanitizedMessage = message ?? '';
     // Escape newlines as literal \n sequences
-    sanitizedMessage = sanitizedMessage.replace(/\r\n/g, '\\n').replace(/\n/g, '\\n').replace(/\r/g, '\\n');
+    sanitizedMessage = sanitizedMessage.replaceAll('\r\n', '\\n').replaceAll('\n', '\\n').replaceAll('\r', '\\n');
     // Truncate to max length
     if (sanitizedMessage.length > MAX_MESSAGE_LENGTH) {
       sanitizedMessage = sanitizedMessage.slice(0, MAX_MESSAGE_LENGTH);
