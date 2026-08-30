@@ -128,7 +128,7 @@ function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onEdit, 
   const formatLocalDT = (dt) => {
     if (!dt) return ''
     const d = dt instanceof Date ? dt : new Date(dt)
-    if (isNaN(d.getTime())) return ''
+    if (Number.isNaN(d.getTime())) return ''
     const year = d.getFullYear()
     const month = String(d.getMonth() + 1).padStart(2, '0')
     const day = String(d.getDate()).padStart(2, '0')
@@ -970,7 +970,7 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
   const formatLocalDateTime = (dt) => {
     if (!dt) return ''
     const d = dt instanceof Date ? dt : new Date(dt)
-    if (isNaN(d.getTime())) return ''
+    if (Number.isNaN(d.getTime())) return ''
     const year = d.getFullYear()
     const month = String(d.getMonth() + 1).padStart(2, '0')
     const day = String(d.getDate()).padStart(2, '0')

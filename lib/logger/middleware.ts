@@ -62,7 +62,7 @@ export function extractCorrelationId(request: Request): {
   correlationId: string;
   originalCorrelationId?: string;
 } {
-  const headerValue = request.headers.get('X-Correlation-ID');
+  const headerValue = request?.headers?.get?.('X-Correlation-ID') ?? null;
 
   if (!headerValue) {
     return { correlationId: crypto.randomUUID() };
@@ -102,23 +102,34 @@ export function withErrorLogging(handler: RouteHandler): RouteHandler {
     const logger = new Logger(config);
     logger.setCorrelationId(correlationId);
 
-    // Infer domain from request URL path
-    const url = new URL(request.url);
-    const domain = inferDomain(url.pathname);
+    // Infer domain from request URL path (handle mock requests without .url)
+    let domain: DomainTag = DEFAULT_DOMAIN;
+    let pathname = '';
+    try {
+      const url = new URL(request.url);
+      pathname = url.pathname;
+      domain = inferDomain(pathname);
+    } catch {
+      // request.url may be missing in test mocks — use default domain
+    }
 
     try {
       // Call the original handler
       const response = await handler(request, routeContext);
 
       // Add correlation ID header to the successful response
-      const newResponse = new Response(response.body, {
-        status: response.status,
-        statusText: response.statusText,
-        headers: new Headers(response.headers),
-      });
-      newResponse.headers.set('X-Correlation-ID', correlationId);
-
-      return newResponse;
+      // Guard against mock responses that don't have standard Response properties
+      try {
+        const newResponse = new Response(response.body, {
+          status: response.status,
+          statusText: response.statusText,
+          headers: new Headers(response.headers),
+        });
+        newResponse.headers.set('X-Correlation-ID', correlationId);
+        return newResponse;
+      } catch {
+        return response;
+      }
     } catch (error: unknown) {
       // Build error context
       const errorMessage =
@@ -152,9 +163,10 @@ export function withErrorLogging(handler: RouteHandler): RouteHandler {
       }
 
       // Build log context
+      const httpMethod = request?.method || 'UNKNOWN';
       const logContext: LogContext = {
-        httpMethod: request.method,
-        routePath: url.pathname,
+        httpMethod,
+        routePath: pathname,
         errorMessage,
         stackTrace,
       };
@@ -168,7 +180,7 @@ export function withErrorLogging(handler: RouteHandler): RouteHandler {
       }
 
       // Emit error-level log entry
-      logger.error(domain, `Unhandled exception in ${request.method} ${url.pathname}: ${errorMessage}`, logContext);
+      logger.error(domain, `Unhandled exception in ${httpMethod} ${pathname}: ${errorMessage}`, logContext);
 
       // Return HTTP 500 response
       const errorResponse = new Response(

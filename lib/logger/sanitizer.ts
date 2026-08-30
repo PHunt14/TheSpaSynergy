@@ -91,11 +91,22 @@ function isEmailLike(value: string): boolean {
 
 /**
  * Checks if a string value looks like a phone number.
- * Must have at least 7 digit characters to avoid false positives.
+ * To avoid false positives on IDs, dates, and other alphanumeric strings:
+ * - Strings containing letters are never treated as phone numbers
+ * - Pure-digit strings need 10+ digits (standard phone length)
+ * - Strings with phone formatting chars (dashes, parens, plus, spaces between digits) need 7+ digits
  */
 function isPhoneLike(value: string): boolean {
+  // If the string contains any letters, it's not a phone number
+  if (/[a-zA-Z]/.test(value)) return false;
+
   const digitCount = (value.match(/\d/g) || []).length;
-  if (digitCount < 7) return false;
+  const hasPhoneFormatting = /[\-\(\)\+]/.test(value) || /\d\s+\d/.test(value);
+  if (!hasPhoneFormatting) {
+    if (digitCount < 10) return false;
+  } else {
+    if (digitCount < 7) return false;
+  }
   // Should be mostly digits and phone-related characters
   return PHONE_REGEX.test(value);
 }
