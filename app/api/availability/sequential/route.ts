@@ -27,15 +27,36 @@ function collectAllStaffIds(services: any[]): Set<string> {
 }
 
 /**
- * Builds a map of serviceId → eligible StaffSchedule[] from the fetched staff schedules.
+ * True if any service is open to all staff (null/empty allowedStaff).
+ */
+function hasOpenStaffService(services: any[]): boolean {
+  return services.some(
+    (s: any) => !s.allowedStaff || (s.allowedStaff as string[]).length === 0
+  );
+}
+
+/**
+ * Builds a map of serviceId → eligible StaffSchedule[].
+ *
+ * IMPORTANT: this must match the booking route (/api/bundles/book) exactly.
+ * A service with empty/null allowedStaff means "any active staff is eligible"
+ * (excluding resource calendars), NOT "no staff eligible". Previously this
+ * helper produced an empty list for open-staff services, so the calendar and
+ * the booking disagreed about which staff could cover a service.
  */
 function buildStaffSchedulesByService(services: any[], staffSchedules: any[]): Record<string, any[]> {
   const map: Record<string, any[]> = {};
   for (const service of services) {
     const allowedStaff = (service.allowedStaff as string[]) || [];
-    map[service.serviceId] = staffSchedules.filter(
-      (staff: any) => allowedStaff.includes(staff.visibleId)
-    );
+    if (allowedStaff.length > 0) {
+      map[service.serviceId] = staffSchedules.filter(
+        (staff: any) => allowedStaff.includes(staff.visibleId)
+      );
+    } else {
+      map[service.serviceId] = staffSchedules.filter(
+        (staff: any) => !String(staff.visibleId).startsWith('resource-')
+      );
+    }
   }
   return map;
 }
@@ -107,19 +128,34 @@ export const GET = withErrorLogging(async function GET(request: Request) {
     // Collect all unique staff IDs across all services
     const allStaffIds = collectAllStaffIds(services);
 
-    if (allStaffIds.size === 0) {
-      return Response.json({ slots: [], suggestedOrder: serviceIds, totalDuration: 0 });
+    // Fetch staff schedules. If any service is open to all staff (empty
+    // allowedStaff), fetch every active staff member — matching the booking
+    // route (/api/bundles/book) so the calendar and booking consider the same
+    // candidate staff. Otherwise fetch only the explicitly allowed staff.
+    let staffSchedules: any[];
+    if (hasOpenStaffService(services)) {
+      const { data: allStaff } = await client.models.StaffSchedule.list();
+      staffSchedules = (allStaff || []).filter((s: any) => s.isActive !== false);
+      staffSchedules.forEach((s: any) => allStaffIds.add(s.visibleId));
+    } else {
+      if (allStaffIds.size === 0) {
+        return Response.json({ slots: [], suggestedOrder: serviceIds, totalDuration: 0 });
+      }
+      const staffPromises = Array.from(allStaffIds).map(staffId =>
+        client.models.StaffSchedule.get({ visibleId: staffId } as any)
+      );
+      const staffResults = await Promise.all(staffPromises);
+      staffSchedules = staffResults
+        .filter(result => !result.errors && result.data)
+        .map(result => result.data);
     }
 
-    // Fetch staff schedules for all relevant staff
-    const staffPromises = Array.from(allStaffIds).map(staffId =>
-      client.models.StaffSchedule.get({ visibleId: staffId } as any)
-    );
-    const staffResults = await Promise.all(staffPromises);
-
-    const staffSchedules = staffResults
-      .filter(result => !result.errors && result.data)
-      .map(result => result.data);
+    // Exclude staff with an active booking blackout (matches booking route).
+    const now = new Date();
+    staffSchedules = staffSchedules.filter((s: any) => {
+      if (s.bookingDisabledUntil && new Date(s.bookingDisabledUntil) > now) return false;
+      return true;
+    });
 
     // Build staffSchedulesByService map: serviceId → eligible StaffSchedule[]
     const staffSchedulesByService = buildStaffSchedulesByService(services, staffSchedules);

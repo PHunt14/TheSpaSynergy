@@ -5,8 +5,9 @@ import { useParams, useRouter } from 'next/navigation'
 import { Suspense } from 'react'
 import Link from 'next/link'
 import TipSelection from '../components/TipSelection'
-import useSquarePayment, { resolveSquareLocation } from '../components/useSquarePayment'
+import useSquarePayment, { resolveSquareStatus } from '../components/useSquarePayment'
 import KioskPaymentForm from '../components/KioskPaymentForm'
+import SquareConfigError from '../components/SquareConfigError'
 import PaymentSuccess from '../components/PaymentSuccess'
 import TotalDueDisplay from '../components/TotalDueDisplay'
 import formatTime from '../components/formatTime'
@@ -19,6 +20,7 @@ function PaymentContent() {
 
   const [appointment, setAppointment] = useState(null)
   const [squareLocationId, setSquareLocationId] = useState(null)
+  const [squareReason, setSquareReason] = useState(null) // null (resolving) | 'ok' | 'needs_reconnect' | 'not_connected' | 'network_error'
   const [loading, setLoading] = useState(true)
   const [paying, setPaying] = useState(false)
   const [paid, setPaid] = useState(false)
@@ -30,7 +32,7 @@ function PaymentContent() {
   const [customAmountError, setCustomAmountError] = useState(null)
 
   // Initialize Square card as soon as we have a location — card-container is always in the DOM
-  const { card } = useSquarePayment(squareLocationId, paid)
+  const { card, initError } = useSquarePayment(squareLocationId, paid)
 
   useEffect(() => {
     fetch(`/api/kiosk/appointments?appointmentId=${appointmentId}`)
@@ -40,20 +42,14 @@ function PaymentContent() {
         setAppointment(apt)
         setLoading(false)
 
-        if (apt?.staffId) {
-          fetch(`/api/staff-schedules?visibleId=${apt.staffId}`)
-            .then(res => res.json())
-            .then(sData => {
-              const staff = sData.schedule
-              if (staff?.squareLocationId && staff?.squareOAuthStatus === 'connected') {
-                setSquareLocationId(staff.squareLocationId)
-              } else {
-                resolveSquareLocation(apt.vendorId, setSquareLocationId)
-              }
+        if (apt?.vendorId || apt?.staffId) {
+          resolveSquareStatus({ vendorId: apt.vendorId, staffId: apt.staffId })
+            .then(status => {
+              setSquareLocationId(status.locationId)
+              setSquareReason(status.reason)
             })
-            .catch(() => resolveSquareLocation(apt?.vendorId, setSquareLocationId))
-        } else if (apt?.vendorId) {
-          resolveSquareLocation(apt.vendorId, setSquareLocationId)
+        } else {
+          setSquareReason('not_connected')
         }
       })
       .catch(() => { setError('Failed to load appointment'); setLoading(false) })
@@ -416,12 +412,44 @@ function PaymentContent() {
       {/* Full Payment Flow (default for non-group or when 'full' or 'custom' selected) */}
       {/* Card form is always rendered so Square SDK can attach; hidden until user picks 'full' or 'custom' */}
       <div style={canSplitPay && paymentMode !== 'full' && paymentMode !== 'custom' ? { position: 'absolute', left: '-9999px', opacity: 0, pointerEvents: 'none' } : undefined}>
-        {!squareLocationId ? (
+        {initError || squareReason === 'config_error' ? (
+          <SquareConfigError
+            code={initError?.code || 'config_error'}
+            message={initError?.message || 'Square is misconfigured for this deployment.'}
+          />
+        ) : !squareLocationId ? (
           (!canSplitPay || paymentMode === 'full' || paymentMode === 'custom') ? (
-            <div style={{ padding: '1.5rem', background: '#fff3cd', borderRadius: '8px', border: '1px solid #ffc107', textAlign: 'center' }}>
-              <strong>Card payment not available</strong>
-              <p style={{ margin: '0.5rem 0 0', fontSize: '0.9rem' }}>This vendor has not connected Square.</p>
-            </div>
+            squareReason === null ? (
+              <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--color-text-light)' }}>
+                <p style={{ margin: 0, fontSize: '0.9rem' }}>Checking card payment availability…</p>
+              </div>
+            ) : squareReason === 'network_error' ? (
+              <div style={{ padding: '1.5rem', background: '#fff3cd', borderRadius: '8px', border: '1px solid #ffc107', textAlign: 'center' }}>
+                <strong>Couldn't check card payment</strong>
+                <p style={{ margin: '0.5rem 0 1rem', fontSize: '0.9rem' }}>There was a temporary network problem.</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSquareReason(null)
+                    resolveSquareStatus({ vendorId: appointment?.vendorId, staffId: appointment?.staffId })
+                      .then(status => { setSquareLocationId(status.locationId); setSquareReason(status.reason) })
+                  }}
+                  className="cta"
+                  style={{ display: 'inline-block' }}
+                >
+                  Retry
+                </button>
+              </div>
+            ) : (
+              <div style={{ padding: '1.5rem', background: '#fff3cd', borderRadius: '8px', border: '1px solid #ffc107', textAlign: 'center' }}>
+                <strong>Card payment not available</strong>
+                <p style={{ margin: '0.5rem 0 0', fontSize: '0.9rem' }}>
+                  {squareReason === 'needs_reconnect'
+                    ? 'The provider needs to reconnect Square in Dashboard → Settings.'
+                    : 'The provider has not connected Square. Please pay in person.'}
+                </p>
+              </div>
+            )
           ) : null
         ) : (
           <KioskPaymentForm totalDue={totalDue} paying={paying} card={card} error={error} onPay={handlePay} />

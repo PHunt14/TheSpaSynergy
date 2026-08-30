@@ -171,6 +171,28 @@ export function assignBundleStaff({
   return flatAssignments
 }
 
+/**
+ * Dry-run feasibility check: returns true only if a complete, conflict-free
+ * staff assignment can be built for the bundle at the given start time.
+ *
+ * This is the SAME logic the booking route uses (assignBundleStaff), exposed
+ * as a boolean so the availability/slot-generation path can gate slots on the
+ * exact constraint that booking will later enforce. Making the "show" path and
+ * the "book" path share this function is what guarantees that a slot shown as
+ * available can actually be booked — no more "shows available, then rejected."
+ *
+ * @param {Object} params - Same shape as assignBundleStaff params
+ * @returns {boolean}
+ */
+export function canAssignBundleStaff(params) {
+  try {
+    assignBundleStaff(params)
+    return true
+  } catch {
+    return false
+  }
+}
+
 // ─── Internal Helpers ────────────────────────────────────────────────────────
 
 /**

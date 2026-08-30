@@ -6,6 +6,7 @@ import Link from 'next/link'
 import TipSelection from '../components/TipSelection'
 import useSquarePayment, { resolveSquareLocation } from '../components/useSquarePayment'
 import KioskPaymentForm from '../components/KioskPaymentForm'
+import SquareConfigError from '../components/SquareConfigError'
 import PaymentSuccess from '../components/PaymentSuccess'
 import TotalDueDisplay from '../components/TotalDueDisplay'
 import ServiceLineItems from '../components/ServiceLineItems'
@@ -24,8 +25,9 @@ function MultiPaymentContent() {
   const [error, setError] = useState(null)
   const [tipAmount, setTipAmount] = useState(0)
   const [squareLocationId, setSquareLocationId] = useState(null)
+  const [squareReason, setSquareReason] = useState(null)
 
-  const { card } = useSquarePayment(squareLocationId, paid)
+  const { card, initError } = useSquarePayment(squareLocationId, paid)
 
   useEffect(() => {
     if (ids.length === 0) { setLoading(false); return }
@@ -42,18 +44,23 @@ function MultiPaymentContent() {
         setAppointments(apts)
 
         if (apts.length > 0) {
-          // Try each appointment's vendor in order until one resolves a Square location
+          // Try each appointment's provider in order until one resolves a
+          // usable Square location. resolveSquareLocation always calls back
+          // (null when unavailable), so this advances reliably.
           const tryResolve = (index) => {
-            if (index >= apts.length) return
+            if (index >= apts.length) { setSquareReason('not_connected'); return }
             resolveSquareLocation(apts[index].vendorId, (locationId) => {
               if (locationId) {
                 setSquareLocationId(locationId)
+                setSquareReason('ok')
               } else {
                 tryResolve(index + 1)
               }
-            })
+            }, apts[index].staffId)
           }
           tryResolve(0)
+        } else {
+          setSquareReason('not_connected')
         }
 
         setLoading(false)
@@ -223,11 +230,22 @@ function MultiPaymentContent() {
 
       <TotalDueDisplay totalDue={totalDue} tipAmount={tipAmount} priceLabel="Services" priceAmount={totalPrice} />
 
-      {!squareLocationId ? (
-        <div style={{ padding: '1.5rem', background: '#fff3cd', borderRadius: '8px', border: '1px solid #ffc107', textAlign: 'center' }}>
-          <strong>Card payment not available</strong>
-          <p style={{ margin: '0.5rem 0 0', fontSize: '0.9rem' }}>Vendor has not connected Square.</p>
-        </div>
+      {initError || squareReason === 'config_error' ? (
+        <SquareConfigError
+          code={initError?.code || 'config_error'}
+          message={initError?.message || 'Square is misconfigured for this deployment.'}
+        />
+      ) : !squareLocationId ? (
+        squareReason === null ? (
+          <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--color-text-light)' }}>
+            <p style={{ margin: 0, fontSize: '0.9rem' }}>Checking card payment availability…</p>
+          </div>
+        ) : (
+          <div style={{ padding: '1.5rem', background: '#fff3cd', borderRadius: '8px', border: '1px solid #ffc107', textAlign: 'center' }}>
+            <strong>Card payment not available</strong>
+            <p style={{ margin: '0.5rem 0 0', fontSize: '0.9rem' }}>No provider in this group has connected Square. Please pay in person.</p>
+          </div>
+        )
       ) : (
         <KioskPaymentForm totalDue={totalDue} paying={paying} card={card} error={error} onPay={handlePay} />
       )}

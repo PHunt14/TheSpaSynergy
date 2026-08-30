@@ -16,6 +16,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
+    "typecheck:amplify": "tsc -p amplify/tsconfig.json --noEmit",
     "sandbox": "npx ampx sandbox",
     "sandbox:delete": "npx ampx sandbox delete",
     "db:sync": "node scripts/sync-prod-to-dev.mjs --prod-hash ioggmkvoizfdbjlunwydeowaim --dev-hash fijie4ecpbaghhganm4kvz2qkq",

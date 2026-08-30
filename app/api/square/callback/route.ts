@@ -119,6 +119,24 @@ export const GET = withErrorLogging(async function GET(request: Request) {
       console.error('Error updating staff schedule:', JSON.stringify(errors, null, 2))
       return Response.redirect(`${baseUrl}/dashboard/settings?error=oauth_failed&details=db_update_failed`)
     }
+
+    // Best-effort: backfill the vendor's location so the kiosk fast-path
+    // (/api/providers) can surface a location for this vendor. We intentionally
+    // do NOT copy the staff access token onto the vendor — payment routing and
+    // the authoritative /api/square/status check remain staff-scoped and
+    // token-gated, so this only helps location resolution and never falsely
+    // reports the vendor itself as chargeable.
+    if (vendorId) {
+      try {
+        const { data: vendor } = await client.models.Vendor.get({ vendorId })
+        if (vendor && !vendor.squareLocationId) {
+          await client.models.Vendor.update({ vendorId, squareLocationId: locationId } as any)
+        }
+      } catch (vendorErr) {
+        console.error('Square callback: vendor location backfill failed', vendorErr)
+      }
+    }
+
     return Response.redirect(`${baseUrl}/dashboard/settings?success=square_connected&staffId=${staffId}`)
   } catch (error: any) {
     console.error('Square callback error:', error)
