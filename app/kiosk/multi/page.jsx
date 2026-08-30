@@ -6,7 +6,7 @@ import Link from 'next/link'
 import TipSelection from '../components/TipSelection'
 import useSquarePayment, { resolveSquareLocation } from '../components/useSquarePayment'
 import KioskPaymentForm from '../components/KioskPaymentForm'
-import SquareConfigError from '../components/SquareConfigError'
+import KioskPaymentAvailability from '../components/KioskPaymentAvailability'
 import PaymentSuccess from '../components/PaymentSuccess'
 import TotalDueDisplay from '../components/TotalDueDisplay'
 import ServiceLineItems from '../components/ServiceLineItems'
@@ -230,25 +230,14 @@ function MultiPaymentContent() {
 
       <TotalDueDisplay totalDue={totalDue} tipAmount={tipAmount} priceLabel="Services" priceAmount={totalPrice} />
 
-      {initError || squareReason === 'config_error' ? (
-        <SquareConfigError
-          code={initError?.code || 'config_error'}
-          message={initError?.message || 'Card payments are temporarily unavailable due to a configuration issue.'}
-        />
-      ) : !squareLocationId ? (
-        squareReason === null ? (
-          <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--color-text-light)' }}>
-            <p style={{ margin: 0, fontSize: '0.9rem' }}>Checking card payment availability…</p>
-          </div>
-        ) : (
-          <div style={{ padding: '1.5rem', background: '#fff3cd', borderRadius: '8px', border: '1px solid #ffc107', textAlign: 'center' }}>
-            <strong>Card payment not available</strong>
-            <p style={{ margin: '0.5rem 0 0', fontSize: '0.9rem' }}>No provider in this group has connected Square. Please pay in person.</p>
-          </div>
-        )
-      ) : (
+      <KioskPaymentAvailability
+        initError={initError}
+        squareReason={squareReason}
+        squareLocationId={squareLocationId}
+        notConnectedText="No provider in this group has connected Square. Please pay in person."
+      >
         <KioskPaymentForm totalDue={totalDue} paying={paying} card={card} error={error} onPay={handlePay} />
-      )}
+      </KioskPaymentAvailability>
     </div>
   )
 }

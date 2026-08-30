@@ -14,7 +14,7 @@ describe('SquareConfigError', () => {
   test('shows the specific message and pay-in-person guidance', () => {
     render(<SquareConfigError code="env_mismatch" message="Square environment mismatch: fix both env vars." />)
     expect(screen.getByText(/Square environment mismatch: fix both env vars\./)).toBeInTheDocument()
-    expect(screen.getByText(/pay in person/i)).toBeInTheDocument()
+    expect(screen.getByText(/take payment in person/i)).toBeInTheDocument()
   })
 
   test('includes the error code for support/debugging', () => {

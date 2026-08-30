@@ -9,7 +9,7 @@
  * stylist shared across two same-vendor services.
  *
  * Fix: the SHOW path now gates each slot on canAssignBundleStaff — the SAME
- * assignment logic BOOK uses. This test enforces the invariant directly:
+ * assignment logic BOOK uses. This suite enforces the invariant directly:
  *
  *   Every slot returned by getSequentialBundleSlots MUST be bookable by
  *   assignBundleStaff for the reported suggestedOrder.
@@ -19,145 +19,97 @@ import { getSequentialBundleSlots } from '../../app/utils/sequentialAvailability
 import { assignBundleStaff } from '../../app/utils/bundleStaffAssigner.js'
 
 const DAY = { monday: { start: '09:00', end: '17:00' } }
+const DATE = '2024-03-11' // a Monday, so the schedule above applies
 
 function staff(id, vendorId) {
   return { visibleId: id, vendorId, isActive: true, staffName: id, schedule: DAY }
 }
 
-// A Monday date so the schedule above applies.
-const DATE = '2024-03-11'
-
-describe('show/book consistency: shared stylist across same-vendor services', () => {
-  // Vendor A offers two services in the bundle, and only ONE stylist (s1) is
-  // qualified for both. The old count-based logic showed a slot (1 free for
-  // each service), but booking cannot put s1 on two overlapping/sequential
-  // slots for the same person twice at once — it must sequence them, and if
-  // the block doesn't fit, no slot should be shown.
-  const services = [
-    { serviceId: 'svc-a1', duration: 60, providersRequired: 1, vendorId: 'vendor-a', allowedStaff: ['s1'] },
-    { serviceId: 'svc-a2', duration: 60, providersRequired: 1, vendorId: 'vendor-a', allowedStaff: ['s1'] },
-  ]
-  const staffSchedulesByService = {
-    'svc-a1': [staff('s1', 'vendor-a')],
-    'svc-a2': [staff('s1', 'vendor-a')],
-  }
-
-  test('every returned slot is bookable by assignBundleStaff', () => {
-    const { slots, suggestedOrder } = getSequentialBundleSlots({
-      services,
-      staffSchedulesByService,
-      appointments: [],
-      startDate: DATE,
-      bufferMinutes: 15,
-      serviceOrder: null,
-      multiDay: false,
-      maxDays: 1,
-    })
-
-    // There should be some slots (s1 can do both sequentially within 9-5).
-    expect(slots.length).toBeGreaterThan(0)
-
-    const orderedServices = suggestedOrder.map(id => services.find(s => s.serviceId === id))
-
-    for (const slot of slots) {
-      expect(() =>
-        assignBundleStaff({
-          orderedServices,
-          staffSchedulesByService,
-          appointments: [],
-          date: DATE,
-          startTime: slot.startTime,
-          bufferMinutes: 15,
-        })
-      ).not.toThrow()
-    }
+/**
+ * Shared assertion: compute availability, then verify EVERY returned slot is
+ * bookable by assignBundleStaff for the reported order. Optionally require that
+ * at least one slot exists.
+ */
+function assertAllSlotsBookable({ services, staffSchedulesByService, appointments = [], bufferMinutes, expectSlots = false }) {
+  const { slots, suggestedOrder } = getSequentialBundleSlots({
+    services,
+    staffSchedulesByService,
+    appointments,
+    startDate: DATE,
+    bufferMinutes,
+    serviceOrder: null,
+    multiDay: false,
+    maxDays: 1,
   })
-})
 
-describe('show/book consistency: two stylists, two services, one busy', () => {
-  // Vendor A has services a1 and a2, stylists s1 and s2 both qualified.
-  // s2 is fully booked all day, so only s1 is free — same as the single-stylist
-  // case. Every shown slot must still be bookable.
-  const services = [
-    { serviceId: 'svc-a1', duration: 45, providersRequired: 1, vendorId: 'vendor-a', allowedStaff: ['s1', 's2'] },
-    { serviceId: 'svc-a2', duration: 45, providersRequired: 1, vendorId: 'vendor-a', allowedStaff: ['s1', 's2'] },
-  ]
-  const staffSchedulesByService = {
-    'svc-a1': [staff('s1', 'vendor-a'), staff('s2', 'vendor-a')],
-    'svc-a2': [staff('s1', 'vendor-a'), staff('s2', 'vendor-a')],
+  if (expectSlots) expect(slots.length).toBeGreaterThan(0)
+
+  const orderedServices = suggestedOrder.map(id => services.find(s => s.serviceId === id))
+
+  for (const slot of slots) {
+    expect(() =>
+      assignBundleStaff({
+        orderedServices,
+        staffSchedulesByService,
+        appointments,
+        date: DATE,
+        startTime: slot.startTime,
+        bufferMinutes,
+      })
+    ).not.toThrow()
   }
-  // s2 booked 09:00-17:00 solid.
-  const appointments = [
-    { appointmentId: 'x', staffId: 's2', dateTime: `${DATE}T09:00`, status: 'confirmed', customer: JSON.stringify({ duration: 480 }) },
-  ]
+}
 
-  test('every returned slot is bookable by assignBundleStaff', () => {
-    const { slots, suggestedOrder } = getSequentialBundleSlots({
-      services,
-      staffSchedulesByService,
-      appointments,
-      startDate: DATE,
+describe('show/book consistency: every shown slot is bookable', () => {
+  test('shared stylist across two same-vendor services (the original bug)', () => {
+    // Vendor A offers two services, and only ONE stylist (s1) is qualified for
+    // both. The old count-based logic counted s1 twice and showed slots the
+    // booking path then rejected.
+    assertAllSlotsBookable({
+      services: [
+        { serviceId: 'svc-a1', duration: 60, providersRequired: 1, vendorId: 'vendor-a', allowedStaff: ['s1'] },
+        { serviceId: 'svc-a2', duration: 60, providersRequired: 1, vendorId: 'vendor-a', allowedStaff: ['s1'] },
+      ],
+      staffSchedulesByService: {
+        'svc-a1': [staff('s1', 'vendor-a')],
+        'svc-a2': [staff('s1', 'vendor-a')],
+      },
+      bufferMinutes: 15,
+      expectSlots: true, // s1 can do both sequentially within 9-5
+    })
+  })
+
+  test('two eligible stylists but one is fully booked', () => {
+    // s2 is booked solid all day, so only s1 is effectively free — same
+    // constraint as the single-stylist case. Every shown slot must still book.
+    assertAllSlotsBookable({
+      services: [
+        { serviceId: 'svc-a1', duration: 45, providersRequired: 1, vendorId: 'vendor-a', allowedStaff: ['s1', 's2'] },
+        { serviceId: 'svc-a2', duration: 45, providersRequired: 1, vendorId: 'vendor-a', allowedStaff: ['s1', 's2'] },
+      ],
+      staffSchedulesByService: {
+        'svc-a1': [staff('s1', 'vendor-a'), staff('s2', 'vendor-a')],
+        'svc-a2': [staff('s1', 'vendor-a'), staff('s2', 'vendor-a')],
+      },
+      appointments: [
+        { appointmentId: 'x', staffId: 's2', dateTime: `${DATE}T09:00`, status: 'confirmed', customer: JSON.stringify({ duration: 480 }) },
+      ],
       bufferMinutes: 10,
-      serviceOrder: null,
-      multiDay: false,
-      maxDays: 1,
     })
-
-    const orderedServices = suggestedOrder.map(id => services.find(s => s.serviceId === id))
-
-    for (const slot of slots) {
-      expect(() =>
-        assignBundleStaff({
-          orderedServices,
-          staffSchedulesByService,
-          appointments,
-          date: DATE,
-          startTime: slot.startTime,
-          bufferMinutes: 10,
-        })
-      ).not.toThrow()
-    }
   })
-})
 
-describe('show/book consistency: two vendors, distinct stylists', () => {
-  // The healthy case — two vendors, one stylist each. Slots should exist and
-  // all be bookable.
-  const services = [
-    { serviceId: 'svc-a', duration: 60, providersRequired: 1, vendorId: 'vendor-a', allowedStaff: ['sa'] },
-    { serviceId: 'svc-b', duration: 60, providersRequired: 1, vendorId: 'vendor-b', allowedStaff: ['sb'] },
-  ]
-  const staffSchedulesByService = {
-    'svc-a': [staff('sa', 'vendor-a')],
-    'svc-b': [staff('sb', 'vendor-b')],
-  }
-
-  test('slots exist and every one is bookable', () => {
-    const { slots, suggestedOrder } = getSequentialBundleSlots({
-      services,
-      staffSchedulesByService,
-      appointments: [],
-      startDate: DATE,
+  test('healthy case: two vendors, distinct stylists', () => {
+    assertAllSlotsBookable({
+      services: [
+        { serviceId: 'svc-a', duration: 60, providersRequired: 1, vendorId: 'vendor-a', allowedStaff: ['sa'] },
+        { serviceId: 'svc-b', duration: 60, providersRequired: 1, vendorId: 'vendor-b', allowedStaff: ['sb'] },
+      ],
+      staffSchedulesByService: {
+        'svc-a': [staff('sa', 'vendor-a')],
+        'svc-b': [staff('sb', 'vendor-b')],
+      },
       bufferMinutes: 15,
-      serviceOrder: null,
-      multiDay: false,
-      maxDays: 1,
+      expectSlots: true,
     })
-
-    expect(slots.length).toBeGreaterThan(0)
-
-    const orderedServices = suggestedOrder.map(id => services.find(s => s.serviceId === id))
-    for (const slot of slots) {
-      expect(() =>
-        assignBundleStaff({
-          orderedServices,
-          staffSchedulesByService,
-          appointments: [],
-          date: DATE,
-          startTime: slot.startTime,
-          bufferMinutes: 15,
-        })
-      ).not.toThrow()
-    }
   })
 })

@@ -1,16 +1,22 @@
 /**
- * Guard test: the Amplify backend is compiled with `moduleResolution: NodeNext`
- * (see amplify/tsconfig.json). Under NodeNext, relative imports in ESM MUST
- * carry an explicit file extension (e.g. './types.js'), otherwise
- * `ampx pipeline-deploy` fails with TS2835 during deploy.
+ * Guard test: keep the Amplify backend module graph free of `.js` extensions
+ * on relative imports that point at TypeScript source files.
  *
- * The root tsconfig uses `moduleResolution: bundler`, which does NOT enforce
- * this — so the regular typecheck and app tests will happily pass while a
- * deploy breaks. This test statically walks the backend's module graph
- * (the Lambda handlers plus everything they import from lib/) and asserts
- * every relative import/export specifier has an explicit extension.
+ * History / why this matters:
+ * - `amplify/tsconfig.json` uses `moduleResolution: Bundler` (the Lambda
+ *   functions are bundled by esbuild, which resolves extensionless TS imports).
+ * - The Next.js app (Turbopack, `moduleResolution: bundler`) shares several of
+ *   these files (e.g. lib/logger/*). Turbopack does NOT rewrite `./constants.js`
+ *   to `constants.ts`, so a `.js` extension on a relative import that actually
+ *   points at a `.ts` file breaks the app build (this happened once and took
+ *   down the homepage).
+ * - Therefore the correct, portable convention for shared TS is EXTENSIONLESS
+ *   relative imports. This test enforces that across the backend graph so a
+ *   well-meaning "add .js for NodeNext" change can't silently break the app.
  *
- * If this fails, add the missing `.js` extension to the reported import.
+ * Note: importing a real `.js`/`.json` file by its actual extension is fine —
+ * we only flag a `.js` (or `.ts`) extension whose target on disk is a `.ts`
+ * source file.
  */
 
 import { readFileSync, existsSync } from 'node:fs'
@@ -20,8 +26,8 @@ import { fileURLToPath } from 'node:url'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(__dirname, '../..')
 
-// Entry points that are bundled into Lambda functions and thus compiled
-// under amplify/tsconfig.json's NodeNext resolution.
+// Entry points that are bundled into Lambda functions / evaluated by the
+// Amplify backend, plus everything they transitively import from lib/.
 const ENTRY_POINTS = [
   'amplify/functions/send-sms/handler.ts',
   'amplify/functions/send-email/handler.ts',
@@ -45,35 +51,43 @@ function isRelative(spec) {
   return spec.startsWith('./') || spec.startsWith('../')
 }
 
-function hasExplicitExtension(spec) {
-  // Accept known source/asset extensions. NodeNext requires the emitted
-  // extension (.js/.mjs/.cjs) or .json for JSON modules.
-  return /\.(js|mjs|cjs|json|jsx)$/.test(spec)
+/** Strip any of the recognized extensions from a specifier. */
+function stripExtension(spec) {
+  return spec.replace(/\.(js|mjs|cjs|jsx|ts|tsx)$/, '')
 }
 
 /**
- * Resolve a relative specifier (which points at the emitted .js) back to the
- * source .ts/.js file on disk so we can continue walking the graph.
+ * Resolve a relative specifier to the source file on disk (trying the common
+ * TS/JS candidates), regardless of whether the specifier carried an extension.
+ * Returns { path, isTs } or null.
  */
 function resolveSourceFile(fromFile, spec) {
-  const base = resolve(dirname(fromFile), spec)
+  const base = resolve(dirname(fromFile), stripExtension(spec))
   const candidates = [
-    base,
-    base.replace(/\.js$/, '.ts'),
-    base.replace(/\.js$/, '.tsx'),
-    base.replace(/\.mjs$/, '.mts'),
-    `${base}.ts`,
-    `${base}.tsx`,
-    `${base}.js`,
-    resolve(base, 'index.ts'),
-    resolve(base, 'index.js'),
+    { path: `${base}.ts`, isTs: true },
+    { path: `${base}.tsx`, isTs: true },
+    { path: `${base}.mts`, isTs: true },
+    { path: `${base}.js`, isTs: false },
+    { path: `${base}.mjs`, isTs: false },
+    { path: `${base}.json`, isTs: false },
+    { path: resolve(base, 'index.ts'), isTs: true },
+    { path: resolve(base, 'index.js'), isTs: false },
   ]
-  return candidates.find((c) => existsSync(c)) || null
+  return candidates.find((c) => existsSync(c.path)) || null
 }
 
 /**
- * Walk the module graph from the entry points, collecting every violation
- * (relative import without an explicit extension) along the way.
+ * A specifier is a violation when it carries an explicit extension AND that
+ * extension's target on disk is a TypeScript source file. Extensionless
+ * imports are the desired convention; importing a real .js/.json is fine.
+ */
+function hasBadExtension(spec, resolved) {
+  const carriesExtension = /\.(js|mjs|cjs|jsx|ts|tsx)$/.test(spec)
+  return carriesExtension && resolved?.isTs === true
+}
+
+/**
+ * Walk the module graph from the entry points, collecting every violation.
  */
 function collectViolations() {
   const violations = []
@@ -92,35 +106,36 @@ function collectViolations() {
     for (const spec of specs) {
       if (!isRelative(spec)) continue
 
-      if (!hasExplicitExtension(spec)) {
+      const resolved = resolveSourceFile(file, spec)
+
+      if (hasBadExtension(spec, resolved)) {
         violations.push({ file: relative(repoRoot, file), spec })
-        continue
       }
 
       // Follow the import to keep walking the graph.
-      const next = resolveSourceFile(file, spec)
-      if (next) queue.push(next)
+      if (resolved) queue.push(resolved.path)
     }
   }
 
   return { violations, visitedCount: visited.size }
 }
 
-describe('Amplify backend NodeNext import extensions', () => {
+describe('Amplify backend import extensions (Bundler resolution)', () => {
   const { violations, visitedCount } = collectViolations()
 
   test('the backend module graph was actually traversed', () => {
-    // Sanity check: if this is 0, the entry points or resolution broke and the
-    // test would pass vacuously.
+    // Sanity check: if this is <= 1, the entry points or resolution broke and
+    // the test would pass vacuously.
     expect(visitedCount).toBeGreaterThan(1)
   })
 
-  test('every relative import in the backend graph has an explicit extension', () => {
+  test('no relative import in the backend graph uses a .js/.ts extension for a TS source file', () => {
     const message =
       violations.length === 0
         ? ''
-        : 'Relative imports missing an explicit extension (required by NodeNext, breaks ampx deploy):\n' +
-          violations.map((v) => `  ${v.file}: '${v.spec}' (did you mean '${v.spec}.js'?)`).join('\n')
+        : 'Relative imports must be EXTENSIONLESS (they point at .ts sources; a ' +
+          '.js extension breaks the Next.js/Turbopack build that shares these files):\n' +
+          violations.map((v) => `  ${v.file}: '${v.spec}' (use '${stripExtension(v.spec)}')`).join('\n')
 
     expect(message).toBe('')
   })
