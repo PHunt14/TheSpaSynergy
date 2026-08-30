@@ -57,6 +57,18 @@ const sections = [
 
 const platformUpdates = [
   {
+    version: 'v1.6.2',
+    date: 'August 2026',
+    title: 'Kiosk Reliability, Booking Accuracy & Build Stability',
+    changes: [
+      'Kiosk Square connection is now resolved by a single authoritative check — reconnecting in Settings reliably restores card payments',
+      'Kiosk now fails loudly with a clear message when Square is misconfigured (e.g. sandbox/production mismatch) instead of silently showing a blank payment form',
+      'Fixed multi-service bookings that showed a time as available but were rejected at checkout — the calendar now uses the exact staff-assignment logic as booking',
+      'Bundle availability and booking now handle "any staff" services and service ordering consistently',
+      'Fixed a deployment failure and a homepage build error caused by module import resolution',
+    ],
+  },
+  {
     version: 'v1.6.1',
     date: 'August 2026',
     title: 'Improved Logging, Blocked Time & Calendar Corrections',
