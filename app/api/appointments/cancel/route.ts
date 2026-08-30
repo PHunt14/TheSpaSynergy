@@ -2,8 +2,9 @@ import { Client, Environment } from 'square';
 import { randomUUID } from 'node:crypto';
 import { client, resolveAppointmentDetails, sendAppointmentNotifications } from '@/lib/appointment-notifications';
 import { calculateBundlePrice } from '@/app/utils/bundleDiscount';
+import { withErrorLogging } from '@/lib/logger/middleware';
 
-export async function POST(request: Request) {
+export const POST = withErrorLogging(async function POST(request: Request) {
   try {
     const body = await request.json();
     const { appointmentId, cancelType } = body;
@@ -65,7 +66,7 @@ export async function POST(request: Request) {
     console.error('Error cancelling appointment:', error);
     return Response.json({ error: 'Failed to cancel appointment' }, { status: 500 });
   }
-}
+})
 
 /**
  * Handles partial cancellation of a single service within a multi-vendor bundle.

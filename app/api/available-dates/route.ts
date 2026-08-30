@@ -4,13 +4,25 @@ import type { Schema } from '../../../amplify/data/resource';
 import config from '../../../amplify_outputs.json' with { type: 'json' };
 import { DAY_NAMES, getDayHoursSync, resolveStaffSync, hasAnySlot, getRecurrenceHours } from '../../utils/availability.js';
 import { getEligibleStaff } from '../../utils/staffEligibility';
+import { withErrorLogging } from '@/lib/logger/middleware';
 
 const client = generateServerClientUsingCookies<Schema>({
   config,
   cookies,
 });
 
-export async function GET(request: Request) {
+/**
+ * Formats a Date as YYYY-MM-DD in local time, avoiding UTC timezone shift.
+ * Using toISOString().split('T')[0] can shift dates when the server is behind UTC.
+ */
+function formatDateLocal(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+export const GET = withErrorLogging(async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const vendorId = searchParams.get('vendorId');
   const serviceId = searchParams.get('serviceId');
@@ -146,7 +158,7 @@ export async function GET(request: Request) {
     console.error('Error fetching available dates:', error);
     return Response.json({ error: 'Failed to fetch available dates' }, { status: 500 });
   }
-}
+})
 
 /**
  * Unified flow: determine available dates based on eligible staff schedules.
@@ -164,7 +176,7 @@ function buildAvailableDatesUnified(
 
   for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
     if (d < minDate) continue;
-    const dateStr = d.toISOString().split('T')[0];
+    const dateStr = formatDateLocal(d);
     const dayOfWeek = DAY_NAMES[d.getDay()];
 
     if (allowedDays && !allowedDays.includes(dayOfWeek)) continue;
@@ -197,11 +209,22 @@ function buildAvailableDatesUnified(
 }
 
 /**
- * Get working hours for a staff member on a specific day, handling recurrence.
+ * Get working hours for a staff member on a specific day, handling overrides and recurrence.
  */
 function getStaffHoursForDay(staff: any, dayOfWeek: string, requestedDate: Date) {
   if (!staff.schedule) return null;
   const schedule = typeof staff.schedule === 'string' ? JSON.parse(staff.schedule) : staff.schedule;
+
+  // Date-specific overrides take priority over weekly template
+  if (schedule.overrides) {
+    const dateStr = formatDateLocal(requestedDate);
+    if (dateStr in schedule.overrides) {
+      const override = schedule.overrides[dateStr];
+      // null = explicitly closed, { start, end } = custom hours
+      return override ? { start: override.start, end: override.end } : null;
+    }
+  }
+
   const daySchedule = schedule[dayOfWeek];
   if (!daySchedule || !daySchedule.start) return null;
 
@@ -263,7 +286,7 @@ function buildAvailableDatesLegacy(
 
   for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
     if (d < minDate) continue;
-    const dateStr = d.toISOString().split('T')[0];
+    const dateStr = formatDateLocal(d);
     const dayOfWeek = DAY_NAMES[d.getDay()];
 
     if (allowedDays && !allowedDays.includes(dayOfWeek)) continue;
@@ -350,7 +373,7 @@ async function handleBundleAvailableDates(
 
     for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
       if (d < minDate) continue;
-      const dateStr = d.toISOString().split('T')[0];
+      const dateStr = formatDateLocal(d);
       const dayOfWeek = DAY_NAMES[d.getDay()];
 
       if (allowedDays && !allowedDays.includes(dayOfWeek)) continue;

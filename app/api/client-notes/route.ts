@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { fetchAuthSession } from 'aws-amplify/auth/server';
 import { Amplify } from 'aws-amplify';
 import { createServerRunner } from '@aws-amplify/adapter-nextjs';
+import { withErrorLogging } from '@/lib/logger/middleware';
 
 Amplify.configure(config, { ssr: true });
 const { runWithAmplifyServerContext } = createServerRunner({ config });
@@ -35,7 +36,7 @@ async function getCurrentUser() {
   }
 }
 
-export async function GET(request: Request) {
+export const GET = withErrorLogging(async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const clientId = searchParams.get('clientId');
 
@@ -50,9 +51,9 @@ export async function GET(request: Request) {
     console.error('Error fetching notes:', error);
     return Response.json({ error: 'Failed to fetch notes' }, { status: 500 });
   }
-}
+})
 
-export async function POST(request: Request) {
+export const POST = withErrorLogging(async function POST(request: Request) {
   try {
     const user = await getCurrentUser();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
@@ -79,9 +80,9 @@ export async function POST(request: Request) {
     console.error('Error creating note:', error);
     return Response.json({ error: 'Failed to create note' }, { status: 500 });
   }
-}
+})
 
-export async function PATCH(request: Request) {
+export const PATCH = withErrorLogging(async function PATCH(request: Request) {
   try {
     const user = await getCurrentUser();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
@@ -107,4 +108,4 @@ export async function PATCH(request: Request) {
     console.error('Error updating note:', error);
     return Response.json({ error: 'Failed to update note' }, { status: 500 });
   }
-}
+})

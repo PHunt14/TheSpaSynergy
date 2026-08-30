@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import type { Schema } from '../../../amplify/data/resource';
 import config from '../../../amplify_outputs.json' with { type: 'json' };
 import { getEligibleStaff } from '../../utils/staffEligibility';
+import { withErrorLogging } from '@/lib/logger/middleware';
 
 const client = generateServerClientUsingCookies<Schema>({
   config,
@@ -18,7 +19,7 @@ const client = generateServerClientUsingCookies<Schema>({
  *
  * Requirements: 5.1, 5.2, 13.2
  */
-export async function GET(request: Request) {
+export const GET = withErrorLogging(async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const serviceId = searchParams.get('serviceId');
 
@@ -82,4 +83,4 @@ export async function GET(request: Request) {
     console.error('Error fetching eligible staff:', error);
     return Response.json({ error: 'Failed to fetch eligible staff' }, { status: 500 });
   }
-}
+})

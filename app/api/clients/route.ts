@@ -4,13 +4,14 @@ import type { Schema } from '../../../amplify/data/resource';
 import config from '../../../amplify_outputs.json' with { type: 'json' };
 import { randomUUID } from 'node:crypto';
 import { normalizePhone, normalizeEmail } from '@/app/utils/client.js';
+import { withErrorLogging } from '@/lib/logger/middleware';
 
 const client = generateServerClientUsingCookies<Schema>({
   config,
   cookies,
 });
 
-export async function GET(request: Request) {
+export const GET = withErrorLogging(async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const clientId = searchParams.get('clientId');
   const search = searchParams.get('search');
@@ -35,9 +36,9 @@ export async function GET(request: Request) {
     console.error('Error fetching clients:', error);
     return Response.json({ error: 'Failed to fetch clients' }, { status: 500 });
   }
-}
+})
 
-export async function POST(request: Request) {
+export const POST = withErrorLogging(async function POST(request: Request) {
   try {
     const body = await request.json();
     const { name, phone, email } = body;
@@ -73,9 +74,9 @@ export async function POST(request: Request) {
     console.error('Error creating client:', error);
     return Response.json({ error: 'Failed to create client' }, { status: 500 });
   }
-}
+})
 
-export async function PATCH(request: Request) {
+export const PATCH = withErrorLogging(async function PATCH(request: Request) {
   try {
     const body = await request.json();
     const { clientId, name, phone, email } = body;
@@ -92,9 +93,9 @@ export async function PATCH(request: Request) {
   } catch (error) {
     return Response.json({ error: 'Failed to update client' }, { status: 500 });
   }
-}
+})
 
-export async function DELETE(request: Request) {
+export const DELETE = withErrorLogging(async function DELETE(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const clientId = searchParams.get('clientId');
@@ -114,7 +115,7 @@ export async function DELETE(request: Request) {
   } catch (error) {
     return Response.json({ error: 'Failed to delete client' }, { status: 500 });
   }
-}
+})
 
 async function findExistingClient(phone?: string, email?: string) {
   const normalizedPhone = normalizePhone(phone);

@@ -5,17 +5,19 @@ import { cookies } from 'next/headers'
 import type { Schema } from '@/amplify/data/resource'
 import { Amplify } from 'aws-amplify'
 import config from '@/amplify_outputs.json'
+import { withErrorLogging } from '@/lib/logger/middleware';
 
 Amplify.configure(config, { ssr: true })
 const client = generateServerClientUsingCookies<Schema>({ config, cookies })
 
-export async function GET(request: NextRequest) {
+export const GET = withErrorLogging(async function GET(request: Request) {
+  const nextRequest = request as unknown as NextRequest;
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
 
   try {
-    const code = request.nextUrl.searchParams.get('code')
-    const state = request.nextUrl.searchParams.get('state')
-    const error = request.nextUrl.searchParams.get('error')
+    const code = nextRequest.nextUrl.searchParams.get('code')
+    const state = nextRequest.nextUrl.searchParams.get('state')
+    const error = nextRequest.nextUrl.searchParams.get('error')
 
     if (error) {
       return Response.redirect(`${baseUrl}/dashboard/settings?error=oauth_failed&details=${encodeURIComponent(error)}`)
@@ -122,4 +124,4 @@ export async function GET(request: NextRequest) {
     console.error('Square callback error:', error)
     return Response.redirect(`${baseUrl}/dashboard/settings?error=oauth_failed&details=${encodeURIComponent(error.message || 'unknown')}`)
   }
-}
+})

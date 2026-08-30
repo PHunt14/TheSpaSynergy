@@ -1,4 +1,5 @@
 import { client, getCurrentUser } from '@/lib/auth';
+import { withErrorLogging } from '@/lib/logger/middleware';
 
 const SENSITIVE_VENDOR_FIELDS = [
   'squareAccessToken', 'squareRefreshToken', 'squareApplicationId',
@@ -12,7 +13,7 @@ function stripSensitiveFields(vendor: any) {
   return safe;
 }
 
-export async function GET(request: Request) {
+export const GET = withErrorLogging(async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const includeInactive = searchParams.get('includeInactive');
@@ -80,9 +81,9 @@ export async function GET(request: Request) {
     console.error('Error fetching providers:', error);
     return Response.json({ error: 'Failed to fetch providers' }, { status: 500 });
   }
-}
+})
 
-export async function POST(request: Request) {
+export const POST = withErrorLogging(async function POST(request: Request) {
   try {
     const currentUser = await getCurrentUser();
     if (!currentUser || (currentUser.role !== 'admin')) {
@@ -121,9 +122,9 @@ export async function POST(request: Request) {
     console.error('Error creating provider:', error);
     return Response.json({ error: 'Failed to create provider' }, { status: 500 });
   }
-}
+})
 
-export async function PATCH(request: Request) {
+export const PATCH = withErrorLogging(async function PATCH(request: Request) {
   try {
     const body = await request.json();
     const { vendorId } = body;
@@ -172,9 +173,9 @@ export async function PATCH(request: Request) {
     console.error('Error updating provider:', error);
     return Response.json({ error: 'Failed to update provider' }, { status: 500 });
   }
-}
+})
 
-export async function DELETE(request: Request) {
+export const DELETE = withErrorLogging(async function DELETE(request: Request) {
   try {
     const currentUser = await getCurrentUser();
     if (!currentUser || (currentUser.role !== 'admin')) {
@@ -218,4 +219,4 @@ export async function DELETE(request: Request) {
     console.error('Error deleting provider:', error);
     return Response.json({ error: 'Failed to delete provider' }, { status: 500 });
   }
-}
+})

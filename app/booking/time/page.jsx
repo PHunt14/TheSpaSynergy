@@ -70,15 +70,23 @@ function TimePageContent() {
     if (service && isBookingEnabled) fetchAvailableDates(selectedDate)
   }, [service, staffId])
 
+  // Helper to format date as YYYY-MM-DD in local timezone
+  const formatDateLocal = (date) => {
+    const y = date.getFullYear()
+    const m = String(date.getMonth() + 1).padStart(2, '0')
+    const d = String(date.getDate()).padStart(2, '0')
+    return `${y}-${m}-${d}`
+  }
+
   const isDateAvailable = (date) => {
     if (!availableDates || datesLoading) return false
-    const dateStr = date.toISOString().split('T')[0]
+    const dateStr = formatDateLocal(date)
     return availableDates.has(dateStr)
   }
 
   const getDayClassName = (date) => {
     if (!availableDates || datesLoading) return 'unavailable-day'
-    const dateStr = date.toISOString().split('T')[0]
+    const dateStr = formatDateLocal(date)
     return availableDates.has(dateStr) ? '' : 'unavailable-day'
   }
 
@@ -88,7 +96,7 @@ function TimePageContent() {
     setLoading(true)
     setSelectedTime(null)
 
-    const dateStr = selectedDate.toISOString().split('T')[0] // YYYY-MM-DD
+    const dateStr = formatDateLocal(selectedDate) // YYYY-MM-DD
 
     const multiProviderParam = multiProvider ? '&multiProvider=true' : ''
     const quantityParams = quantity > 1 ? `&quantity=${quantity}&mode=${quantityMode}` : ''
@@ -252,7 +260,7 @@ function TimePageContent() {
           className="cta"
           onClick={async () => {
             // Re-validate the slot is still available before proceeding
-            const dateStr = selectedDate.toISOString().split('T')[0]
+            const dateStr = formatDateLocal(selectedDate)
             const multiProviderParam = multiProvider ? '&multiProvider=true' : ''
             const quantityParams = quantity > 1 ? `&quantity=${quantity}&mode=${quantityMode}` : ''
             const vendorParam = vendor ? `&vendorId=${vendor}` : ''

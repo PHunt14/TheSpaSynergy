@@ -4,6 +4,7 @@ import type { Schema } from '../../../amplify/data/resource';
 import config from '../../../amplify_outputs.json' with { type: 'json' };
 import { getSequentialBundleSlots } from '../../utils/sequentialAvailability.js';
 import { checkBookingBlackout, blackoutResponseFields } from '../../utils/bookingBlackout';
+import { withErrorLogging } from '@/lib/logger/middleware';
 
 const client = generateServerClientUsingCookies<Schema>({ config, cookies });
 
@@ -13,7 +14,7 @@ const client = generateServerClientUsingCookies<Schema>({ config, cookies });
  * Returns available start times where ALL services in the bundle
  * can be scheduled sequentially with appropriate staff.
  */
-export async function GET(request: Request) {
+export const GET = withErrorLogging(async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const serviceIdsParam = searchParams.get('serviceIds');
   const date = searchParams.get('date');
@@ -148,7 +149,7 @@ export async function GET(request: Request) {
     console.error('Bundle availability error:', error);
     return Response.json({ error: 'Failed to fetch bundle availability' }, { status: 500 });
   }
-}
+})
 
 function formatTime(timeStr: string): string {
   const [h, m] = timeStr.split(':').map(Number);

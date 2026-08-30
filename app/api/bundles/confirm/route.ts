@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import type { Schema } from '../../../../amplify/data/resource';
 import config from '../../../../amplify_outputs.json' with { type: 'json' };
 import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
+import { withErrorLogging } from '@/lib/logger/middleware';
 
 const client = generateServerClientUsingCookies<Schema>({ config, cookies });
 const snsClient = new SNSClient({ region: process.env.AWS_REGION || 'us-east-1' });
@@ -98,7 +99,7 @@ async function confirmVendorPortion(bundleId: string, vendorId: string, bundle: 
   return newStatus;
 }
 
-export async function POST(request: Request) {
+export const POST = withErrorLogging(async function POST(request: Request) {
   try {
     const { bundleId, vendorId, action } = await request.json();
     if (!bundleId || !vendorId || !action) {
@@ -139,4 +140,4 @@ export async function POST(request: Request) {
     console.error('Bundle confirm error:', error);
     return Response.json({ error: 'Failed to process bundle confirmation' }, { status: 500 });
   }
-}
+})

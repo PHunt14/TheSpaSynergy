@@ -32,6 +32,45 @@ function formatTime(date) {
   return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
 }
 
+// A service is treated as a "Head Bath" service if its name contains "head bath"
+// or "headbath" (case-insensitive, spacing-insensitive). Catches variants like
+// "Head Bath", "Couples Head Bath", and "Couple Headbath".
+function isHeadBathService(name) {
+  return (name || '').toLowerCase().replace(/\s+/g, '').includes('headbath')
+}
+
+// Sort comparator: Head Bath services first, then alphabetical by name.
+function compareServicesHeadBathFirst(a, b) {
+  const aHB = isHeadBathService(a.name)
+  const bHB = isHeadBathService(b.name)
+  if (aHB && !bHB) return -1
+  if (!aHB && bHB) return 1
+  return (a.name || '').localeCompare(b.name || '')
+}
+
+// Format a duration in minutes as "1h 30m", "45m", or "2h"
+function formatDuration(minutes) {
+  if (minutes < 60) return `${minutes}m`
+  const hours = Math.floor(minutes / 60)
+  const mins = minutes % 60
+  const minsPart = mins > 0 ? ` ${mins}m` : ''
+  return `${hours}h${minsPart}`
+}
+
+// Shared local datetime formatter (YYYY-MM-DDTHH:MM) for datetime-local inputs.
+// Avoids UTC shift from toISOString().
+function formatLocalDateTimeValue(dt) {
+  if (!dt) return ''
+  const d = dt instanceof Date ? dt : new Date(dt)
+  if (Number.isNaN(d.getTime())) return ''
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  const hours = String(d.getHours()).padStart(2, '0')
+  const minutes = String(d.getMinutes()).padStart(2, '0')
+  return `${year}-${month}-${day}T${hours}:${minutes}`
+}
+
 // ── Appointment Block Component ───────────────────────────────
 
 function AppointmentBlock({ appointment, startHour, onClick, column = 0, totalColumns = 1 }) {
@@ -112,41 +151,52 @@ function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onEdit, 
     customerPhone: '',
     customerEmail: '',
   })
+  // Block-specific edit state
+  const [blockEditForm, setBlockEditForm] = useState({
+    dateTime: '',
+    endTime: '',
+    staffId: '',
+    notes: '',
+  })
 
   if (!appointment) return null
   const aptDate = parseAppointmentDate(appointment.rawDateTime)
+  const isBlockedTime = appointment.customer?.isBlockedTime || appointment.status === 'blocked'
+
+  // Format dateTime as local YYYY-MM-DDTHH:MM for datetime-local input
+  const formatLocalDT = formatLocalDateTimeValue
 
   // Initialize edit form when entering edit mode
   const startEditing = () => {
     const dt = appointment.rawDateTime || ''
-    // Convert to datetime-local format (must be local time, not UTC)
-    let dtLocal = ''
-    if (dt) {
-      const d = new Date(dt)
-      if (!isNaN(d.getTime())) {
-        // Format as YYYY-MM-DDTHH:MM in local timezone
-        const year = d.getFullYear()
-        const month = String(d.getMonth() + 1).padStart(2, '0')
-        const day = String(d.getDate()).padStart(2, '0')
-        const hours = String(d.getHours()).padStart(2, '0')
-        const minutes = String(d.getMinutes()).padStart(2, '0')
-        dtLocal = `${year}-${month}-${day}T${hours}:${minutes}`
-      }
+    const dtLocal = formatLocalDT(dt)
+
+    if (isBlockedTime) {
+      // Block-specific form
+      const blockDuration = appointment.customer?.duration || 60
+      const startDate = new Date(dt)
+      const endDate = new Date(startDate.getTime() + blockDuration * 60000)
+      setBlockEditForm({
+        dateTime: dtLocal,
+        endTime: formatLocalDT(endDate),
+        staffId: appointment.staffId || '',
+        notes: appointment.customer?.notes || '',
+      })
+    } else {
+      setEditForm({
+        dateTime: dtLocal,
+        serviceId: appointment.serviceId || '',
+        staffId: appointment.staffId || '',
+        status: appointment.status || '',
+        customerFirstName: appointment.customer?.name ? appointment.customer.name.split(' ')[0] : '',
+        customerLastName: appointment.customer?.name ? appointment.customer.name.split(' ').slice(1).join(' ') : '',
+        customerPhone: appointment.customer?.phone || '',
+        customerEmail: appointment.customer?.email || '',
+      })
     }
-    setEditForm({
-      dateTime: dtLocal,
-      serviceId: appointment.serviceId || '',
-      staffId: appointment.staffId || '',
-      status: appointment.status || '',
-      customerFirstName: appointment.customer?.name ? appointment.customer.name.split(' ')[0] : '',
-      customerLastName: appointment.customer?.name ? appointment.customer.name.split(' ').slice(1).join(' ') : '',
-      customerPhone: appointment.customer?.phone || '',
-      customerEmail: appointment.customer?.email || '',
-    })
     setEditing(true)
     setOverlapWarning(null)
     setPendingPayload(null)
-    // Load all services and all staff (unified access — no vendor filtering)
     loadEditData()
   }
 
@@ -306,6 +356,103 @@ function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onEdit, 
     }
   }
 
+  // Save handler for blocked time edits
+  const handleBlockSave = async () => {
+    setSaving(true)
+    try {
+      const updates = { appointmentId: appointment.appointmentId }
+      let hasChanges = false
+
+      // Check dateTime change — send in same format as creation (local YYYY-MM-DDTHH:MM)
+      if (blockEditForm.dateTime) {
+        const currentStored = appointment.rawDateTime || ''
+        // Normalize both to comparable format
+        const newLocal = blockEditForm.dateTime
+        const currentLocal = formatLocalDT(currentStored)
+        if (newLocal !== currentLocal) {
+          updates.dateTime = blockEditForm.dateTime
+          hasChanges = true
+        }
+      }
+
+      // Check staff change
+      if (blockEditForm.staffId !== (appointment.staffId || '')) {
+        updates.staffId = blockEditForm.staffId || null
+        hasChanges = true
+      }
+
+      // Calculate new duration from start/end
+      let newDuration = appointment.customer?.duration || 60
+      if (blockEditForm.dateTime && blockEditForm.endTime) {
+        const startMs = new Date(blockEditForm.dateTime).getTime()
+        const endMs = new Date(blockEditForm.endTime).getTime()
+        const diffMin = Math.round((endMs - startMs) / 60000)
+        if (diffMin > 0) newDuration = diffMin
+      }
+
+      // Check if duration or notes changed
+      const oldDuration = appointment.customer?.duration || 60
+      const oldNotes = appointment.customer?.notes || ''
+      if (newDuration !== oldDuration || blockEditForm.notes !== oldNotes) {
+        updates.customer = JSON.stringify({
+          name: 'Blocked Time',
+          isBlockedTime: true,
+          duration: newDuration,
+          notes: blockEditForm.notes || '',
+        })
+        hasChanges = true
+      }
+
+      if (currentUserStaffId) {
+        updates.createdBy = currentUserStaffId
+      }
+
+      if (hasChanges || updates.createdBy) {
+        const res = await fetch('/api/appointments', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updates)
+        })
+        if (!res.ok) {
+          const data = await res.json()
+          alert('Failed to save: ' + (data.error || 'Unknown error'))
+          setSaving(false)
+          return
+        }
+      }
+
+      if (hasChanges) onEdit()
+      onClose()
+    } catch (error) {
+      alert('Error saving: ' + (error.message || 'Unknown error'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Delete (cancel) blocked time
+  const handleDeleteBlock = async () => {
+    if (!confirm('Remove this time block?')) return
+    setSaving(true)
+    try {
+      const res = await fetch('/api/appointments', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ appointmentId: appointment.appointmentId, status: 'cancelled' })
+      })
+      if (res.ok) {
+        onEdit()
+        onClose()
+      } else {
+        alert('Failed to remove block')
+      }
+    } catch (error) {
+      alert('Error: ' + (error.message || 'Unknown'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <div
       onClick={onClose}
@@ -328,217 +475,345 @@ function AppointmentDetail({ appointment, onClose, onConfirm, onCancel, onEdit, 
           boxShadow: '0 8px 32px rgba(0,0,0,0.2)'
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-          <h3 style={{ margin: 0 }}>{editing ? 'Edit Appointment' : 'Appointment Details'}</h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: 'var(--color-text-light)' }}>×</button>
-        </div>
-
-        {!editing ? (
+        {/* ─── BLOCKED TIME ─── */}
+        {isBlockedTime ? (
           <>
-            {/* View mode */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              <p style={{ margin: 0 }}><strong>Customer:</strong> {appointment.customer?.name || 'Walk-in'}</p>
-              <p style={{ margin: 0 }}><strong>Service:</strong> {appointment.service?.name} ({appointment.service?.duration} min)</p>
-              <p style={{ margin: 0 }}><strong>Price:</strong> ${appointment.service?.price?.toFixed(2)}</p>
-              {appointment.staffName && <p style={{ margin: 0 }}><strong>With:</strong> {appointment.staffName}</p>}
-              {aptDate && <p style={{ margin: 0 }}><strong>Time:</strong> {formatTime(aptDate)}</p>}
-              {aptDate && <p style={{ margin: 0 }}><strong>Date:</strong> {aptDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>}
-              {(appointment.groupId || appointment.bundleId) && (
-                <p style={{ margin: 0 }}><strong>{appointment.bundleId ? '📦 Bundle' : '🔗 Group'}:</strong> This is part of a multi-appointment booking</p>
-              )}
-              <p style={{ margin: 0 }}><strong>Status:</strong> <span style={{
-                padding: '0.15rem 0.5rem', borderRadius: '8px', fontSize: '0.85rem',
-                background: appointment.status === 'confirmed' ? '#d4edda' : appointment.status === 'cancelled' ? '#f8d7da' : '#fff3cd',
-                color: appointment.status === 'confirmed' ? '#155724' : appointment.status === 'cancelled' ? '#721c24' : '#856404',
-              }}>{appointment.status}</span></p>
-              <p style={{ margin: 0 }}><strong>Payment:</strong> <span style={{
-                padding: '0.15rem 0.5rem', borderRadius: '8px', fontSize: '0.85rem',
-                background: appointment.paymentStatus === 'paid' ? '#d4edda' : '#fff3cd',
-                color: appointment.paymentStatus === 'paid' ? '#155724' : '#856404',
-              }}>{appointment.paymentStatus === 'paid' ? 'Paid' : 'Unpaid'}</span></p>
-              {appointment.customer?.phone && <p style={{ margin: 0 }}><strong>Phone:</strong> {appointment.customer.phone}</p>}
-              {appointment.customer?.notes && <p style={{ margin: 0 }}><strong>Notes:</strong> {appointment.customer.notes}</p>}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h3 style={{ margin: 0 }}>{editing ? 'Edit Time Block' : '🚫 Time Block'}</h3>
+              <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: 'var(--color-text-light)' }}>×</button>
             </div>
 
-            {/* Action buttons */}
-            {appointment.status !== 'cancelled' && (
-              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.5rem', flexWrap: 'wrap' }}>
-                {(appointment.status === 'pending' || appointment.status === 'pending-confirmation') && (
+            {!editing ? (
+              <>
+                {/* Block view mode */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', background: '#f5f5f5', borderRadius: '8px', padding: '1rem', marginBottom: '1rem' }}>
+                  {appointment.staffName && <p style={{ margin: 0 }}><strong>Staff:</strong> {appointment.staffName}</p>}
+                  {aptDate && <p style={{ margin: 0 }}><strong>Date:</strong> {aptDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>}
+                  {aptDate && (
+                    <p style={{ margin: 0 }}><strong>Time:</strong> {formatTime(aptDate)} – {formatTime(new Date(aptDate.getTime() + (appointment.customer?.duration || 60) * 60000))}</p>
+                  )}
+                  <p style={{ margin: 0 }}><strong>Duration:</strong> {formatDuration(appointment.customer?.duration || 60)}</p>
+                  {appointment.customer?.notes && <p style={{ margin: 0 }}><strong>Notes:</strong> {appointment.customer.notes}</p>}
+                </div>
+
+                {/* Block action buttons */}
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
                   <button
-                    onClick={() => { onConfirm(appointment); onClose() }}
-                    style={{ flex: 1, padding: '0.6rem 1rem', borderRadius: '6px', border: 'none', background: '#4CAF50', color: 'white', cursor: 'pointer', fontWeight: '500', fontSize: '0.85rem' }}
+                    onClick={startEditing}
+                    style={{ flex: 1, padding: '0.6rem 1rem', borderRadius: '6px', border: 'none', background: '#607D8B', color: 'white', cursor: 'pointer', fontWeight: '500', fontSize: '0.85rem' }}
                   >
-                    Confirm
+                    Edit Block
                   </button>
-                )}
-                <button
-                  onClick={startEditing}
-                  style={{ flex: 1, padding: '0.6rem 1rem', borderRadius: '6px', border: 'none', background: '#2196F3', color: 'white', cursor: 'pointer', fontWeight: '500', fontSize: '0.85rem' }}
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={() => { onRebook(appointment); onClose() }}
-                  style={{ flex: 1, padding: '0.6rem 1rem', borderRadius: '6px', border: 'none', background: '#9C27B0', color: 'white', cursor: 'pointer', fontWeight: '500', fontSize: '0.85rem' }}
-                >
-                  Rebook
-                </button>
-                <button
-                  onClick={() => { onCancel(appointment); onClose() }}
-                  style={{ flex: 1, padding: '0.6rem 1rem', borderRadius: '6px', border: 'none', background: '#F44336', color: 'white', cursor: 'pointer', fontWeight: '500', fontSize: '0.85rem' }}
-                >
-                  Cancel
-                </button>
-              </div>
+                  <button
+                    onClick={handleDeleteBlock}
+                    disabled={saving}
+                    style={{ flex: 1, padding: '0.6rem 1rem', borderRadius: '6px', border: 'none', background: '#F44336', color: 'white', cursor: 'pointer', fontWeight: '500', fontSize: '0.85rem', opacity: saving ? 0.6 : 1 }}
+                  >
+                    {saving ? 'Removing...' : 'Remove Block'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Block edit mode */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  {/* Start Time */}
+                  <div>
+                    <label htmlFor="block-edit-start" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Start Time</label>
+                    <input
+                      id="block-edit-start"
+                      type="datetime-local"
+                      value={blockEditForm.dateTime}
+                      onChange={(e) => setBlockEditForm({ ...blockEditForm, dateTime: e.target.value })}
+                      style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                    />
+                  </div>
+
+                  {/* End Time */}
+                  <div>
+                    <label htmlFor="block-edit-end" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>End Time</label>
+                    <input
+                      id="block-edit-end"
+                      type="datetime-local"
+                      value={blockEditForm.endTime}
+                      onChange={(e) => setBlockEditForm({ ...blockEditForm, endTime: e.target.value })}
+                      min={blockEditForm.dateTime || ''}
+                      style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                    />
+                    {blockEditForm.dateTime && blockEditForm.endTime && (() => {
+                      const diffMin = Math.round((new Date(blockEditForm.endTime).getTime() - new Date(blockEditForm.dateTime).getTime()) / 60000)
+                      if (diffMin <= 0) return null
+                      return (
+                        <p style={{ fontSize: '0.8rem', color: 'var(--color-text-light)', marginTop: '0.25rem', marginBottom: 0 }}>
+                          Duration: {formatDuration(diffMin)}
+                        </p>
+                      )
+                    })()}
+                  </div>
+
+                  {/* Staff */}
+                  <div>
+                    <label htmlFor="block-edit-staff" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Staff Member</label>
+                    <select
+                      id="block-edit-staff"
+                      value={blockEditForm.staffId}
+                      onChange={(e) => setBlockEditForm({ ...blockEditForm, staffId: e.target.value })}
+                      style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem' }}
+                    >
+                      <option value="">None</option>
+                      {staffList.map(s => <option key={s.visibleId} value={s.visibleId}>{s.staffName}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Notes */}
+                  <div>
+                    <label htmlFor="block-edit-notes" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Notes</label>
+                    <input
+                      id="block-edit-notes"
+                      type="text"
+                      value={blockEditForm.notes}
+                      onChange={(e) => setBlockEditForm({ ...blockEditForm, notes: e.target.value })}
+                      placeholder="Reason for blocking time..."
+                      style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                </div>
+
+                {/* Block Save / Cancel buttons */}
+                <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
+                  <button
+                    onClick={handleBlockSave}
+                    disabled={saving}
+                    style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: 'none', background: '#607D8B', color: 'white', cursor: 'pointer', fontWeight: '500', opacity: saving ? 0.6 : 1 }}
+                  >
+                    {saving ? 'Saving...' : 'Save Block'}
+                  </button>
+                  <button
+                    onClick={() => setEditing(false)}
+                    style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', background: 'white', cursor: 'pointer' }}
+                  >
+                    Back
+                  </button>
+                </div>
+              </>
             )}
           </>
         ) : (
           <>
-            {/* Edit mode */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {/* Overlap Warning */}
-              {overlapWarning && (
-                <div style={{ background: '#fff3cd', border: '1px solid #ffc107', borderRadius: '8px', padding: '1rem', marginBottom: '0.5rem' }}>
-                  <p style={{ margin: 0, fontWeight: '600', color: '#856404' }}>⚠️ Scheduling Conflict</p>
-                  <p style={{ margin: '0.5rem 0', fontSize: '0.9rem', color: '#856404' }}>{overlapWarning}</p>
-                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
+            {/* ─── REGULAR APPOINTMENT ─── */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h3 style={{ margin: 0 }}>{editing ? 'Edit Appointment' : 'Appointment Details'}</h3>
+              <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: 'var(--color-text-light)' }}>×</button>
+            </div>
+
+            {!editing ? (
+              <>
+                {/* View mode */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <p style={{ margin: 0 }}><strong>Customer:</strong> {appointment.customer?.name || 'Walk-in'}</p>
+                  <p style={{ margin: 0 }}><strong>Service:</strong> {appointment.service?.name} ({appointment.service?.duration} min)</p>
+                  <p style={{ margin: 0 }}><strong>Price:</strong> ${appointment.service?.price?.toFixed(2)}</p>
+                  {appointment.staffName && <p style={{ margin: 0 }}><strong>With:</strong> {appointment.staffName}</p>}
+                  {aptDate && <p style={{ margin: 0 }}><strong>Time:</strong> {formatTime(aptDate)}</p>}
+                  {aptDate && <p style={{ margin: 0 }}><strong>Date:</strong> {aptDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>}
+                  {(appointment.groupId || appointment.bundleId) && (
+                    <p style={{ margin: 0 }}><strong>{appointment.bundleId ? '📦 Bundle' : '🔗 Group'}:</strong> This is part of a multi-appointment booking</p>
+                  )}
+                  <p style={{ margin: 0 }}><strong>Status:</strong> <span style={{
+                    padding: '0.15rem 0.5rem', borderRadius: '8px', fontSize: '0.85rem',
+                    background: appointment.status === 'confirmed' ? '#d4edda' : appointment.status === 'cancelled' ? '#f8d7da' : '#fff3cd',
+                    color: appointment.status === 'confirmed' ? '#155724' : appointment.status === 'cancelled' ? '#721c24' : '#856404',
+                  }}>{appointment.status}</span></p>
+                  <p style={{ margin: 0 }}><strong>Payment:</strong> <span style={{
+                    padding: '0.15rem 0.5rem', borderRadius: '8px', fontSize: '0.85rem',
+                    background: appointment.paymentStatus === 'paid' ? '#d4edda' : '#fff3cd',
+                    color: appointment.paymentStatus === 'paid' ? '#155724' : '#856404',
+                  }}>{appointment.paymentStatus === 'paid' ? 'Paid' : 'Unpaid'}</span></p>
+                  {appointment.customer?.phone && <p style={{ margin: 0 }}><strong>Phone:</strong> {appointment.customer.phone}</p>}
+                  {appointment.customer?.notes && <p style={{ margin: 0 }}><strong>Notes:</strong> {appointment.customer.notes}</p>}
+                </div>
+
+                {/* Action buttons */}
+                {appointment.status !== 'cancelled' && (
+                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.5rem', flexWrap: 'wrap' }}>
+                    {(appointment.status === 'pending' || appointment.status === 'pending-confirmation') && (
+                      <button
+                        onClick={() => { onConfirm(appointment); onClose() }}
+                        style={{ flex: 1, padding: '0.6rem 1rem', borderRadius: '6px', border: 'none', background: '#4CAF50', color: 'white', cursor: 'pointer', fontWeight: '500', fontSize: '0.85rem' }}
+                      >
+                        Confirm
+                      </button>
+                    )}
                     <button
-                      onClick={handleConfirmOverlap}
-                      style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: 'none', background: '#ffc107', color: '#856404', cursor: 'pointer', fontWeight: '500', fontSize: '0.85rem' }}
+                      onClick={startEditing}
+                      style={{ flex: 1, padding: '0.6rem 1rem', borderRadius: '6px', border: 'none', background: '#2196F3', color: 'white', cursor: 'pointer', fontWeight: '500', fontSize: '0.85rem' }}
                     >
-                      Save Anyway
+                      Edit
                     </button>
                     <button
-                      onClick={() => { setOverlapWarning(null); setPendingPayload(null) }}
-                      style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: '1px solid var(--color-border)', background: 'white', cursor: 'pointer', fontSize: '0.85rem' }}
+                      onClick={() => { onRebook(appointment); onClose() }}
+                      style={{ flex: 1, padding: '0.6rem 1rem', borderRadius: '6px', border: 'none', background: '#9C27B0', color: 'white', cursor: 'pointer', fontWeight: '500', fontSize: '0.85rem' }}
+                    >
+                      Rebook
+                    </button>
+                    <button
+                      onClick={() => { onCancel(appointment); onClose() }}
+                      style={{ flex: 1, padding: '0.6rem 1rem', borderRadius: '6px', border: 'none', background: '#F44336', color: 'white', cursor: 'pointer', fontWeight: '500', fontSize: '0.85rem' }}
                     >
                       Cancel
                     </button>
                   </div>
+                )}
+              </>
+            ) : (
+              <>
+                {/* Edit mode */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  {/* Overlap Warning */}
+                  {overlapWarning && (
+                    <div style={{ background: '#fff3cd', border: '1px solid #ffc107', borderRadius: '8px', padding: '1rem', marginBottom: '0.5rem' }}>
+                      <p style={{ margin: 0, fontWeight: '600', color: '#856404' }}>⚠️ Scheduling Conflict</p>
+                      <p style={{ margin: '0.5rem 0', fontSize: '0.9rem', color: '#856404' }}>{overlapWarning}</p>
+                      <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
+                        <button
+                          onClick={handleConfirmOverlap}
+                          style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: 'none', background: '#ffc107', color: '#856404', cursor: 'pointer', fontWeight: '500', fontSize: '0.85rem' }}
+                        >
+                          Save Anyway
+                        </button>
+                        <button
+                          onClick={() => { setOverlapWarning(null); setPendingPayload(null) }}
+                          style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: '1px solid var(--color-border)', background: 'white', cursor: 'pointer', fontSize: '0.85rem' }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Date & Time */}
+                  <div>
+                    <label htmlFor="edit-datetime" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Date & Time</label>
+                    <input
+                      id="edit-datetime"
+                      type="datetime-local"
+                      value={editForm.dateTime}
+                      onChange={(e) => setEditForm({ ...editForm, dateTime: e.target.value })}
+                      style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                    />
+                  </div>
+
+                  {/* Service */}
+                  <div>
+                    <label htmlFor="edit-service" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Service</label>
+                    <select
+                      id="edit-service"
+                      value={editForm.serviceId}
+                      onChange={(e) => setEditForm({ ...editForm, serviceId: e.target.value })}
+                      style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem' }}
+                    >
+                      <option value="">Select a service</option>
+                      {[...services].sort(compareServicesHeadBathFirst).map(s => <option key={s.serviceId} value={s.serviceId}>{s.name} ({s.duration} min — ${s.price})</option>)}
+                    </select>
+                  </div>
+
+                  {/* Staff */}
+                  <div>
+                    <label htmlFor="edit-staff" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Staff Member</label>
+                    <select
+                      id="edit-staff"
+                      value={editForm.staffId}
+                      onChange={(e) => setEditForm({ ...editForm, staffId: e.target.value })}
+                      style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem' }}
+                    >
+                      <option value="">None / Auto-assign</option>
+                      {staffList.map(s => <option key={s.visibleId} value={s.visibleId}>{s.staffName}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Status */}
+                  <div>
+                    <label htmlFor="edit-status" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Status</label>
+                    <select
+                      id="edit-status"
+                      value={editForm.status}
+                      onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
+                      style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem' }}
+                    >
+                      <option value="pending-confirmation">Pending Confirmation</option>
+                      <option value="confirmed">Confirmed</option>
+                      <option value="cancelled">Cancelled</option>
+                    </select>
+                  </div>
+
+                  {/* Customer Name */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                    <div>
+                      <label htmlFor="edit-customer-fname" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>First Name</label>
+                      <input
+                        id="edit-customer-fname"
+                        type="text"
+                        value={editForm.customerFirstName}
+                        onChange={(e) => setEditForm({ ...editForm, customerFirstName: e.target.value })}
+                        style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="edit-customer-lname" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Last Name</label>
+                      <input
+                        id="edit-customer-lname"
+                        type="text"
+                        value={editForm.customerLastName}
+                        onChange={(e) => setEditForm({ ...editForm, customerLastName: e.target.value })}
+                        style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Customer Phone */}
+                  <div>
+                    <label htmlFor="edit-customer-phone" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Phone</label>
+                    <input
+                      id="edit-customer-phone"
+                      type="tel"
+                      value={editForm.customerPhone}
+                      onChange={(e) => setEditForm({ ...editForm, customerPhone: e.target.value })}
+                      style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                    />
+                  </div>
+
+                  {/* Customer Email */}
+                  <div>
+                    <label htmlFor="edit-customer-email" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Email</label>
+                    <input
+                      id="edit-customer-email"
+                      type="email"
+                      value={editForm.customerEmail}
+                      onChange={(e) => setEditForm({ ...editForm, customerEmail: e.target.value })}
+                      style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                    />
+                  </div>
                 </div>
-              )}
 
-              {/* Date & Time */}
-              <div>
-                <label htmlFor="edit-datetime" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Date & Time</label>
-                <input
-                  id="edit-datetime"
-                  type="datetime-local"
-                  value={editForm.dateTime}
-                  onChange={(e) => setEditForm({ ...editForm, dateTime: e.target.value })}
-                  style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', boxSizing: 'border-box' }}
-                />
-              </div>
-
-              {/* Service */}
-              <div>
-                <label htmlFor="edit-service" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Service</label>
-                <select
-                  id="edit-service"
-                  value={editForm.serviceId}
-                  onChange={(e) => setEditForm({ ...editForm, serviceId: e.target.value })}
-                  style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem' }}
-                >
-                  <option value="">Select a service</option>
-                  {[...services].sort((a, b) => a.name.localeCompare(b.name)).map(s => <option key={s.serviceId} value={s.serviceId}>{s.name} ({s.duration} min — ${s.price})</option>)}
-                </select>
-              </div>
-
-              {/* Staff */}
-              <div>
-                <label htmlFor="edit-staff" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Staff Member</label>
-                <select
-                  id="edit-staff"
-                  value={editForm.staffId}
-                  onChange={(e) => setEditForm({ ...editForm, staffId: e.target.value })}
-                  style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem' }}
-                >
-                  <option value="">None / Auto-assign</option>
-                  {staffList.map(s => <option key={s.visibleId} value={s.visibleId}>{s.staffName}</option>)}
-                </select>
-              </div>
-
-              {/* Status */}
-              <div>
-                <label htmlFor="edit-status" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Status</label>
-                <select
-                  id="edit-status"
-                  value={editForm.status}
-                  onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
-                  style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem' }}
-                >
-                  <option value="pending-confirmation">Pending Confirmation</option>
-                  <option value="confirmed">Confirmed</option>
-                  <option value="cancelled">Cancelled</option>
-                </select>
-              </div>
-
-              {/* Customer Name */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                <div>
-                  <label htmlFor="edit-customer-fname" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>First Name</label>
-                  <input
-                    id="edit-customer-fname"
-                    type="text"
-                    value={editForm.customerFirstName}
-                    onChange={(e) => setEditForm({ ...editForm, customerFirstName: e.target.value })}
-                    style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', boxSizing: 'border-box' }}
-                  />
+                {/* Save / Cancel buttons */}
+                <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
+                  <button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="cta"
+                    style={{ flex: 1, opacity: saving ? 0.6 : 1 }}
+                  >
+                    {saving ? 'Saving...' : 'Save Changes'}
+                  </button>
+                  <button
+                    onClick={() => setEditing(false)}
+                    style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', background: 'white', cursor: 'pointer' }}
+                  >
+                    Back
+                  </button>
                 </div>
-                <div>
-                  <label htmlFor="edit-customer-lname" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Last Name</label>
-                  <input
-                    id="edit-customer-lname"
-                    type="text"
-                    value={editForm.customerLastName}
-                    onChange={(e) => setEditForm({ ...editForm, customerLastName: e.target.value })}
-                    style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', boxSizing: 'border-box' }}
-                  />
-                </div>
-              </div>
-
-              {/* Customer Phone */}
-              <div>
-                <label htmlFor="edit-customer-phone" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Phone</label>
-                <input
-                  id="edit-customer-phone"
-                  type="tel"
-                  value={editForm.customerPhone}
-                  onChange={(e) => setEditForm({ ...editForm, customerPhone: e.target.value })}
-                  style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', boxSizing: 'border-box' }}
-                />
-              </div>
-
-              {/* Customer Email */}
-              <div>
-                <label htmlFor="edit-customer-email" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.9rem' }}>Email</label>
-                <input
-                  id="edit-customer-email"
-                  type="email"
-                  value={editForm.customerEmail}
-                  onChange={(e) => setEditForm({ ...editForm, customerEmail: e.target.value })}
-                  style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', boxSizing: 'border-box' }}
-                />
-              </div>
-            </div>
-
-            {/* Save / Cancel buttons */}
-            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="cta"
-                style={{ flex: 1, opacity: saving ? 0.6 : 1 }}
-              >
-                {saving ? 'Saving...' : 'Save Changes'}
-              </button>
-              <button
-                onClick={() => setEditing(false)}
-                style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', background: 'white', cursor: 'pointer' }}
-              >
-                Back
-              </button>
-            </div>
+              </>
+            )}
           </>
         )}
       </div>
@@ -714,16 +989,20 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
   const [blockType, setBlockType] = useState('single') // 'single' or 'multiday'
   const defaultFirstName = defaultCustomer?.name ? defaultCustomer.name.split(' ')[0] : ''
   const defaultLastName = defaultCustomer?.name ? defaultCustomer.name.split(' ').slice(1).join(' ') : ''
+
+  // Format dateTime as local YYYY-MM-DDTHH:MM for datetime-local input (avoid UTC shift from toISOString)
+  const formatLocalDateTime = formatLocalDateTimeValue
+
   const [form, setForm] = useState({
     customerFirstName: defaultFirstName,
     customerLastName: defaultLastName,
     customerPhone: defaultCustomer?.phone || '',
     customerEmail: defaultCustomer?.email || '',
     notes: '',
-    dateTime: dateTime ? dateTime.toISOString().slice(0, 16) : '',
+    dateTime: formatLocalDateTime(dateTime),
   })
   const [blockEndDate, setBlockEndDate] = useState('')
-  const [blockStartDate, setBlockStartDate] = useState(dateTime ? dateTime.toISOString().slice(0, 10) : '')
+  const [blockStartDate, setBlockStartDate] = useState(dateTime ? formatLocalDateTime(dateTime).slice(0, 10) : '')
   const [services, setServices] = useState([])
   const [staffList, setStaffList] = useState([])
   const [allStaff, setAllStaff] = useState([])
@@ -731,7 +1010,12 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
   const [staffId, setStaffId] = useState(defaultStaffId || '')
   const [staffId2, setStaffId2] = useState('')
   const [duration, setDuration] = useState(60)
-  const [blockEndTime, setBlockEndTime] = useState('')
+  const [blockEndTime, setBlockEndTime] = useState(() => {
+    if (!dateTime) return ''
+    const end = new Date(dateTime)
+    end.setMinutes(end.getMinutes() + 60)
+    return formatLocalDateTime(end)
+  })
   const [durationMode, setDurationMode] = useState('endtime') // 'endtime' or 'duration'
   const [submitting, setSubmitting] = useState(false)
   const [overlapWarning, setOverlapWarning] = useState(null)
@@ -964,7 +1248,7 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
               <select id="new-apt-service" value={serviceId} onChange={(e) => setServiceId(e.target.value)}
                 style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem' }}>
                 <option value="">Select a service</option>
-                {[...services].sort((a, b) => a.name.localeCompare(b.name)).map(s => <option key={s.serviceId} value={s.serviceId}>{s.name} ({s.duration} min — ${s.price})</option>)}
+                {[...services].sort(compareServicesHeadBathFirst).map(s => <option key={s.serviceId} value={s.serviceId}>{s.name} ({s.duration} min — ${s.price})</option>)}
               </select>
             </div>
             {/* Customer */}
@@ -1033,7 +1317,7 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
                     style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem', boxSizing: 'border-box' }} />
                     {duration > 0 && form.dateTime && blockEndTime && (
                       <p style={{ fontSize: '0.8rem', color: 'var(--color-text-light)', marginTop: '0.25rem' }}>
-                        {duration >= 60 ? `${Math.floor(duration / 60)}h ${duration % 60 > 0 ? `${duration % 60}m` : ''}` : `${duration}m`}
+                        {formatDuration(duration)}
                       </p>
                     )}
                   </div>
@@ -1062,7 +1346,7 @@ function NewAppointmentModal({ dateTime, vendorId, defaultStaffId, defaultServic
                     </div>
                     {duration > 0 && (
                       <p style={{ fontSize: '0.8rem', color: 'var(--color-text-light)', marginTop: '0.25rem' }}>
-                        Total: {duration >= 60 ? `${Math.floor(duration / 60)}h ${duration % 60 > 0 ? `${duration % 60}m` : ''}` : `${duration}m`}
+                        Total: {formatDuration(duration)}
                       </p>
                     )}
                   </div>

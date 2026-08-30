@@ -14,6 +14,7 @@ import { generateIdempotencyKey, hashSourceToken } from '../../../../lib/payment
 import { appendAuditRecord, buildAuditRecord } from '../../../../lib/payment/audit';
 import { hasValidCredentials } from '../../../utils/paymentRouting';
 import { isTokenExpiringSoon, refreshSquareToken } from '../../../../lib/square-token-enhanced';
+import { withErrorLogging } from '@/lib/logger/middleware';
 
 Amplify.configure(config, { ssr: true });
 
@@ -25,7 +26,7 @@ Amplify.configure(config, { ssr: true });
  *
  * Requirements: 3.3, 3.4, 3.5, 3.7, 3.8, 4.3, 4.4, 4.5, 5.1, 8.2
  */
-export async function POST(request: Request) {
+export const POST = withErrorLogging(async function POST(request: Request) {
   let auditAppointmentId: string | undefined;
 
   try {
@@ -270,4 +271,4 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
-}
+})

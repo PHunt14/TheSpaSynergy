@@ -1,7 +1,8 @@
 import { client, resolveAppointmentDetails, sendAppointmentNotifications } from '@/lib/appointment-notifications';
 import { checkStaffConflict, resolveAppointmentDuration } from '@/app/utils/overlapDetection';
+import { withErrorLogging } from '@/lib/logger/middleware';
 
-export async function POST(request: Request) {
+export const POST = withErrorLogging(async function POST(request: Request) {
   try {
     const { appointmentId, newDateTime, confirmOverlap } = await request.json();
 
@@ -58,4 +59,4 @@ export async function POST(request: Request) {
     console.error('Error rescheduling appointment:', error);
     return Response.json({ error: 'Failed to reschedule appointment' }, { status: 500 });
   }
-}
+})

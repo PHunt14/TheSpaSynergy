@@ -5,6 +5,7 @@ import type { Schema } from '../../../../amplify/data/resource';
 import config from '../../../../amplify_outputs.json' with { type: 'json' };
 import { getStaffServices, groupByCategory, buildCategoryObject, buildItemObject, parseSyncResponse } from '@/lib/square/catalog.js';
 import { randomUUID } from 'node:crypto';
+import { withErrorLogging } from '@/lib/logger/middleware';
 
 const dbClient = generateServerClientUsingCookies<Schema>({
   config,
@@ -85,7 +86,7 @@ function buildMappingsFromResponse(result: any, savedMappings: Record<string, an
   return newMappings;
 }
 
-export async function POST(request: Request) {
+export const POST = withErrorLogging(async function POST(request: Request) {
   try {
     const { staffId } = await request.json();
     if (!staffId) return Response.json({ error: 'staffId required' }, { status: 400 });
@@ -124,4 +125,4 @@ export async function POST(request: Request) {
     console.error('Catalog sync error:', error);
     return Response.json({ error: 'Catalog sync failed', details: error.message }, { status: 500 });
   }
-}
+})

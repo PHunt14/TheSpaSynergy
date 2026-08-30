@@ -2,13 +2,14 @@ import { generateClient } from 'aws-amplify/data'
 import type { Schema } from '@/amplify/data/resource'
 import { Amplify } from 'aws-amplify'
 import config from '@/amplify_outputs.json'
+import { withErrorLogging } from '@/lib/logger/middleware';
 
 Amplify.configure(config, { ssr: true })
 const client = generateClient<Schema>()
 
 const SETTINGS_ID = 'default'
 
-export async function GET() {
+export const GET = withErrorLogging(async function GET() {
   try {
     const { data: settings } = await client.models.BundleSettings.get({ settingsId: SETTINGS_ID as any })
     return Response.json({ settings: settings || {
@@ -25,9 +26,9 @@ export async function GET() {
       discount4PlusServices: 0
     }})
   }
-}
+})
 
-export async function POST(request: Request) {
+export const POST = withErrorLogging(async function POST(request: Request) {
   try {
     const body = await request.json()
     console.log('Saving bundle settings:', body)
@@ -66,4 +67,4 @@ export async function POST(request: Request) {
     console.error('Bundle settings save error:', error)
     return Response.json({ error: 'Failed to save settings' }, { status: 500 })
   }
-}
+})

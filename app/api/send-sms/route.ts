@@ -3,11 +3,12 @@ import type { Schema } from '@/amplify/data/resource'
 import { Amplify } from 'aws-amplify'
 import config from '@/amplify_outputs.json'
 import { sendSms } from '@/lib/sms'
+import { withErrorLogging } from '@/lib/logger/middleware'
 
 Amplify.configure(config, { ssr: true })
 const client = generateClient<Schema>()
 
-export async function POST(request: Request) {
+export const POST = withErrorLogging(async function POST(request: Request) {
   try {
     const { appointmentId, vendorId } = await request.json()
 
@@ -63,4 +64,4 @@ export async function POST(request: Request) {
       details: error 
     }, { status: 500 })
   }
-}
+})

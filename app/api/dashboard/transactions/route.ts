@@ -5,6 +5,7 @@ import config from '../../../../amplify_outputs.json' with { type: 'json' };
 import { fetchAuthSession } from 'aws-amplify/auth/server';
 import { Amplify } from 'aws-amplify';
 import { createServerRunner } from '@aws-amplify/adapter-nextjs';
+import { withErrorLogging } from '@/lib/logger/middleware';
 
 Amplify.configure(config, { ssr: true });
 
@@ -45,7 +46,7 @@ const getCurrentUser = async () => {
  *   - status: optional filter (e.g., "confirmed", "cancelled")
  *   - paymentStatus: optional filter (e.g., "paid", "unpaid")
  */
-export async function GET(request: Request) {
+export const GET = withErrorLogging(async function GET(request: Request) {
   const currentUser = await getCurrentUser();
   if (!currentUser) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
@@ -229,4 +230,4 @@ export async function GET(request: Request) {
     console.error('Transactions API error:', error);
     return Response.json({ error: 'Failed to fetch transactions' }, { status: 500 });
   }
-}
+})

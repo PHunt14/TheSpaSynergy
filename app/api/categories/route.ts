@@ -11,6 +11,7 @@ import { generateClient } from 'aws-amplify/data';
 import type { Schema } from '../../../amplify/data/resource';
 import config from '../../../amplify_outputs.json';
 import { validateCategoryName } from '../../utils/categoryValidator';
+import { withErrorLogging } from '@/lib/logger/middleware';
 
 Amplify.configure(config, { ssr: true });
 
@@ -18,7 +19,7 @@ function getClient() {
   return generateClient<Schema>();
 }
 
-export async function GET() {
+export const GET = withErrorLogging(async function GET() {
   const client = getClient();
 
   try {
@@ -68,9 +69,9 @@ export async function GET() {
     console.error('Error listing categories:', error);
     return Response.json({ error: 'Failed to load categories' }, { status: 500 });
   }
-}
+})
 
-export async function POST(request: Request) {
+export const POST = withErrorLogging(async function POST(request: Request) {
   const client = getClient();
 
   try {
@@ -119,9 +120,9 @@ export async function POST(request: Request) {
     console.error('Error creating category:', error);
     return Response.json({ error: 'Failed to create category' }, { status: 500 });
   }
-}
+})
 
-export async function DELETE(request: Request) {
+export const DELETE = withErrorLogging(async function DELETE(request: Request) {
   const client = getClient();
 
   try {
@@ -143,4 +144,4 @@ export async function DELETE(request: Request) {
     console.error('Error deleting category:', error);
     return Response.json({ error: 'Failed to delete category' }, { status: 500 });
   }
-}
+})

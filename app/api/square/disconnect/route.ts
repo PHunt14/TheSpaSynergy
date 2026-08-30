@@ -1,4 +1,3 @@
-import { NextRequest } from 'next/server'
 import { Client, Environment } from 'square'
 import { generateClient } from 'aws-amplify/data'
 import type { Schema } from '@/amplify/data/resource'
@@ -7,6 +6,7 @@ import config from '@/amplify_outputs.json'
 import { cookies } from 'next/headers'
 import { fetchAuthSession } from 'aws-amplify/auth/server'
 import { createServerRunner } from '@aws-amplify/adapter-nextjs'
+import { withErrorLogging } from '@/lib/logger/middleware';
 
 Amplify.configure(config, { ssr: true })
 const { runWithAmplifyServerContext } = createServerRunner({ config })
@@ -30,7 +30,7 @@ function isAuthorizedToDisconnect(staff: any, currentUser: any): boolean {
   return isOwnAccount || isAdminOrOwner
 }
 
-export async function POST(request: NextRequest) {
+export const POST = withErrorLogging(async function POST(request: Request) {
   try {
     const { staffId } = await request.json()
     if (!staffId) return Response.json({ error: 'staffId required' }, { status: 400 })
@@ -72,4 +72,4 @@ export async function POST(request: NextRequest) {
     console.error('Square disconnect error:', error)
     return Response.json({ error: error.message || 'Disconnect failed' }, { status: 500 })
   }
-}
+})

@@ -5,6 +5,7 @@ import { cookies } from 'next/headers';
 import { fetchAuthSession } from 'aws-amplify/auth/server';
 import { Amplify } from 'aws-amplify';
 import { createServerRunner } from '@aws-amplify/adapter-nextjs';
+import { withErrorLogging } from '@/lib/logger/middleware';
 
 Amplify.configure(config, { ssr: true });
 
@@ -70,7 +71,7 @@ function buildUserAttributes(email: string, role: string, vendorId?: string, fir
   return attrs;
 }
 
-export async function POST(request: Request) {
+export const POST = withErrorLogging(async function POST(request: Request) {
   try {
     const currentUser = await getCurrentUserFromSession();
     console.log('Staff POST - currentUser:', currentUser);
@@ -124,9 +125,9 @@ export async function POST(request: Request) {
     console.error('Error inviting user:', error);
     return Response.json({ error: 'Failed to invite user', details: error.message }, { status: 500 });
   }
-}
+})
 
-export async function GET(request: Request) {
+export const GET = withErrorLogging(async function GET(request: Request) {
   try {
     const userPoolId = getUserPoolId();
     if (!userPoolId) {
@@ -171,9 +172,9 @@ export async function GET(request: Request) {
       details: error.message 
     }, { status: 500 });
   }
-}
+})
 
-export async function DELETE(request: Request) {
+export const DELETE = withErrorLogging(async function DELETE(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const username = searchParams.get('username');
@@ -211,9 +212,9 @@ export async function DELETE(request: Request) {
       details: error.message 
     }, { status: 500 });
   }
-}
+})
 
-export async function PATCH(request: Request) {
+export const PATCH = withErrorLogging(async function PATCH(request: Request) {
   try {
     const { username, role, vendorId, firstName, lastName } = await request.json();
 
@@ -304,4 +305,4 @@ export async function PATCH(request: Request) {
       details: error.message 
     }, { status: 500 });
   }
-}
+})
