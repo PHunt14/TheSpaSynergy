@@ -192,44 +192,46 @@ export default function TransactionsPage() {
       )}
 
       {!loading && grouped.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          {grouped.map((item, idx) => {
-            if (item.type === 'group') {
-              return <GroupRow key={item.groupId} group={item} expandedId={expandedId} setExpandedId={setExpandedId} />
-            }
-            return <TransactionRow key={item.appointmentId || idx} txn={item} expandedId={expandedId} setExpandedId={setExpandedId} />
-          })}
+        <div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {grouped.map((item, idx) => {
+              if (item.type === 'group') {
+                return <GroupRow key={item.groupId} group={item} expandedId={expandedId} setExpandedId={setExpandedId} />
+              }
+              return <TransactionRow key={item.appointmentId || idx} txn={item} expandedId={expandedId} setExpandedId={setExpandedId} />
+            })}
+          </div>
+
+          {/* Pagination: Load More button */}
+          {pagination.hasMore && (
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1.5rem' }}>
+              <button
+                onClick={() => loadTransactions(true)}
+                disabled={loadingMore}
+                style={{
+                  padding: '0.75rem 1.5rem',
+                  borderRadius: '8px',
+                  border: '1px solid var(--color-primary)',
+                  background: loadingMore ? '#f0f0f0' : 'white',
+                  color: 'var(--color-primary)',
+                  cursor: loadingMore ? 'not-allowed' : 'pointer',
+                  fontSize: '1rem',
+                  fontWeight: '600',
+                  opacity: loadingMore ? 0.6 : 1,
+                }}
+              >
+                {loadingMore ? 'Loading...' : `Load More (${pagination.totalCount - transactions.length} remaining)`}
+              </button>
+            </div>
+          )}
+
+          {/* Pagination info */}
+          {pagination.totalCount > 0 && (
+            <div style={{ textAlign: 'center', marginTop: '1rem', fontSize: '0.85rem', color: 'var(--color-text-light)' }}>
+              Showing {transactions.length} of {pagination.totalCount} transactions
+            </div>
+          )}
         </div>
-
-        {/* Pagination: Load More button */}
-        {pagination.hasMore && (
-          <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1.5rem' }}>
-            <button
-              onClick={() => loadTransactions(true)}
-              disabled={loadingMore}
-              style={{
-                padding: '0.75rem 1.5rem',
-                borderRadius: '8px',
-                border: '1px solid var(--color-primary)',
-                background: loadingMore ? '#f0f0f0' : 'white',
-                color: 'var(--color-primary)',
-                cursor: loadingMore ? 'not-allowed' : 'pointer',
-                fontSize: '1rem',
-                fontWeight: '600',
-                opacity: loadingMore ? 0.6 : 1,
-              }}
-            >
-              {loadingMore ? 'Loading...' : `Load More (${pagination.totalCount - transactions.length} remaining)`}
-            </button>
-          </div>
-        )}
-
-        {/* Pagination info */}
-        {pagination.totalCount > 0 && (
-          <div style={{ textAlign: 'center', marginTop: '1rem', fontSize: '0.85rem', color: 'var(--color-text-light)' }}>
-            Showing {transactions.length} of {pagination.totalCount} transactions
-          </div>
-        )}
       )}
     </div>
   )
