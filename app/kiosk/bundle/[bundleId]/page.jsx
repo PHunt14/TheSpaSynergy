@@ -9,6 +9,7 @@ import { dollarsToCents } from '../../../utils/splitCalculator'
 import TipSelection from '../../components/TipSelection'
 import useSquarePayment, { resolveSquareLocation } from '../../components/useSquarePayment'
 import KioskPaymentForm from '../../components/KioskPaymentForm'
+import KioskPaymentAvailability from '../../components/KioskPaymentAvailability'
 import PaymentSuccess from '../../components/PaymentSuccess'
 import TotalDueDisplay from '../../components/TotalDueDisplay'
 import ServiceLineItems from '../../components/ServiceLineItems'
@@ -28,13 +29,14 @@ function BundlePaymentContent() {
   const [error, setError] = useState(null)
   const [tipAmount, setTipAmount] = useState(0)
   const [squareLocationId, setSquareLocationId] = useState(null)
+  const [squareReason, setSquareReason] = useState(null)
   const [paymentMode, setPaymentMode] = useState(null) // null | 'full' | 'split' | 'custom'
   const [splitError, setSplitError] = useState(null)
   const [customAmount, setCustomAmount] = useState('')
   const [customAmountError, setCustomAmountError] = useState(null)
 
   // Initialize Square card as soon as we have a location — card-container is always in the DOM
-  const { card } = useSquarePayment(squareLocationId, paid)
+  const { card, initError } = useSquarePayment(squareLocationId, paid)
 
   useEffect(() => {
     Promise.all([
@@ -51,18 +53,23 @@ function BundlePaymentContent() {
         setBundle(foundBundle)
 
         if (apts.length > 0) {
-          // Try each appointment's vendor in order until one resolves a Square location
+          // Try each appointment's provider in order until one resolves a
+          // usable Square location. resolveSquareLocation always calls back
+          // (null when unavailable), so this advances reliably.
           const tryResolve = (index) => {
-            if (index >= apts.length) return
+            if (index >= apts.length) { setSquareReason('not_connected'); return }
             resolveSquareLocation(apts[index].vendorId, (locationId) => {
               if (locationId) {
                 setSquareLocationId(locationId)
+                setSquareReason('ok')
               } else {
                 tryResolve(index + 1)
               }
-            })
+            }, apts[index].staffId)
           }
           tryResolve(0)
+        } else {
+          setSquareReason('not_connected')
         }
 
         setLoading(false)
@@ -437,14 +444,14 @@ function BundlePaymentContent() {
 
         <TotalDueDisplay totalDue={totalDue} tipAmount={tipAmount} priceLabel={paymentMode === 'custom' ? 'Custom Amount' : 'Package'} priceAmount={baseAmount} />
 
-        {!squareLocationId ? (
-          <div style={{ padding: '1.5rem', background: '#fff3cd', borderRadius: '8px', border: '1px solid #ffc107', textAlign: 'center' }}>
-            <strong>Card payment not available</strong>
-            <p style={{ margin: '0.5rem 0 0', fontSize: '0.9rem' }}>Vendors in this package have not connected Square.</p>
-          </div>
-        ) : (
+        <KioskPaymentAvailability
+          initError={initError}
+          squareReason={squareReason}
+          squareLocationId={squareLocationId}
+          notConnectedText="No provider in this package has connected Square. Please pay in person."
+        >
           <KioskPaymentForm totalDue={totalDue} paying={paying} card={card} error={error} onPay={handlePay} />
-        )}
+        </KioskPaymentAvailability>
       </div>
 
       {/* Split Payment Flow */}

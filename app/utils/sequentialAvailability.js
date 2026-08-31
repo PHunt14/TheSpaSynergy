@@ -1,4 +1,5 @@
-import { DAY_NAMES, getRecurrenceHours, hasAppointmentConflict } from './availability.js'
+import { DAY_NAMES, getRecurrenceHours } from './availability.js'
+import { canAssignBundleStaff } from './bundleStaffAssigner.js'
 
 /**
  * Calculates the total duration of a sequential bundle including buffers.
@@ -68,7 +69,7 @@ export function findSlotsForOrder({ orderedServices, staffSchedulesByService, ap
   if (earliestStart + totalDuration > latestEnd) return []
 
   const startMinutes = earliestStart % 30 === 0 ? earliestStart : Math.ceil(earliestStart / 30) * 30
-  return scanForValidSlots(startMinutes, latestEnd, totalDuration, orderedServices, staffSchedulesByService, appointments, dayOfWeek, requestedDate, bufferMinutes)
+  return scanForValidSlots(startMinutes, latestEnd, totalDuration, orderedServices, staffSchedulesByService, appointments, date, bufferMinutes)
 }
 
 /**
@@ -121,11 +122,17 @@ export function getSequentialBundleSlots({
     return { slots, suggestedOrder: serviceOrder }
   }
 
-  // Try permutations to find the best ordering
+  // Try permutations to find the ordering that yields the most valid slots.
+  //
+  // We return the slots for that SINGLE best ordering (not a union across all
+  // orderings). This is deliberate: the confirm/booking step books the
+  // reported `suggestedOrder`, so every slot we show must be valid for exactly
+  // that order. Returning a union could surface a start time that is only
+  // bookable under a different permutation — the exact "shows available then
+  // rejected" bug we're eliminating.
   const permutations = getPermutations(services)
-  let allSlots = []
   let bestOrder = services.map(s => s.serviceId)
-  let bestSlotCount = 0
+  let bestSlots = []
 
   for (const perm of permutations) {
     let slots
@@ -142,23 +149,16 @@ export function getSequentialBundleSlots({
       })
     }
 
-    if (slots.length > bestSlotCount) {
-      bestSlotCount = slots.length
+    if (slots.length > bestSlots.length) {
+      bestSlots = slots
       bestOrder = perm.map(s => s.serviceId)
-    }
-
-    // Merge slots (union by startTime)
-    for (const slot of slots) {
-      if (!allSlots.some(s => s.startTime === slot.startTime)) {
-        allSlots.push(slot)
-      }
     }
   }
 
   // Sort slots by startTime
-  allSlots.sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
+  bestSlots.sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
 
-  return { slots: allSlots, suggestedOrder: bestOrder }
+  return { slots: bestSlots, suggestedOrder: bestOrder }
 }
 
 // ─── Internal Helpers ────────────────────────────────────────────────────────
@@ -166,17 +166,31 @@ export function getSequentialBundleSlots({
 /**
  * Scans time slots in 30-minute increments and collects valid ones.
  */
-function scanForValidSlots(startMinutes, latestEnd, totalDuration, orderedServices, staffSchedulesByService, appointments, dayOfWeek, requestedDate, bufferMinutes) {
+function scanForValidSlots(startMinutes, latestEnd, totalDuration, orderedServices, staffSchedulesByService, appointments, date, bufferMinutes) {
   const validSlots = []
   let currentMinutes = startMinutes
 
   while (currentMinutes + totalDuration <= latestEnd) {
-    const schedule = calculateServiceSchedule(orderedServices, minutesToTime(currentMinutes), bufferMinutes)
-    const isValid = validateScheduleSlot(schedule, orderedServices, staffSchedulesByService, appointments, dayOfWeek, requestedDate, bufferMinutes)
+    const startTime = minutesToTime(currentMinutes)
+    const schedule = calculateServiceSchedule(orderedServices, startTime, bufferMinutes)
+
+    // Gate the slot on the SAME assignment logic the booking route runs. A slot
+    // is only "available" if a complete, conflict-free staff assignment exists
+    // for this exact ordering — not merely if each service has some free staff
+    // (which double-counts a stylist shared across same-vendor services and
+    // caused slots to show as available but fail at booking).
+    const isValid = canAssignBundleStaff({
+      orderedServices,
+      staffSchedulesByService,
+      appointments,
+      date,
+      startTime,
+      bufferMinutes,
+    })
 
     if (isValid) {
       validSlots.push({
-        startTime: minutesToTime(currentMinutes),
+        startTime,
         schedule: schedule.map((entry) => ({ ...entry, staffId: null }))
       })
     }
@@ -281,82 +295,6 @@ function getMultiDayDistributions(services, maxDays) {
 }
 
 /**
- * Validates that a proposed schedule slot is feasible:
- * each service has enough eligible staff available at its scheduled time.
- */
-function validateScheduleSlot(schedule, orderedServices, staffSchedulesByService, appointments, dayOfWeek, requestedDate, bufferMinutes) {
-  for (let i = 0; i < schedule.length; i++) {
-    const entry = schedule[i]
-    const service = orderedServices[i]
-    const providersRequired = service.providersRequired || 1
-    const staffSchedules = staffSchedulesByService[service.serviceId] || []
-
-    const availableCount = countAvailableStaff(
-      staffSchedules,
-      dayOfWeek,
-      requestedDate,
-      entry.startTime,
-      service.duration,
-      appointments,
-      bufferMinutes
-    )
-
-    if (availableCount < providersRequired) {
-      return false
-    }
-  }
-  return true
-}
-
-/**
- * Counts how many staff members are available for a service at a given time.
- */
-function countAvailableStaff(staffSchedules, dayOfWeek, requestedDate, time, duration, appointments, bufferMinutes) {
-  let count = 0
-
-  for (const staff of staffSchedules) {
-    if (!staff.isActive) continue
-    if (!isWorkingAtTime(staff, dayOfWeek, requestedDate, time, duration)) continue
-    if (hasConflict(staff.visibleId, appointments, time, duration, bufferMinutes)) continue
-    count++
-  }
-
-  return count
-}
-
-/**
- * Checks if a staff member is working at the given time on the given day.
- */
-function isWorkingAtTime(staff, dayOfWeek, requestedDate, time, duration) {
-  if (!staff.schedule) return false
-  const schedule = typeof staff.schedule === 'string' ? JSON.parse(staff.schedule) : staff.schedule
-  const daySchedule = schedule[dayOfWeek]
-  if (!daySchedule) return false
-
-  let hours = null
-  if (daySchedule.recurrence) {
-    hours = getRecurrenceHours(daySchedule, requestedDate)
-  } else if (daySchedule.start) {
-    hours = { start: daySchedule.start, end: daySchedule.end }
-  }
-
-  if (!hours) return false
-
-  const slotStart = timeToMinutes(time)
-  const slotEnd = slotStart + duration
-  const workStart = timeToMinutes(hours.start)
-  const workEnd = timeToMinutes(hours.end)
-
-  return slotStart >= workStart && slotEnd <= workEnd
-}
-
-/**
- * Checks if a staff member has a conflicting appointment at the given time.
- */
-function hasConflict(staffId, appointments, time, duration, bufferMinutes) {
-  return hasAppointmentConflict(staffId, appointments, time, duration, bufferMinutes)
-}
-
 /**
  * Determines the scan range (earliest start, latest end) across all staff for all services.
  */

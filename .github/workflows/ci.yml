@@ -26,6 +26,33 @@ jobs:
 
       - run: npm run typecheck
 
+      # Validates the Amplify backend under its own module resolution — the
+      # same check `ampx pipeline-deploy` runs. Catches backend type errors
+      # before they reach a deploy.
+      - run: npm run typecheck:amplify
+
+  # Runs the real Next.js production build (Turbopack). This is the ONLY check
+  # that catches Turbopack-specific module resolution errors (e.g. a relative
+  # import with a `.js` extension pointing at a `.ts` file), which the lenient
+  # `bundler`-resolution typecheck does NOT catch. The homepage once broke on
+  # exactly this because no CI step ran `next build`.
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Create amplify_outputs stub for build
+        run: echo '{"auth":{"user_pool_id":"stub","aws_region":"us-east-1","user_pool_client_id":"stub","identity_pool_id":"stub","username_attributes":["email"],"standard_required_attributes":["email"],"user_verification_types":["email"],"unauthenticated_identities_enabled":true,"password_policy":{"min_length":8,"require_lowercase":true,"require_numbers":true,"require_symbols":true,"require_uppercase":true}},"data":{"url":"https://stub.appsync-api.us-east-1.amazonaws.com/graphql","aws_region":"us-east-1","api_key":"stub","default_authorization_type":"API_KEY","authorization_types":[]}}' > amplify_outputs.json
+
+      - run: npm run build
+
   test-e2e:
     runs-on: ubuntu-latest
     steps:

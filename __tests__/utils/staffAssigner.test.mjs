@@ -9,7 +9,7 @@
  * - Conflict detection
  */
 
-import { assignStaff } from '../../app/utils/staffAssigner.js'
+import { assignStaff, rankEligibleStaff } from '../../app/utils/staffAssigner.js'
 
 const makeStaff = (id, vendorId, schedule, autoAssignRules = null) => ({
   visibleId: id,
@@ -227,5 +227,46 @@ describe('assignStaff', () => {
     expect(result).toHaveLength(2)
     const assignedIds = result.map(r => r.staffId)
     expect(assignedIds).not.toContain('staff-2')
+  })
+})
+
+describe('rankEligibleStaff', () => {
+  const svc = { duration: 60, providersRequired: 1, allowedStaff: ['staff-1', 'staff-2', 'staff-3'] }
+
+  test('returns ALL eligible staff (not just providersRequired), fewest-booked first', () => {
+    const staffSchedules = [
+      makeStaff('staff-1', 'vendor-a', mondaySchedule),
+      makeStaff('staff-2', 'vendor-b', mondaySchedule),
+      makeStaff('staff-3', 'vendor-c', mondaySchedule),
+    ]
+    // staff-1 has 2 bookings, staff-2 has 1, staff-3 has 0
+    const appointments = [
+      { dateTime: '2025-01-06T08:00', staffId: 'staff-1', status: 'confirmed', customer: JSON.stringify({ name: 'T' }) },
+      { dateTime: '2025-01-06T12:00', staffId: 'staff-1', status: 'confirmed', customer: JSON.stringify({ name: 'T' }) },
+      { dateTime: '2025-01-06T08:00', staffId: 'staff-2', status: 'confirmed', customer: JSON.stringify({ name: 'T' }) },
+    ]
+    const ranked = rankEligibleStaff({ service: svc, staffSchedules, appointments, date: '2025-01-06', time: '10:00', bufferMinutes: 15 })
+
+    // All three are eligible at 10:00 and returned (not sliced to 1)
+    expect(ranked.map(r => r.staffId)).toEqual(['staff-3', 'staff-2', 'staff-1'])
+  })
+
+  test('does NOT throw when no staff are eligible — returns empty array', () => {
+    const staffSchedules = [makeStaff('staff-1', 'vendor-a', mondaySchedule)]
+    // Requesting a Tuesday (no schedule) → nobody eligible
+    const ranked = rankEligibleStaff({ service: svc, staffSchedules, appointments: [], date: '2025-01-07', time: '10:00', bufferMinutes: 15 })
+    expect(ranked).toEqual([])
+  })
+
+  test('excludes staff with a conflicting appointment', () => {
+    const staffSchedules = [
+      makeStaff('staff-1', 'vendor-a', mondaySchedule),
+      makeStaff('staff-2', 'vendor-b', mondaySchedule),
+    ]
+    const appointments = [
+      { dateTime: '2025-01-06T10:00', staffId: 'staff-1', status: 'confirmed', customer: JSON.stringify({ name: 'T' }) },
+    ]
+    const ranked = rankEligibleStaff({ service: svc, staffSchedules, appointments, date: '2025-01-06', time: '10:00', bufferMinutes: 15 })
+    expect(ranked.map(r => r.staffId)).toEqual(['staff-2'])
   })
 })
