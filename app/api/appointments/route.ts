@@ -4,7 +4,7 @@ import type { Schema } from '../../../amplify/data/resource';
 import config from '../../../amplify_outputs.json' with { type: 'json' };
 import { randomUUID } from 'crypto';
 import { resolveAppointmentDetails, sendAppointmentNotifications, sendStaffBookingNotification } from '@/lib/appointment-notifications';
-import { assignStaff } from '@/app/utils/staffAssigner.js';
+import { assignStaff, rankEligibleStaff } from '@/app/utils/staffAssigner.js';
 import { detectConflict, extractDateFromDateTime } from '@/app/utils/overlapDetection';
 import { getCurrentUser } from '@/lib/auth';
 import { withErrorLogging } from '@/lib/logger/middleware';
@@ -160,7 +160,6 @@ export const POST = withErrorLogging(async function POST(request: Request) {
     const bookingDate = dateTime.split('T')[0];
     const bookingTime = dateTime.includes('T') ? dateTime.split('T')[1].substring(0, 5) : '00:00';
     const duration = serviceCheck2?.duration || 60;
-    const bufferMins = serviceCheck2?.bufferMinutes != null ? serviceCheck2.bufferMinutes : 15;
     const [bh, bm] = bookingTime.split(':').map(Number);
     const slotStart = bh * 60 + bm;
     const slotEnd = slotStart + duration;
@@ -219,44 +218,18 @@ export const POST = withErrorLogging(async function POST(request: Request) {
           }
         }
       }
-    } else if (staffId) {
-      // Staff-based: prevent double-booking the specified staff member (client path)
-      const { data: staffSch } = await client.models.StaffSchedule.get({ visibleId: staffId });
-      if (staffSch?.vendorId) {
-        const result = await client.models.Appointment.listAppointmentByVendorIdAndDateTime({
-          vendorId: staffSch.vendorId,
-          dateTime: { beginsWith: bookingDate }
-        } as any);
-        const existingApts = (result as any).data || [];
-
-        for (const apt of existingApts) {
-          if (apt.status === 'cancelled') continue;
-          if (apt.staffId !== staffId) continue;
-
-          // Determine the existing appointment's actual duration
-          let aptDuration: number;
-          const aptCustomer = typeof apt.customer === 'string' ? (() => { try { return JSON.parse(apt.customer); } catch { return {}; } })() : (apt.customer || {});
-
-          if (aptCustomer.isBlockedTime && aptCustomer.duration) {
-            // Blocked time stores its duration in the customer JSON
-            aptDuration = aptCustomer.duration;
-          } else if (aptCustomer.duration) {
-            // Manual/enriched appointments store duration in customer JSON
-            aptDuration = aptCustomer.duration;
-          } else {
-            const { data: aptSvc } = await client.models.Service.get({ serviceId: apt.serviceId });
-            aptDuration = (aptSvc?.duration as number) || 60;
-          }
-
-          if (slotsOverlap(apt.dateTime, aptDuration, bufferMins, bufferMins)) {
-            return Response.json({ error: 'This time slot is no longer available' }, { status: 409 });
-          }
-        }
-      }
     }
+    // NOTE: the explicit-staff double-booking check that used to live here has
+    // been consolidated into the single detectOverlap call below (see the
+    // `if (staffId)` branch after auto-assign). detectOverlap derives existing
+    // appointment durations from the CURRENT DB Service.duration — the same
+    // source the availability endpoint uses — so a slot shown as available is
+    // no longer rejected due to a stale stored customer.duration.
 
     // Auto-assign staff if none provided — uses staffAssigner with fewest-bookings algorithm (Req 5.5, 5.6)
     let assignedStaffId = staffId;
+    // Ranked eligible staff for the auto-assign path (fewest-bookings first).
+    let autoAssignCandidates: string[] = [];
     if (!assignedStaffId) {
       const { data: svcData } = await client.models.Service.get({ serviceId });
       const allowedStaff = (svcData?.allowedStaff as string[]) || [];
@@ -293,51 +266,67 @@ export const POST = withErrorLogging(async function POST(request: Request) {
         // Get buffer minutes from vendor
         const bufferMinutes = svcData?.bufferMinutes || 15;
 
-        try {
-          const assigned = assignStaff({
-            service: { ...svcData, providersRequired: 1 },
-            staffSchedules,
-            appointments: existingAppointments,
-            date,
-            time,
-            bufferMinutes,
-          });
-          if (assigned.length > 0) {
-            assignedStaffId = assigned[0].staffId;
-          }
-        } catch {
-          // If assignStaff throws (no eligible staff), fall back to first active staff
-          assignedStaffId = staffSchedules[0]?.visibleId;
-        }
+        // Build a ranked list of ALL eligible staff (fewest-bookings first),
+        // not just the single top pick. Availability shows a slot when ANY
+        // eligible staff is free, so booking must try each candidate and only
+        // fail if NONE can take it — otherwise a slot shown as available (via
+        // staff A) gets rejected because we happened to auto-assign staff B.
+        const ranked = rankEligibleStaff({
+          service: { ...svcData, providersRequired: 1 },
+          staffSchedules,
+          appointments: existingAppointments,
+          date,
+          time,
+          bufferMinutes,
+        });
+        autoAssignCandidates = ranked.map((r: any) => r.staffId);
       }
     }
 
     // Resolve vendorId from StaffSchedule (Req 9.7) rather than from request body
     let resolvedVendorId = body.vendorId; // fallback to body if staff not found
-    if (assignedStaffId) {
-      const { data: staffSchedule } = await client.models.StaffSchedule.get({ visibleId: assignedStaffId });
-      if (staffSchedule?.vendorId) {
-        resolvedVendorId = staffSchedule.vendorId;
-      }
 
-      // Overlap detection (Req 4.6): check before saving
-      // Customer bookings ALWAYS enforce overlap — never allow confirmOverlap override
-      if (isCustomerBooking || !confirmOverlap) {
-        const svcDuration = serviceCheck?.duration || 60;
-        const overlap = await detectOverlap(client, assignedStaffId, dateTime, svcDuration as number, undefined, !isCustomerBooking);
-        if (overlap) {
-          // For customer bookings: hard block with no override option
-          if (isCustomerBooking) {
-            return Response.json({
-              error: 'This time slot is no longer available. Please select a different time.',
-            }, { status: 409 });
-          }
+    if (staffId) {
+      // Explicit staff choice: this specific staff must be free.
+      const overlap = await detectOverlap(client, staffId, dateTime, (serviceCheck?.duration as number) || 60, undefined, !isCustomerBooking);
+      if (overlap) {
+        if (isCustomerBooking) {
+          return Response.json({ error: 'This time slot is no longer available. Please select a different time.' }, { status: 409 });
+        }
+        if (!confirmOverlap) {
           return Response.json({
             warning: 'Scheduling conflict detected',
             conflict: overlap,
             message: 'This appointment overlaps with an existing appointment. Resubmit with confirmOverlap=true to save anyway.',
           }, { status: 409 });
         }
+      }
+      assignedStaffId = staffId;
+    } else {
+      // Auto-assign: pick the first ranked candidate that is actually free.
+      // Only 409 if every eligible candidate has a conflict (or none exist).
+      const svcDuration = (serviceCheck?.duration as number) || 60;
+      for (const candidateId of autoAssignCandidates) {
+        const overlap = await detectOverlap(client, candidateId, dateTime, svcDuration, undefined, !isCustomerBooking);
+        if (!overlap) {
+          assignedStaffId = candidateId;
+          break;
+        }
+      }
+      if (!assignedStaffId && isCustomerBooking) {
+        // No eligible provider is free at this time — mirror what availability
+        // would have shown (no slot). Vendors may still proceed (they can book
+        // over conflicts / manage staffless entries), so only hard-block customers.
+        return Response.json({
+          error: 'This time slot is no longer available. Please select a different time.',
+        }, { status: 409 });
+      }
+    }
+
+    if (assignedStaffId) {
+      const { data: staffSchedule } = await client.models.StaffSchedule.get({ visibleId: assignedStaffId });
+      if (staffSchedule?.vendorId) {
+        resolvedVendorId = staffSchedule.vendorId;
       }
     }
 
@@ -381,22 +370,14 @@ export const POST = withErrorLogging(async function POST(request: Request) {
       try {
         const { data: staffSchedule } = await client.models.StaffSchedule.get({ visibleId: assignedStaffId });
         if (staffSchedule?.vendorId) {
-          const postWriteResult = await client.models.Appointment.listAppointmentByVendorIdAndDateTime({
-            vendorId: staffSchedule.vendorId,
-            dateTime: { beginsWith: bookingDate },
-          } as any);
-          const postWriteApts = ((postWriteResult as any).data || []).filter(
-            (a: any) => a.status !== 'cancelled' && a.staffId === assignedStaffId && a.appointmentId !== appointmentId
-          );
-
-          for (const apt of postWriteApts) {
-            const aptCustomer = typeof apt.customer === 'string' ? (() => { try { return JSON.parse(apt.customer); } catch { return {}; } })() : (apt.customer || {});
-            const aptDuration: number = aptCustomer?.duration || duration;
-            if (slotsOverlap(apt.dateTime, aptDuration, bufferMins, bufferMins)) {
-              // Conflict detected after write — roll back our appointment
-              await client.models.Appointment.update({ appointmentId, status: 'cancelled' } as any);
-              return Response.json({ error: 'This time slot is no longer available' }, { status: 409 });
-            }
+          // Re-check with the SAME authority as the pre-write check
+          // (detectOverlap → current DB Service.duration), excluding the
+          // appointment we just created. This catches a concurrent booking
+          // that slipped in, without rolling back on a stale stored duration.
+          const overlap = await detectOverlap(client, assignedStaffId, dateTime, duration, appointmentId, !isCustomerBooking);
+          if (overlap) {
+            await client.models.Appointment.update({ appointmentId, status: 'cancelled' } as any);
+            return Response.json({ error: 'This time slot is no longer available' }, { status: 409 });
           }
         }
       } catch (e) {

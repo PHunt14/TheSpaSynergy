@@ -21,8 +21,15 @@ import { DAY_NAMES, getRecurrenceHours, hasAppointmentConflict } from './availab
  * @returns {Array} Array of StaffAssignment objects { staffId, vendorId, staffName }
  * @throws {Error} If fewer than providersRequired staff are available
  */
-export function assignStaff({ service, staffSchedules, appointments, date, time, bufferMinutes }) {
-  const providersRequired = service.providersRequired || 1
+/**
+ * Returns ALL eligible staff for a service at a time, ranked fewest-bookings
+ * first (ties broken randomly). Does NOT throw and does NOT slice — callers
+ * decide how many to take. Eligibility = active, in allowedStaff (or all if
+ * empty), working at the time, and no conflicting appointment.
+ *
+ * @returns {Array} Ranked StaffAssignment objects { staffId, vendorId, staffName }
+ */
+export function rankEligibleStaff({ service, staffSchedules, appointments, date, time, bufferMinutes }) {
   const allowedStaff = service.allowedStaff || []
   const duration = service.duration
 
@@ -37,12 +44,6 @@ export function assignStaff({ service, staffSchedules, appointments, date, time,
     if (hasConflict(staff.visibleId, appointments, time, duration, bufferMinutes)) return false
     return true
   })
-
-  if (eligible.length < providersRequired) {
-    throw new Error(
-      `Insufficient staff available: need ${providersRequired}, found ${eligible.length}`
-    )
-  }
 
   // 2. Count non-cancelled bookings on the date for each eligible staff member
   const bookingCounts = new Map()
@@ -64,14 +65,26 @@ export function assignStaff({ service, staffSchedules, appointments, date, time,
     return arr[0] % 2 === 0 ? -1 : 1
   })
 
-  // 3. Return exactly providersRequired staff members
-  const assigned = sorted.slice(0, providersRequired)
-
-  return assigned.map(staff => ({
+  return sorted.map(staff => ({
     staffId: staff.visibleId,
     vendorId: staff.vendorId,
     staffName: staff.name || ''
   }))
+}
+
+export function assignStaff({ service, staffSchedules, appointments, date, time, bufferMinutes }) {
+  const providersRequired = service.providersRequired || 1
+
+  const ranked = rankEligibleStaff({ service, staffSchedules, appointments, date, time, bufferMinutes })
+
+  if (ranked.length < providersRequired) {
+    throw new Error(
+      `Insufficient staff available: need ${providersRequired}, found ${ranked.length}`
+    )
+  }
+
+  // Return exactly providersRequired staff members
+  return ranked.slice(0, providersRequired)
 }
 
 /**
