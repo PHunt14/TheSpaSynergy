@@ -17,3 +17,5 @@ test-results/
 playwright-report/
 # Kiro specs
 .kiro/
+
+test-texts/
