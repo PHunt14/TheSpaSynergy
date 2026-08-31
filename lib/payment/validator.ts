@@ -59,12 +59,13 @@ export function dollarsToCents(amount: number): number {
 
 /**
  * Validates that the submitted payment amount matches the expected amount
- * within a tolerance of $0.01.
+ * within a tolerance of $0.01 and is within reasonable bounds ($0.50–$9999.99).
  *
  * Requirement 4.1: Verify that the requested amount matches the expected amount
  * within a tolerance of $0.01.
  * Requirement 4.2: If the amount does not match, reject with expected, received,
  * and difference.
+ * Requirement 4.5: Enforce reasonable payment bounds to prevent typos or attacks.
  */
 export function validatePaymentAmount(input: PaymentValidationInput): ValidationResult {
   const { amount, expectedAmount } = input;
@@ -87,6 +88,27 @@ export function validatePaymentAmount(input: PaymentValidationInput): Validation
       valid: false,
       error: {
         message: 'Invalid expected amount',
+      },
+    };
+  }
+
+  // Enforce reasonable bounds: $0.50 minimum, $9999.99 maximum
+  if (sanitizedAmount < 0.50) {
+    return {
+      valid: false,
+      error: {
+        message: 'Payment amount must be at least $0.50',
+        received: sanitizedAmount,
+      },
+    };
+  }
+
+  if (sanitizedAmount > 9999.99) {
+    return {
+      valid: false,
+      error: {
+        message: 'Payment amount cannot exceed $9999.99',
+        received: sanitizedAmount,
       },
     };
   }

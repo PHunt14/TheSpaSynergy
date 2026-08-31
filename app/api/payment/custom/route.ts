@@ -15,6 +15,7 @@ import { appendAuditRecord, buildAuditRecord } from '../../../../lib/payment/aud
 import { hasValidCredentials } from '../../../utils/paymentRouting';
 import { isTokenExpiringSoon, refreshSquareToken } from '../../../../lib/square-token-enhanced';
 import { withErrorLogging } from '@/lib/logger/middleware';
+import { rateLimitMiddleware, getClientIp } from '@/lib/payment/rateLimiter';
 
 Amplify.configure(config, { ssr: true });
 
@@ -30,6 +31,13 @@ export const POST = withErrorLogging(async function POST(request: Request) {
   let auditAppointmentId: string | undefined;
 
   try {
+    // Rate limit check (Requirement 11.1)
+    const clientIp = getClientIp(request.headers);
+    const rateLimitResponse = rateLimitMiddleware(clientIp, 10, 10000); // 10 requests per 10 seconds
+    if (rateLimitResponse) {
+      return rateLimitResponse;
+    }
+
     const body = await request.json();
     const { sourceId, amount, description, clientName, tipAmount } = body;
 

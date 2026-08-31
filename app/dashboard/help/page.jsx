@@ -57,6 +57,19 @@ const sections = [
 
 const platformUpdates = [
   {
+    version: 'v1.6.3',
+    date: 'August 31, 2026',
+    title: 'Dashboard Payment Features & Performance Optimization',
+    changes: [
+      'Transaction pagination — loads 50 transactions at a time with "Load More" button for better performance and UI responsiveness',
+      'Smart caching for service and staff lookups — reduces database queries from ~100 to ~13 for typical vendor dashboards (5-minute TTL)',
+      'House vendor Square credentials UI — admins can now configure house vendor account directly in Dashboard → Settings',
+      'Enhanced dashboard documentation — step-by-step instructions for enabling house fees and verifying configurations',
+      'Integration test suite for dashboard payments — 15 tests validating transaction filtering, pagination, role-based access, and house fee calculations',
+      'DynamoDB index verification — added Service.vendorId GSI for efficient vendor service lookups',
+    ],
+  },
+  {
     version: 'v1.6.2',
     date: 'August 2026',
     title: 'Kiosk Reliability, Booking Accuracy & Build Stability',

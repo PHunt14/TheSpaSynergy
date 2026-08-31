@@ -9,11 +9,19 @@ import { calculateBundlePaymentSplit } from '../../../utils/bundlePaymentSplit';
 import { calculateMultiProviderSplit } from '../../../utils/payment';
 import { scaleVendorAllocations } from '../../../utils/vendorRevenueScaler';
 import { withErrorLogging } from '@/lib/logger/middleware';
+import { rateLimitMiddleware, getClientIp } from '@/lib/payment/rateLimiter';
 
 Amplify.configure(config, { ssr: true });
 
 export const POST = withErrorLogging(async function POST(request: Request) {
   try {
+    // Rate limit check (Requirement 11.1)
+    const clientIp = getClientIp(request.headers);
+    const rateLimitResponse = rateLimitMiddleware(clientIp, 10, 10000); // 10 requests per 10 seconds
+    if (rateLimitResponse) {
+      return rateLimitResponse;
+    }
+
     const body = await request.json();
     const { action } = body;
 
