@@ -210,13 +210,14 @@ describe('resolveCredentialChain', () => {
       })
     })
 
-    test('sibling must have squareOAuthStatus === "connected"', () => {
+    test('valid sibling credentials still work when status is "disconnected"', () => {
       const staff = makeStaff({ squareAccessToken: '' })
       const sibling = makeSiblingStaff({ squareOAuthStatus: 'disconnected' })
       const result = resolveCredentialChain(staff, [sibling], makeHouseProvider())
 
-      // Sibling is skipped because status is not 'connected'
-      expect(result.source).toBe('house')
+      expect(result.source).toBe('sibling_staff')
+      expect(result.credentials.accessToken).toBe('sibling-token-789')
+      expect(result.resolutionPath).toContain('sibling:resolved')
     })
 
     test('sibling with empty token is skipped', () => {
