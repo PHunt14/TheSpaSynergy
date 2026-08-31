@@ -286,9 +286,12 @@ export const POST = withErrorLogging(async function POST(request: Request) {
     // Resolve vendorId from StaffSchedule (Req 9.7) rather than from request body
     let resolvedVendorId = body.vendorId; // fallback to body if staff not found
 
+    // Buffer authority: the NEW service's buffer (matches the availability/show path).
+    const serviceBuffer = (serviceCheck?.bufferMinutes as number | null | undefined) ?? 15;
+
     if (staffId) {
       // Explicit staff choice: this specific staff must be free.
-      const overlap = await detectOverlap(client, staffId, dateTime, (serviceCheck?.duration as number) || 60, undefined, !isCustomerBooking);
+      const overlap = await detectOverlap(client, staffId, dateTime, (serviceCheck?.duration as number) || 60, undefined, !isCustomerBooking, { bufferOverride: serviceBuffer });
       if (overlap) {
         if (isCustomerBooking) {
           return Response.json({ error: 'This time slot is no longer available. Please select a different time.' }, { status: 409 });
@@ -307,7 +310,7 @@ export const POST = withErrorLogging(async function POST(request: Request) {
       // Only 409 if every eligible candidate has a conflict (or none exist).
       const svcDuration = (serviceCheck?.duration as number) || 60;
       for (const candidateId of autoAssignCandidates) {
-        const overlap = await detectOverlap(client, candidateId, dateTime, svcDuration, undefined, !isCustomerBooking);
+        const overlap = await detectOverlap(client, candidateId, dateTime, svcDuration, undefined, !isCustomerBooking, { bufferOverride: serviceBuffer });
         if (!overlap) {
           assignedStaffId = candidateId;
           break;
@@ -374,7 +377,7 @@ export const POST = withErrorLogging(async function POST(request: Request) {
           // (detectOverlap → current DB Service.duration), excluding the
           // appointment we just created. This catches a concurrent booking
           // that slipped in, without rolling back on a stale stored duration.
-          const overlap = await detectOverlap(client, assignedStaffId, dateTime, duration, appointmentId, !isCustomerBooking);
+          const overlap = await detectOverlap(client, assignedStaffId, dateTime, duration, appointmentId, !isCustomerBooking, { bufferOverride: serviceBuffer });
           if (overlap) {
             await client.models.Appointment.update({ appointmentId, status: 'cancelled' } as any);
             return Response.json({ error: 'This time slot is no longer available' }, { status: 409 });
@@ -421,7 +424,8 @@ async function detectOverlap(
   dateTime: string,
   durationMinutes: number,
   excludeAppointmentId?: string,
-  isVendorBooking: boolean = false
+  isVendorBooking: boolean = false,
+  options: { bufferOverride?: number; prefetchedAppointments?: any[] } = {}
 ): Promise<{ appointmentId: string; dateTime: string; staffId: string } | null> {
   const date = extractDateFromDateTime(dateTime);
 
@@ -429,32 +433,35 @@ async function detectOverlap(
   const { data: staffSchedule } = await amplifyClient.models.StaffSchedule.get({ visibleId: staffId });
   if (!staffSchedule?.vendorId) return null;
 
-  // Get buffer minutes from vendor config
+  // Get buffer minutes from vendor config (fallback only)
   const { data: vendor } = await amplifyClient.models.Vendor.get({ vendorId: staffSchedule.vendorId });
   const vendorBuffer = vendor?.bufferMinutes ?? 15;
 
-  const { data: appointments } = await amplifyClient.models.Appointment.listAppointmentByVendorIdAndDateTime({
-    vendorId: staffSchedule.vendorId,
-    dateTime: { beginsWith: date },
-  } as any);
+  const appointments = options.prefetchedAppointments
+    ?? (await amplifyClient.models.Appointment.listAppointmentByVendorIdAndDateTime({
+      vendorId: staffSchedule.vendorId,
+      dateTime: { beginsWith: date },
+    } as any)).data;
 
   if (!appointments || appointments.length === 0) return null;
 
-  // Build service duration map for all unique serviceIds in the existing appointments
+  // Build service duration map from the CURRENT DB Service.duration for all
+  // unique serviceIds in the existing appointments. This is the single source
+  // of truth for existing-appointment durations, matching the availability
+  // (show) path — so a slot shown as available is never rejected because an
+  // appointment stored a stale duration at an earlier booking time.
   const serviceIds = [...new Set(appointments.map((a: any) => a.serviceId).filter(Boolean))];
   const serviceDurationMap: Record<string, number> = {};
   await Promise.all(serviceIds.map(async (sid: string) => {
     if (sid === 'blocked' || sid === 'manual') return;
     const { data: svc } = await amplifyClient.models.Service.get({ serviceId: sid });
     if (svc?.duration) serviceDurationMap[sid] = svc.duration as number;
-    // Use per-service buffer if defined, storing for later use
-    if (svc?.bufferMinutes != null) serviceDurationMap[`__buffer__${sid}`] = svc.bufferMinutes as number;
   }));
 
-  // Determine the buffer to use for the new appointment
-  // Check if the new service has a per-service buffer
-  const newServiceBuffer = serviceDurationMap[`__buffer__${appointments[0]?.serviceId}`];
-  const bufferMinutes = newServiceBuffer ?? vendorBuffer;
+  // Buffer for the NEW appointment. Callers pass the new service's buffer
+  // (bufferOverride) so this matches exactly what the availability path used
+  // to show the slot. Falls back to the vendor buffer only when unspecified.
+  const bufferMinutes = options.bufferOverride ?? vendorBuffer;
 
   return detectConflict(
     staffId,
@@ -525,10 +532,11 @@ async function handleMultiProviderBooking(body: any, amplifyClient: any) {
     .flatMap((result: any) => result.data || [])
     .filter((apt: any) => apt.status !== 'cancelled');
 
-  // Determine buffer minutes from the first vendor (lead vendor)
-  const leadVendorId = service.leadVendorId || vendorIds[0];
-  const { data: leadVendor } = await amplifyClient.models.Vendor.get({ vendorId: leadVendorId });
-  const bufferMinutes = leadVendor?.bufferMinutes || 15;
+  // Buffer authority: the NEW service's buffer, matching the availability/show
+  // path (getMultiProviderSlots uses service.bufferMinutes ?? 15). Using the
+  // vendor buffer here would let a slot shown under a smaller service buffer be
+  // rejected at booking under a larger vendor buffer.
+  const bufferMinutes = (service.bufferMinutes as number | null | undefined) ?? 15;
 
   // Run staff assignment
   let assignedStaffMembers;
@@ -611,42 +619,29 @@ async function handleMultiProviderBooking(body: any, amplifyClient: any) {
   }
 
   // --- Post-write race condition guard for multi-provider bookings ---
+  // Uses the SAME authority as the pre-write assignment (detectOverlap → current
+  // DB Service.duration + the new service's buffer), excluding this group's own
+  // appointments. This only catches a genuine concurrent booking; it will not
+  // roll back on a stale stored duration (the old manual loop's bug).
   try {
-    const bookingDate = dateTime.includes('T') ? dateTime.split('T')[0] : dateTime.split(' ')[0];
-    const bookingTime = dateTime.includes('T') ? dateTime.split('T')[1].substring(0, 5) : '00:00';
-    const [bh, bm] = bookingTime.split(':').map(Number);
-    const slotStart = bh * 60 + bm;
-    const slotEnd = slotStart + (service.duration || 60);
-    const bufferMins = service.bufferMinutes ?? 15;
-
-    for (const staff of assignedStaffMembers) {
-      const { data: staffSch } = await amplifyClient.models.StaffSchedule.get({ visibleId: staff.staffId });
-      if (!staffSch?.vendorId) continue;
-
-      const postWriteResult = await amplifyClient.models.Appointment.listAppointmentByVendorIdAndDateTime({
-        vendorId: staffSch.vendorId,
-        dateTime: { beginsWith: bookingDate },
-      } as any);
-      const postWriteApts = ((postWriteResult as any).data || []).filter(
-        (a: any) => a.status !== 'cancelled' && a.staffId === staff.staffId && !appointmentIds.includes(a.appointmentId)
+    for (let i = 0; i < assignedStaffMembers.length; i++) {
+      const staff = assignedStaffMembers[i];
+      const ownAppointmentId = appointmentIds[i];
+      const overlap = await detectOverlap(
+        amplifyClient,
+        staff.staffId,
+        dateTime,
+        service.duration || 60,
+        ownAppointmentId,
+        false,
+        { bufferOverride: bufferMinutes }
       );
-
-      for (const apt of postWriteApts) {
-        const aptCustomer = typeof apt.customer === 'string' ? (() => { try { return JSON.parse(apt.customer); } catch { return {}; } })() : (apt.customer || {});
-        const aptDuration: number = aptCustomer?.duration || (service.duration || 60);
-        const aptTime = (apt.dateTime as string).includes('T') ? (apt.dateTime as string).split('T')[1].substring(0, 5) : '00:00';
-        const [ah, am] = aptTime.split(':').map(Number);
-        const aptStart = ah * 60 + am;
-        const aptEnd = aptStart + aptDuration + bufferMins;
-        const newEnd = slotEnd + bufferMins;
-
-        if (slotStart < aptEnd && newEnd > aptStart) {
-          // Conflict detected — roll back all appointments in this group
-          for (const id of appointmentIds) {
-            await amplifyClient.models.Appointment.update({ appointmentId: id, status: 'cancelled' } as any).catch(() => {});
-          }
-          return Response.json({ error: 'This time slot is no longer available' }, { status: 409 });
+      if (overlap) {
+        // Genuine concurrent conflict — roll back the whole group.
+        for (const id of appointmentIds) {
+          await amplifyClient.models.Appointment.update({ appointmentId: id, status: 'cancelled' } as any).catch(() => {});
         }
+        return Response.json({ error: 'This time slot is no longer available' }, { status: 409 });
       }
     }
   } catch (e) {
@@ -708,8 +703,9 @@ async function handleQuantityBooking(body: any, amplifyClient: any) {
       .flatMap((r: any) => r.data || [])
       .filter((apt: any) => apt.status !== 'cancelled');
 
-    const { data: leadVendor } = await amplifyClient.models.Vendor.get({ vendorId });
-    const bufferMinutes = leadVendor?.bufferMinutes || 15;
+    // Buffer authority: the NEW service's buffer, matching the availability
+    // (show) path getParallelQuantitySlots (service.bufferMinutes ?? 15).
+    const bufferMinutes = (service.bufferMinutes as number | null | undefined) ?? 15;
 
     // Use assignStaff with providersRequired = quantity
     let assignedStaffMembers;
@@ -751,24 +747,11 @@ async function handleQuantityBooking(body: any, amplifyClient: any) {
       }
     }
   } else {
-    // Sequential: same staff, back-to-back appointments
-    const bufferMinutes = 15;
-    const { data: vendorData } = await amplifyClient.models.Vendor.get({ vendorId });
-    const actualBuffer = vendorData?.bufferMinutes || bufferMinutes;
-
-    // Auto-assign staff if none provided
-    let assignedStaffId = staffId;
-    if (!assignedStaffId) {
-      const allowedStaff = (service.allowedStaff as string[]) || [];
-      if (allowedStaff.length > 0) {
-        assignedStaffId = allowedStaff[0];
-      } else {
-        // allowedStaff is null = all staff for this vendor
-        const { data: vendorStaff } = await amplifyClient.models.StaffSchedule.listStaffScheduleByVendorId({ vendorId } as any);
-        const activeStaff = (vendorStaff || []).filter((s: any) => s.isActive !== false);
-        if (activeStaff.length > 0) assignedStaffId = activeStaff[0].visibleId;
-      }
-    }
+    // Sequential: same staff, back-to-back appointments.
+    // Buffer authority: the NEW service's buffer, matching the availability
+    // (show) path getSequentialQuantitySlots (service.bufferMinutes ?? 15).
+    const actualBuffer = (service.bufferMinutes as number | null | undefined) ?? 15;
+    const isCustomerBooking = !body.createdBy;
 
     // Parse the start dateTime
     const [date, timeStr] = dateTime.includes('T')
@@ -776,7 +759,56 @@ async function handleQuantityBooking(body: any, amplifyClient: any) {
       : [dateTime.split(' ')[0], dateTime.split(' ')[1]];
 
     const [startHour, startMin] = timeStr.split(':').map(Number);
-    let currentMinutes = startHour * 60 + startMin;
+    const blockStart = startHour * 60 + startMin;
+
+    // Compute the sub-slot dateTimes for the whole back-to-back block.
+    const subSlotDateTimes: string[] = [];
+    for (let i = 0; i < quantity; i++) {
+      const m = blockStart + i * (duration + actualBuffer);
+      const hh = Math.floor(m / 60).toString().padStart(2, '0');
+      const mm = (m % 60).toString().padStart(2, '0');
+      subSlotDateTimes.push(`${date}T${hh}:${mm}:00`);
+    }
+
+    // Build the candidate staff list. Availability shows a sequential slot when
+    // ANY eligible staff can do the FULL block, so booking must try each and
+    // pick the first whose entire block is free.
+    let candidateStaffIds: string[] = [];
+    if (staffId) {
+      candidateStaffIds = [staffId];
+    } else {
+      const allowedStaff = (service.allowedStaff as string[]) || [];
+      if (allowedStaff.length > 0) {
+        candidateStaffIds = allowedStaff;
+      } else {
+        const { data: vendorStaff } = await amplifyClient.models.StaffSchedule.listStaffScheduleByVendorId({ vendorId } as any);
+        candidateStaffIds = (vendorStaff || [])
+          .filter((s: any) => s.isActive !== false && !String(s.visibleId).startsWith('resource-'))
+          .map((s: any) => s.visibleId);
+      }
+    }
+
+    // Pick the first candidate whose ENTIRE block is free (DB-duration authority).
+    let assignedStaffId: string | undefined;
+    for (const candidateId of candidateStaffIds) {
+      let blockClear = true;
+      for (const subDateTime of subSlotDateTimes) {
+        const overlap = await detectOverlap(amplifyClient, candidateId, subDateTime, duration, undefined, !isCustomerBooking, { bufferOverride: actualBuffer });
+        if (overlap) { blockClear = false; break; }
+      }
+      if (blockClear) { assignedStaffId = candidateId; break; }
+    }
+
+    if (!assignedStaffId) {
+      if (isCustomerBooking) {
+        return Response.json({ error: 'This time slot is no longer available. Please select a different time.' }, { status: 409 });
+      }
+      // Vendor booking with no free staff — fall back to the first candidate so
+      // the vendor can still create the (overlapping) block deliberately.
+      assignedStaffId = candidateStaffIds[0];
+    }
+
+    let currentMinutes = blockStart;
 
     for (let i = 0; i < quantity; i++) {
       const hour = Math.floor(currentMinutes / 60);

@@ -184,6 +184,38 @@ describe('getParallelQuantitySlots', () => {
     })
     expect(slots.length).toBeGreaterThan(0)
   })
+
+  // The availability route enriches existing appointments with the CURRENT DB
+  // Service.duration into customer.duration before calling this calculator, so
+  // the show path and the booking path (which also uses current DB duration)
+  // agree. This asserts the calculator honors that enriched duration.
+  test('honors enriched customer.duration for existing appointments', () => {
+    const staffSchedules = [
+      makeStaff('staff-1', 'vendor-a', mondaySchedule),
+      makeStaff('staff-2', 'vendor-b', mondaySchedule),
+    ]
+    // staff-1 has a 09:00 appointment whose CURRENT (enriched) duration is 120
+    // min → with 15m buffer it blocks through ~11:15. staff-2 is free all day.
+    // For quantity 2 the 09:00–11:00 slots need BOTH staff, so they must be
+    // excluded (only staff-2 is free); a later slot like 11:30 should return.
+    const appointments = [
+      { dateTime: `${futureMonday}T09:00`, staffId: 'staff-1', status: 'confirmed', customer: JSON.stringify({ name: 'A', duration: 120 }) },
+    ]
+    const slots = getParallelQuantitySlots({
+      service: baseService,
+      quantity: 2,
+      staffSchedules,
+      appointments,
+      date: futureMonday,
+      bufferMinutes: 15,
+    })
+    // 09:00 requires 2 staff but staff-1 is busy (enriched 120m) → excluded.
+    expect(slots.find(s => s.time === '09:00')).toBeUndefined()
+    // 10:00 still overlaps staff-1's 09:00+120m block → excluded.
+    expect(slots.find(s => s.time === '10:00')).toBeUndefined()
+    // 11:30 is clear of the 120m block for both staff → available.
+    expect(slots.find(s => s.time === '11:30')).toBeDefined()
+  })
 })
 
 // ─── getSequentialQuantitySlots ───────────────────────────────

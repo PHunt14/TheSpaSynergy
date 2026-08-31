@@ -362,13 +362,40 @@ async function getStaffAppointments(
     if (data?.duration) serviceMap[sid] = data.duration as number;
   }));
 
-  return filtered.map(apt => {
-    const duration = serviceMap[apt.serviceId];
+  return enrichAppointmentsWithDbDuration(filtered, serviceMap);
+}
+
+/**
+ * Injects the CURRENT DB Service.duration into each appointment's customer JSON
+ * (as customer.duration) so the slot calculators — which read customer.duration
+ * — use the up-to-date duration rather than whatever was stored when the
+ * appointment was originally booked. This keeps the availability (show) path's
+ * existing-appointment durations aligned with the booking path (which also uses
+ * current DB Service.duration via detectOverlap). Blocked-time durations are
+ * preserved (never overwritten).
+ *
+ * @param appointments - Raw appointment records
+ * @param serviceMap - Optional precomputed serviceId → duration map; built if omitted
+ */
+async function enrichAppointmentsWithDbDuration(appointments: any[], serviceMap?: Record<string, number>) {
+  let map = serviceMap;
+  if (!map) {
+    const serviceIds = [...new Set(appointments.map(a => a.serviceId).filter(Boolean))];
+    map = {};
+    await Promise.all(serviceIds.map(async (sid) => {
+      const { data } = await client.models.Service.get({ serviceId: sid });
+      if (data?.duration) (map as Record<string, number>)[sid] = data.duration as number;
+    }));
+  }
+
+  return appointments.map(apt => {
+    let customer = apt.customer;
+    if (typeof customer === 'string') { try { customer = JSON.parse(customer); } catch { customer = {}; } }
+    if (!customer) customer = {};
+    // Never overwrite a blocked-time duration — it is authoritative.
+    if (customer.isBlockedTime) return apt;
+    const duration = (map as Record<string, number>)[apt.serviceId];
     if (duration) {
-      // Inject duration into customer object so generateTimeSlots can read it
-      let customer = apt.customer;
-      if (typeof customer === 'string') { try { customer = JSON.parse(customer); } catch { customer = {}; } }
-      if (!customer) customer = {};
       customer.duration = duration;
       return { ...apt, customer: JSON.stringify(customer) };
     }
@@ -427,9 +454,12 @@ async function handleMultiProviderAvailability(service: any, date: string, eligi
   );
   const appointmentResults = await Promise.all(appointmentPromises);
 
-  const allAppointments = appointmentResults
+  const rawAppointments = appointmentResults
     .flatMap(result => (result as any).data || [])
     .filter(apt => apt.status !== 'cancelled' && staffScheduleIds.includes(apt.staffId));
+
+  // Enrich with current DB Service.duration so show-path conflict math matches booking.
+  const allAppointments = await enrichAppointmentsWithDbDuration(rawAppointments);
 
   // Call getMultiProviderSlots
   const slots = getMultiProviderSlots({
@@ -481,9 +511,12 @@ async function handleQuantityAvailability(service: any, date: string, eligibleSt
   );
   const appointmentResults = await Promise.all(appointmentPromises);
 
-  const allAppointments = appointmentResults
+  const rawAppointments = appointmentResults
     .flatMap(result => (result as any).data || [])
     .filter(apt => apt.status !== 'cancelled' && staffScheduleIds.includes(apt.staffId));
+
+  // Enrich with current DB Service.duration so show-path conflict math matches booking.
+  const allAppointments = await enrichAppointmentsWithDbDuration(rawAppointments);
 
   let slots;
   if (mode === 'parallel') {
