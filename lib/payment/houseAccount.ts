@@ -50,18 +50,30 @@ export async function getHouseVendor(dataClient: any): Promise<any | null> {
 export async function resolveHousePayeeStaff(dataClient: any, houseVendor: any): Promise<any | null> {
   if (!houseVendor) return null;
 
-  const { data: houseStaffList } = await dataClient.models.StaffSchedule.listStaffScheduleByVendorId({
-    vendorId: houseVendor.vendorId,
-  });
-  const staff = houseStaffList || [];
+  // StaffSchedule access is required to identify the payee staff. If the model
+  // isn't available (or errors), there is no staff to resolve — return null so
+  // the caller falls back to vendor-level credentials.
+  const listByVendor = dataClient?.models?.StaffSchedule?.listStaffScheduleByVendorId;
+  if (typeof listByVendor !== 'function') return null;
+
+  let staff: any[] = [];
+  try {
+    const { data: houseStaffList } = await listByVendor({ vendorId: houseVendor.vendorId });
+    staff = houseStaffList || [];
+  } catch {
+    return null;
+  }
 
   // 1. Explicit admin override via SiteSettings.
   try {
-    const { data: setting } = await dataClient.models.SiteSettings.get({ settingKey: HOUSE_PAYEE_SETTING_KEY });
-    const overrideId = setting?.settingValue;
-    if (overrideId) {
-      const match = staff.find((s: any) => s.visibleId === overrideId);
-      if (match) return match;
+    const getSetting = dataClient?.models?.SiteSettings?.get;
+    if (typeof getSetting === 'function') {
+      const { data: setting } = await getSetting({ settingKey: HOUSE_PAYEE_SETTING_KEY });
+      const overrideId = setting?.settingValue;
+      if (overrideId) {
+        const match = staff.find((s: any) => s.visibleId === overrideId);
+        if (match) return match;
+      }
     }
   } catch {
     // SiteSettings lookup is best-effort; fall through to owner-email match.

@@ -40,9 +40,19 @@ describe('Feature: structured-error-logging, Property 15: Booking domain logging
     return JSON.parse(lastCall.replace(/\n$/, ''));
   }
 
-  // Arbitraries for generating valid booking details
-  // Use alphanumeric strings to avoid triggering the sanitizer's email/phone masking
-  const nonEmptyString = fc.stringMatching(/^[a-zA-Z0-9_-]{1,50}$/);
+  // Arbitraries for generating valid booking details.
+  // IDs must contain at least one letter so they are never treated as phone
+  // numbers by the sanitizer. (A digits-and-dashes string like "0000000-" is
+  // legitimately phone-like — 7+ digits with formatting — and would be masked,
+  // which is correct sanitizer behavior. The generator must therefore avoid it
+  // to test the logger's field passthrough, not the sanitizer's masking.)
+  const nonEmptyString = fc
+    .tuple(
+      fc.stringMatching(/^[a-zA-Z0-9_-]{0,24}$/),
+      fc.constantFrom(...'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')),
+      fc.stringMatching(/^[a-zA-Z0-9_-]{0,24}$/),
+    )
+    .map(([a, letter, b]) => `${a}${letter}${b}`);
   const actorArb = fc.constantFrom('customer', 'staff', 'admin');
 
   describe('logAppointmentCreated (Req 8.1)', () => {
