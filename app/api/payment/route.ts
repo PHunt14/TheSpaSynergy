@@ -17,6 +17,7 @@ import {
   isTokenExpiringSoon as isTokenExpiringSoonEnhanced,
   refreshSquareToken as refreshSquareTokenEnhanced,
 } from '../../../lib/square-token-enhanced';
+import { resolveHousePayeeCredentials } from '../../../lib/payment/houseAccount';
 import {
   validatePaymentAmount,
   sanitizeNumericInput,
@@ -403,26 +404,16 @@ async function processStaffRoutedPayment(
     }
   }
 
-  // Resolve house provider credentials for split decision
+  // Resolve house credentials for the split decision. House money always lands
+  // with the single designated house payee (Stacey) — resolved from the house
+  // owner's staff record (or a SiteSettings override), refreshing an expiring
+  // token — never "any connected staff" on the house vendor. Falls back to
+  // vendor-level house credentials only.
+  const resolvedHouse = await resolveHousePayeeCredentials(dataClient, houseProvider);
   const houseCredentials = {
-    accessToken: houseProvider.squareAccessToken || '',
-    locationId: houseProvider.squareLocationId || '',
+    accessToken: resolvedHouse?.accessToken || '',
+    locationId: resolvedHouse?.locationId || '',
   };
-
-  // If house fee requires house credentials, refresh house token if needed
-  if (houseProvider.squareAccessToken && houseProvider.squareLocationId) {
-    // Check house token expiry — house may be a staff record too
-    const { data: houseStaffList } = await (dataClient.models as any).StaffSchedule.listStaffScheduleByVendorId({ vendorId: houseProvider.vendorId });
-    const houseStaffWithCreds = (houseStaffList || []).find((s: any) =>
-      s.squareAccessToken === houseProvider.squareAccessToken
-    );
-    if (houseStaffWithCreds && isTokenExpiringSoonEnhanced(houseStaffWithCreds.squareTokenExpiresAt)) {
-      const houseRefresh = await refreshSquareTokenEnhanced(houseStaffWithCreds.visibleId);
-      if (houseRefresh.success && houseRefresh.newAccessToken) {
-        houseCredentials.accessToken = houseRefresh.newAccessToken;
-      }
-    }
-  }
 
   // --- Step 6: decideSplit ---
   let splitDecision;
@@ -796,28 +787,10 @@ async function ensureFreshCredentials(
  * Tries connected staff on the house vendor first, then the vendor-level credentials.
  * Returns null if no credentials are available.
  */
-async function resolveHouseSquareCredentials(
-  dataClient: any,
-  houseVendor: any
-): Promise<{ accessToken: string; locationId: string; staffId?: string } | null> {
-  const { data: houseStaffList } = await (dataClient.models as any).StaffSchedule.listStaffScheduleByVendorId({ vendorId: houseVendor.vendorId });
-  const houseStaff = (houseStaffList || []).find((s: any) =>
-    s.isActive !== false && s.squareAccessToken && s.squareLocationId && s.squareOAuthStatus === 'connected'
-  );
-
-  if (houseStaff) {
-    const fresh = await ensureFreshCredentials(dataClient, { accessToken: houseStaff.squareAccessToken, locationId: houseStaff.squareLocationId }, houseStaff.visibleId, houseVendor.vendorId);
-    if (!fresh.error && fresh.accessToken && fresh.locationId) {
-      return { accessToken: fresh.accessToken, locationId: fresh.locationId, staffId: houseStaff.visibleId };
-    }
-  }
-
-  if (houseVendor.squareAccessToken && houseVendor.squareLocationId) {
-    return { accessToken: houseVendor.squareAccessToken, locationId: houseVendor.squareLocationId };
-  }
-
-  return null;
-}
+// NOTE: House credential resolution is centralized in
+// lib/payment/houseAccount.ts (resolveHousePayeeCredentials), which enforces
+// that house money always routes to the single designated house payee (Stacey)
+// rather than "any connected staff" on the house vendor.
 
 /**
  * Resolves Square credentials for a staff member, falling back to any connected staff on
@@ -1014,34 +987,16 @@ async function processMultiProviderPayment(sourceId: string, totalAmount: number
     : Environment.Sandbox;
 
   if (split.houseFee > 0) {
-    // Find house staff (any connected staff on the house vendor)
-    const { data: houseStaffList } = await (dataClient.models as any).StaffSchedule.listStaffScheduleByVendorId({ vendorId: houseVendor.vendorId });
-    const houseStaff = (houseStaffList || []).find((s: any) =>
-      s.isActive !== false && s.squareAccessToken && s.squareLocationId && s.squareOAuthStatus === 'connected'
-    );
+    // House fee always lands with the single designated house payee (Stacey),
+    // never any other staff on the house vendor. resolveHousePayeeCredentials
+    // enforces that and refreshes an expiring token.
+    const freshHouseCreds = await resolveHousePayeeCredentials(dataClient, houseVendor);
 
-    const houseCreds = houseStaff
-      ? { accessToken: houseStaff.squareAccessToken, locationId: houseStaff.squareLocationId }
-      : houseVendor.squareAccessToken && houseVendor.squareLocationId
-        ? { accessToken: houseVendor.squareAccessToken, locationId: houseVendor.squareLocationId }
-        : null;
-
-    if (!houseCreds) {
+    if (!freshHouseCreds) {
       return Response.json({
         error: 'Card payment unavailable',
         details: 'House account has not connected Square.',
       }, { status: 400 });
-    }
-
-    // Refresh house credentials if needed
-    const freshHouseCreds = await ensureFreshCredentials(
-      dataClient,
-      houseCreds,
-      houseStaff?.visibleId || null,
-      houseVendor.vendorId
-    );
-    if (freshHouseCreds.error) {
-      return Response.json({ error: freshHouseCreds.error, details: freshHouseCreds.details }, { status: 400 });
     }
 
     // Charge house fee
@@ -1274,28 +1229,15 @@ async function processBundlePayment(sourceId: string, totalAmount: number, bundl
   // Process house fee first
   const houseEntry = paymentEntries.find(e => e.isHouseFee);
   if (houseEntry && houseEntry.amount > 0) {
-    // Resolve house credentials (staff on house vendor, or vendor-level)
-    const { data: houseStaffList } = await (dataClient.models as any).StaffSchedule.listStaffScheduleByVendorId({ vendorId: houseVendor.vendorId });
-    const houseStaff = (houseStaffList || []).find((s: any) =>
-      s.isActive !== false && s.squareAccessToken && s.squareLocationId && s.squareOAuthStatus === 'connected'
-    );
+    // House fee always lands with the single designated house payee (Stacey),
+    // never any other staff on the house vendor.
+    const freshHouseCreds = await resolveHousePayeeCredentials(dataClient, houseVendor);
 
-    const houseCreds = houseStaff
-      ? { accessToken: houseStaff.squareAccessToken, locationId: houseStaff.squareLocationId }
-      : houseVendor.squareAccessToken && houseVendor.squareLocationId
-        ? { accessToken: houseVendor.squareAccessToken, locationId: houseVendor.squareLocationId }
-        : null;
-
-    if (!houseCreds) {
+    if (!freshHouseCreds) {
       return Response.json({
         error: 'Card payment unavailable',
         details: 'House account has not connected Square.',
       }, { status: 400 });
-    }
-
-    const freshHouseCreds = await ensureFreshCredentials(dataClient, houseCreds, houseStaff?.visibleId || null, houseVendor.vendorId);
-    if (freshHouseCreds.error) {
-      return Response.json({ error: freshHouseCreds.error, details: freshHouseCreds.details }, { status: 400 });
     }
 
     const houseClient = new Client({ accessToken: freshHouseCreds.accessToken, environment: squareEnvironment });

@@ -8,6 +8,7 @@ import { calculateEqualSplit, validateCustomSplit, dollarsToCents } from '../../
 import { calculateBundlePaymentSplit } from '../../../utils/bundlePaymentSplit';
 import { calculateMultiProviderSplit } from '../../../utils/payment';
 import { scaleVendorAllocations } from '../../../utils/vendorRevenueScaler';
+import { resolveHousePayeeCredentials } from '../../../../lib/payment/houseAccount';
 import { withErrorLogging } from '@/lib/logger/middleware';
 import { rateLimitMiddleware, getClientIp } from '@/lib/payment/rateLimiter';
 
@@ -517,8 +518,16 @@ async function handlePayPayer(body: {
 
   const idempotencyKey = `${sessionId}-payer-${payerIndex}`;
 
+  // The primary charge lands in the house payee's account (the designated house
+  // owner — Stacey — never another house-vendor staff). Vendor shares ride along
+  // as additionalRecipients. Falls back to vendor-level house creds only.
+  const houseCreds = await resolveHousePayeeCredentials(dataClient, houseVendor);
+  if (!houseCreds) {
+    return Response.json({ error: 'House payment account not configured' }, { status: 400 });
+  }
+
   const client = new Client({
-    accessToken: houseVendor.squareAccessToken || process.env.SQUARE_ACCESS_TOKEN,
+    accessToken: houseCreds.accessToken,
     environment: process.env.NEXT_PUBLIC_SQUARE_ENVIRONMENT === 'production'
       ? Environment.Production
       : Environment.Sandbox,
@@ -530,7 +539,7 @@ async function handlePayPayer(body: {
       sourceId,
       idempotencyKey,
       amountMoney: { amount: BigInt(payer.amountCents), currency: 'USD' },
-      locationId: houseVendor.squareLocationId,
+      locationId: houseCreds.locationId,
       additionalRecipients: additionalRecipients.length > 0 ? additionalRecipients : undefined,
     };
 
@@ -666,8 +675,16 @@ async function handleRefund(body: {
     return Response.json({ error: 'House vendor not configured' }, { status: 500 });
   }
 
+  // Refunds are issued from the same account that captured the split payment —
+  // the house payee (Stacey). Must match resolveHousePayeeCredentials so the
+  // refund targets the correct Square account.
+  const houseCreds = await resolveHousePayeeCredentials(dataClient, houseVendor);
+  if (!houseCreds) {
+    return Response.json({ error: 'House payment account not configured' }, { status: 400 });
+  }
+
   const client = new Client({
-    accessToken: houseVendor.squareAccessToken || process.env.SQUARE_ACCESS_TOKEN,
+    accessToken: houseCreds.accessToken,
     environment: process.env.NEXT_PUBLIC_SQUARE_ENVIRONMENT === 'production'
       ? Environment.Production
       : Environment.Sandbox,
