@@ -248,13 +248,15 @@ describe('Kiosk Page', () => {
     delete global.fetch
   })
 
-  test('Custom Charge button is visible on kiosk page', async () => {
+  test('Custom Charge button is not present on kiosk page (removed)', async () => {
     await act(async () => {
       render(<KioskPage />)
     })
 
-    // Wait for the loading state to finish and Custom Charge button to appear
-    const customChargeButton = await screen.findByRole('button', { name: /Custom Charge/i })
-    expect(customChargeButton).toBeInTheDocument()
+    // The standalone custom-charge feature was removed from the kiosk landing page.
+    // The Refresh control should render instead, and no Custom Charge button should exist.
+    const refreshButton = await screen.findByRole('button', { name: /Refresh/i })
+    expect(refreshButton).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Custom Charge/i })).not.toBeInTheDocument()
   })
 })

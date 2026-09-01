@@ -4,14 +4,12 @@ import { useState, useEffect } from 'react'
 import { Suspense } from 'react'
 import Link from 'next/link'
 import AppointmentCard from './components/AppointmentCard'
-import CustomChargeForm from './components/CustomChargeForm'
 import formatTime from './components/formatTime'
 
 function KioskContent() {
   const [appointments, setAppointments] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [showCustomCharge, setShowCustomCharge] = useState(false)
 
   const loadAppointments = () => {
     setLoading(true)
@@ -69,42 +67,19 @@ function KioskContent() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-          {!showCustomCharge && (
-            <button onClick={() => setShowCustomCharge(true)} style={{
-              padding: '0.75rem 1.5rem', borderRadius: '8px', border: 'none',
-              background: 'var(--color-primary)', color: 'white', cursor: 'pointer',
-              fontSize: '1rem', fontWeight: '600'
-            }}>
-              + Custom Charge
-            </button>
-          )}
-          {!showCustomCharge && (
-            <button onClick={loadAppointments} style={{
-              padding: '0.75rem 1.5rem', borderRadius: '8px', border: '1px solid var(--color-border)',
-              background: 'white', cursor: 'pointer', fontSize: '1rem'
-            }}>
-              ↻ Refresh
-            </button>
-          )}
-          {showCustomCharge && (
-            <button onClick={() => setShowCustomCharge(false)} style={{
-              padding: '0.75rem 1.5rem', borderRadius: '8px', border: '1px solid var(--color-border)',
-              background: 'white', cursor: 'pointer', fontSize: '1rem'
-            }}>
-              ← Back to Appointments
-            </button>
-          )}
+          <button onClick={loadAppointments} style={{
+            padding: '0.75rem 1.5rem', borderRadius: '8px', border: '1px solid var(--color-border)',
+            background: 'white', cursor: 'pointer', fontSize: '1rem'
+          }}>
+            ↻ Refresh
+          </button>
         </div>
       </div>
 
-      {showCustomCharge && (
-        <CustomChargeForm />
-      )}
+      {loading && <p>Loading appointments...</p>}
+      {error && <p style={{ color: '#c33' }}>{error}</p>}
 
-      {!showCustomCharge && loading && <p>Loading appointments...</p>}
-      {!showCustomCharge && error && <p style={{ color: '#c33' }}>{error}</p>}
-
-      {!showCustomCharge && !loading && appointments.length === 0 && (
+      {!loading && appointments.length === 0 && (
         <div style={{
           textAlign: 'center', padding: '4rem 2rem', background: 'var(--color-accent)',
           borderRadius: '12px', border: '1px solid var(--color-border)'
@@ -115,7 +90,7 @@ function KioskContent() {
         </div>
       )}
 
-      {!showCustomCharge && !loading && appointments.length > 0 && (
+      {!loading && appointments.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           {/* Bundle groups */}
           {Object.entries(bundleGroups).map(([bundleId, bundleApts]) => {

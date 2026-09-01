@@ -57,6 +57,15 @@ const sections = [
 
 const platformUpdates = [
   {
+    version: 'v1.6.6',
+    date: 'September 1, 2026',
+    title: 'Kiosk Cleanup: Removed Standalone Custom Charge',
+    changes: [
+      'Removed the standalone "Custom Charge" button from the main kiosk screen to avoid confusion — the kiosk now focuses on paying scheduled appointments',
+      'The per-appointment "Custom Amount" option (when checking out a specific appointment) is unchanged and still available',
+    ],
+  },
+  {
     version: 'v1.6.5',
     date: 'September 1, 2026',
     title: 'House Payments Route to the Correct Account',
