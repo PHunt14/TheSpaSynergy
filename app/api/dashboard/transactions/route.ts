@@ -53,6 +53,9 @@ export const GET = withErrorLogging(async function GET(request: Request) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const client = getClient();
+  const { searchParams } = new URL(request.url);
+
   const startDate = searchParams.get('startDate');
   const endDate = searchParams.get('endDate');
   const statusFilter = searchParams.get('status');
