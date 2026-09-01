@@ -57,6 +57,16 @@ const sections = [
 
 const platformUpdates = [
   {
+    version: 'v1.6.5',
+    date: 'September 1, 2026',
+    title: 'House Payments Route to the Correct Account',
+    changes: [
+      'Fixed the kiosk "Custom Charge" option failing with "House payment account not configured" — custom charges now correctly resolve the house owner\'s connected Square account instead of requiring credentials on the house vendor record',
+      'House fees, custom charges, and split-payment capture/refunds now always route to the single designated house owner (Stacey) and never to another staff member who shares the house studio',
+      'Added an optional admin override to explicitly designate which account receives house payments',
+    ],
+  },
+  {
     version: 'v1.6.4',
     date: 'September 1, 2026',
     title: 'Square Reliability: Auto-Refresh & Reconnect Prompts',

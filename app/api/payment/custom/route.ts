@@ -12,8 +12,7 @@ import {
 } from '../../../../lib/payment/validator';
 import { generateIdempotencyKey, hashSourceToken } from '../../../../lib/payment/idempotency';
 import { appendAuditRecord, buildAuditRecord } from '../../../../lib/payment/audit';
-import { hasValidCredentials } from '../../../utils/paymentRouting';
-import { isTokenExpiringSoon, refreshSquareToken } from '../../../../lib/square-token-enhanced';
+import { getHouseVendor, resolveHousePayeeCredentials } from '../../../../lib/payment/houseAccount';
 import { withErrorLogging } from '@/lib/logger/middleware';
 import { rateLimitMiddleware, getClientIp } from '@/lib/payment/rateLimiter';
 
@@ -128,11 +127,15 @@ export const POST = withErrorLogging(async function POST(request: Request) {
       validatedTip = sanitizedTip;
     }
 
-    // --- Resolve house provider credentials (Requirements 3.4, 3.8) ---
+    // --- Resolve house payee credentials (Requirements 3.4, 3.8) ---
+    //
+    // Custom charges route to the HOUSE — which means the single designated house
+    // payee (the house owner, Stacey), never any other staff who happen to share
+    // the house vendor. resolveHousePayeeCredentials enforces that and refreshes
+    // an expiring token, falling back only to vendor-level credentials.
 
     const dataClient = generateClient<Schema>();
-    const { data: vendors } = await (dataClient.models as any).Vendor.list();
-    const houseProvider = (vendors || []).find((v: any) => v.isHouse === true);
+    const houseProvider = await getHouseVendor(dataClient);
 
     if (!houseProvider) {
       return Response.json(
@@ -141,47 +144,16 @@ export const POST = withErrorLogging(async function POST(request: Request) {
       );
     }
 
-    if (!hasValidCredentials(houseProvider)) {
+    const houseCreds = await resolveHousePayeeCredentials(dataClient, houseProvider);
+    if (!houseCreds) {
       return Response.json(
         { success: false, error: 'House payment account not configured' },
         { status: 400 }
       );
     }
 
-    // --- Token refresh if expiring (Requirement 6.1) ---
-
-    let accessToken = houseProvider.squareAccessToken!;
-    let locationId = houseProvider.squareLocationId!;
-
-    if (isTokenExpiringSoon(houseProvider.squareTokenExpiresAt)) {
-      // Try connected staff on house vendor first
-      const { data: houseStaffList } = await (dataClient.models as any).StaffSchedule.listStaffScheduleByVendorId({
-        vendorId: houseProvider.vendorId,
-      });
-      const connectedHouseStaff = (houseStaffList || []).find(
-        (s: any) =>
-          s.isActive !== false &&
-          s.squareAccessToken &&
-          s.squareLocationId &&
-          s.squareOAuthStatus === 'connected'
-      );
-
-      if (connectedHouseStaff) {
-        const refreshResult = await refreshSquareToken(connectedHouseStaff.visibleId);
-        if (refreshResult.success && refreshResult.newAccessToken) {
-          // Re-fetch staff for updated creds
-          const { data: refreshedStaff } = await (dataClient.models as any).StaffSchedule.get({
-            visibleId: connectedHouseStaff.visibleId,
-          });
-          if (refreshedStaff?.squareAccessToken && refreshedStaff?.squareLocationId) {
-            accessToken = refreshedStaff.squareAccessToken;
-            locationId = refreshedStaff.squareLocationId;
-          }
-        }
-      }
-      // If staff refresh didn't produce new creds, proceed with vendor-level credentials
-      // (they may still be valid even if expiring soon — Requirement 6.3)
-    }
+    const accessToken = houseCreds.accessToken;
+    const locationId = houseCreds.locationId;
 
     // --- Generate idempotency key (Requirement 5.1) ---
 

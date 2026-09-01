@@ -105,6 +105,11 @@ jest.unstable_mockModule('aws-amplify/data', () => ({
       Service: { get: mockServiceGet },
       Vendor: { get: mockVendorGet, list: mockVendorList },
       Appointment: { list: mockAppointmentList, update: mockAppointmentUpdate },
+      // House payee resolution consults StaffSchedule (for the designated house
+      // owner) and SiteSettings (for an optional override). These tests seed no
+      // house staff, so resolution falls back to the house Vendor's own creds.
+      StaffSchedule: { listStaffScheduleByVendorId: jest.fn(async () => ({ data: [] })), get: jest.fn(async () => ({ data: null })) },
+      SiteSettings: { get: jest.fn(async () => ({ data: null })) },
       SplitPaymentSession: {
         get: mockSessionGet,
         create: mockSessionCreate,
