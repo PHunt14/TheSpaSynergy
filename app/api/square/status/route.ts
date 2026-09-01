@@ -1,6 +1,6 @@
 import { client } from '@/lib/auth';
 import { withErrorLogging } from '@/lib/logger/middleware';
-import { isTokenExpiringSoon } from '@/lib/square-token.js';
+import { isSquareRecordChargeable, squareRecordNeedsReconnect } from '@/lib/square/core.js';
 import { validateSquareServerConfig } from '@/lib/square/config.js';
 
 /**
@@ -36,48 +36,41 @@ type StatusResult = {
   source: 'staff' | 'vendor' | null;
 };
 
+// usableRecord / recordNeedsReconnect delegate to the shared, unit-tested
+// predicates in lib/square/core.js so the kiosk status gate stays in lockstep
+// with what the payment path can actually charge. See isSquareRecordChargeable
+// for the rationale (expired-but-refreshable tokens are still chargeable because
+// the authenticated payment path refreshes them just-in-time).
+//
+// This endpoint is READ-ONLY and intentionally does NOT refresh tokens: it is
+// public (called by the kiosk before payment), so a side-effecting OAuth refresh
+// + DB write inside a GET would let anonymous callers drive outbound Square
+// traffic and writes. The refresh belongs on the authenticated payment path.
 function usableRecord(rec: any): boolean {
-  // A record is usable if it has a location, a token, is not in an error/
-  // disconnected state, AND the token is not already expired.
-  //
-  // NOTE: this is a READ-ONLY status check. We intentionally do NOT refresh
-  // tokens here. This endpoint is public (called by the kiosk before payment),
-  // so performing an OAuth refresh + DB write inside a GET would let anonymous
-  // callers drive outbound Square traffic and writes. The actual token refresh
-  // happens on the authenticated payment path (card submission) via
-  // resolveSquareCredentials/processStaffRoutedPayment, which is the correct
-  // place for a side-effecting refresh.
-  //
-  // An expiring-soon token is still reported as connected: the payment path
-  // will refresh it just-in-time. Only an already-EXPIRED token is treated as
-  // not usable, so the kiosk surfaces "reconnect" rather than attaching a form
-  // that would fail at charge time.
-  return Boolean(
-    rec &&
-    rec.squareLocationId &&
-    rec.squareAccessToken &&
-    rec.squareOAuthStatus !== 'error' &&
-    rec.squareOAuthStatus !== 'disconnected' &&
-    !isTokenExpired(rec.squareTokenExpiresAt)
-  );
+  return isSquareRecordChargeable(rec);
 }
 
-/** True when the token expiry is in the past (0-day threshold = already expired). */
-function isTokenExpired(expiresAt: string | null | undefined): boolean {
-  return isTokenExpiringSoon(expiresAt, 0);
+function recordNeedsReconnect(rec: any): boolean {
+  return squareRecordNeedsReconnect(rec);
 }
 
 async function resolveStatus(vendorId: string | null, staffId: string | null): Promise<StatusResult> {
+  // Track whether we saw a record that has credentials but genuinely needs a
+  // reconnect (error status, or expired with no refresh token). If nothing is
+  // usable, we prefer the accurate "needs_reconnect" message over the
+  // misleading "not_connected" when such a record exists.
+  let sawNeedsReconnect: 'staff' | 'vendor' | null = null;
+
   // 1) Assigned staff member (preferred — payment routes to this provider).
   if (staffId) {
     try {
       const { data: staff } = await client.models.StaffSchedule.get({ visibleId: staffId } as any);
       if (staff) {
-        if (staff.squareOAuthStatus === 'error') {
-          return { connected: false, locationId: null, reason: 'needs_reconnect', source: 'staff' };
-        }
         if (usableRecord(staff)) {
           return { connected: true, locationId: staff.squareLocationId, reason: 'ok', source: 'staff' };
+        }
+        if (staff.squareOAuthStatus === 'error' || recordNeedsReconnect(staff)) {
+          sawNeedsReconnect = 'staff';
         }
       }
     } catch (err) {
@@ -94,6 +87,9 @@ async function resolveStatus(vendorId: string | null, staffId: string | null): P
         if (usableRecord(candidate)) {
           return { connected: true, locationId: candidate.squareLocationId, reason: 'ok', source: 'staff' };
         }
+        if (recordNeedsReconnect(candidate)) {
+          sawNeedsReconnect = sawNeedsReconnect || 'staff';
+        }
       }
     } catch (err) {
       console.error('Square status: vendor staff scan failed for', vendorId, err);
@@ -103,16 +99,20 @@ async function resolveStatus(vendorId: string | null, staffId: string | null): P
     try {
       const { data: vendor } = await client.models.Vendor.get({ vendorId });
       if (vendor) {
-        if (vendor.squareOAuthStatus === 'error') {
-          return { connected: false, locationId: null, reason: 'needs_reconnect', source: 'vendor' };
-        }
         if (usableRecord(vendor)) {
           return { connected: true, locationId: vendor.squareLocationId, reason: 'ok', source: 'vendor' };
+        }
+        if (vendor.squareOAuthStatus === 'error' || recordNeedsReconnect(vendor)) {
+          sawNeedsReconnect = sawNeedsReconnect || 'vendor';
         }
       }
     } catch (err) {
       console.error('Square status: vendor lookup failed for', vendorId, err);
     }
+  }
+
+  if (sawNeedsReconnect) {
+    return { connected: false, locationId: null, reason: 'needs_reconnect', source: sawNeedsReconnect };
   }
 
   return { connected: false, locationId: null, reason: 'not_connected', source: null };

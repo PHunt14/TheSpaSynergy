@@ -11,12 +11,31 @@ const inputStyle = {
 }
 const labelStyle = { display: 'block', marginBottom: '0.5rem', fontWeight: '500' }
 
-function SquareStatusBanner({ status, connectedAt }) {
+function SquareStatusBanner({ status, connectedAt, expired }) {
   if (status === 'error') {
     return (
       <div style={{ padding: '1rem', background: '#f8d7da', border: '1px solid #f5c6cb', borderRadius: '8px', marginBottom: '1rem' }}>
         <div style={{ fontWeight: '500', color: '#721c24', marginBottom: '0.5rem' }}>⚠ Square Connection Error</div>
         <p style={{ fontSize: '0.85rem', color: '#721c24', margin: 0 }}>Your Square connection needs to be refreshed. Please reconnect.</p>
+      </div>
+    )
+  }
+  // Token expired: card payments still auto-recover at charge time, but reconnecting
+  // is recommended so there's no risk of a failed charge. Show an amber warning
+  // instead of the misleading green "Connected".
+  if (expired) {
+    return (
+      <div style={{ padding: '1rem', background: '#fff3cd', border: '1px solid #ffc107', borderRadius: '8px', marginBottom: '1rem' }}>
+        <div style={{ fontWeight: '500', color: '#856404', marginBottom: '0.5rem' }}>⚠ Reconnect recommended</div>
+        <p style={{ fontSize: '0.85rem', color: '#856404', margin: 0 }}>
+          Your Square access token has expired. Card payments may still go through, but please
+          reconnect to keep them reliable.
+        </p>
+        {connectedAt && (
+          <div style={{ fontSize: '0.8rem', color: '#856404', marginTop: '0.5rem' }}>
+            Last connected {new Date(connectedAt).toLocaleDateString()}
+          </div>
+        )}
       </div>
     )
   }
@@ -55,6 +74,7 @@ export default function MySettings({ currentUser, showMessage }) {
   const [staffSquareConnected, setStaffSquareConnected] = useState(false)
   const [staffSquareConnectedAt, setStaffSquareConnectedAt] = useState(null)
   const [staffSquareStatus, setStaffSquareStatus] = useState('disconnected')
+  const [staffSquareExpiresAt, setStaffSquareExpiresAt] = useState(null)
   const [connectingStaffSquare, setConnectingStaffSquare] = useState(false)
   const [smsAlertsEnabled, setSmsAlertsEnabled] = useState(false)
   const [smsAlertPhone, setSmsAlertPhone] = useState('')
@@ -80,6 +100,7 @@ export default function MySettings({ currentUser, showMessage }) {
         setStaffSquareConnected(!!mine.squareAccessToken)
         setStaffSquareConnectedAt(mine.squareConnectedAt)
         setStaffSquareStatus(mine.squareOAuthStatus || 'disconnected')
+        setStaffSquareExpiresAt(mine.squareTokenExpiresAt || null)
         setSmsAlertsEnabled(mine.smsAlertsEnabled || false)
         setSmsAlertPhone(mine.smsAlertPhone || '')
         setBookingDisabledUntil(mine.bookingDisabledUntil || '')
@@ -111,6 +132,7 @@ export default function MySettings({ currentUser, showMessage }) {
         setStaffSquareConnected(false)
         setStaffSquareConnectedAt(null)
         setStaffSquareStatus('disconnected')
+        setStaffSquareExpiresAt(null)
         showMessage('Your Square account has been disconnected')
       }
     } catch {
@@ -214,6 +236,13 @@ export default function MySettings({ currentUser, showMessage }) {
     }
   }
 
+  // The stored access token is expired when its expiry is in the past (or missing).
+  // Card payments can still auto-recover at charge time via refresh, but we surface
+  // an amber "reconnect recommended" banner so this staff member knows to reconnect.
+  const squareTokenIsExpired = staffSquareConnected && staffSquareStatus !== 'error' && (
+    !staffSquareExpiresAt || new Date(staffSquareExpiresAt).getTime() < Date.now()
+  )
+
   return (
     <div>
       <p style={{ color: 'var(--color-text-light)', marginBottom: '2rem' }}>
@@ -294,9 +323,9 @@ export default function MySettings({ currentUser, showMessage }) {
 
           {staffSquareConnected ? (
             <div>
-              <SquareStatusBanner status={staffSquareStatus} connectedAt={staffSquareConnectedAt} />
+              <SquareStatusBanner status={staffSquareStatus} connectedAt={staffSquareConnectedAt} expired={squareTokenIsExpired} />
               <div style={{ display: 'flex', gap: '1rem' }}>
-                {staffSquareStatus === 'error' && (
+                {(staffSquareStatus === 'error' || squareTokenIsExpired) && (
                   <button onClick={handleConnectStaffSquare} className="cta">Reconnect Square</button>
                 )}
                 <button onClick={handleDisconnectStaffSquare} disabled={connectingStaffSquare} style={{

@@ -38,6 +38,7 @@ export default function Staff() {
   const [editingSchedule, setEditingSchedule] = useState(null) // visibleId or 'new'
   const [scheduleForm, setScheduleForm] = useState({ staffName: '', staffEmail: '', vendorId: '', schedule: emptySchedule(), autoAssignDays: [], smsAlertsEnabled: false, smsAlertPhone: '', emailAlertsEnabled: false, overrides: {} })
   const [savingSchedule, setSavingSchedule] = useState(false)
+  const [refreshingSquare, setRefreshingSquare] = useState(null) // visibleId | 'all' | null
 
   const canManageSchedules = currentUserRole === 'admin' || currentUserRole === 'vendor' || currentUserRole === 'owner'
 
@@ -269,6 +270,55 @@ export default function Staff() {
     } catch (error) { alert('Error deleting schedule') }
   }
 
+  const refreshSquareToken = async (visibleId, name) => {
+    setRefreshingSquare(visibleId)
+    try {
+      const res = await fetch('/api/square/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ staffId: visibleId }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        alert(`Square token refreshed for ${name}.`)
+        loadSchedules()
+      } else {
+        alert(`Could not refresh ${name}: ${data.error || 'unknown error'}${data.needsReconnect ? '\n\nThis staff member must reconnect Square from Settings → My Settings.' : ''}`)
+        loadSchedules()
+      }
+    } catch (error) {
+      alert('Error refreshing Square token')
+    } finally {
+      setRefreshingSquare(null)
+    }
+  }
+
+  const refreshAllSquareTokens = async () => {
+    if (!confirm('Refresh Square tokens for all staff that are expiring or expired?')) return
+    setRefreshingSquare('all')
+    try {
+      const res = await fetch('/api/square/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ all: true }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        const failedNames = (data.results || []).filter(r => !r.ok).map(r => r.staffName || r.staffId)
+        let msg = `Checked ${data.checked} staff · ${data.due} due · ${data.refreshed} refreshed`
+        if (data.failed > 0) msg += `\n${data.failed} need to reconnect Square: ${failedNames.join(', ')}`
+        alert(msg)
+        loadSchedules()
+      } else {
+        alert(`Refresh failed: ${data.error || 'unknown error'}`)
+      }
+    } catch (error) {
+      alert('Error refreshing Square tokens')
+    } finally {
+      setRefreshingSquare(null)
+    }
+  }
+
   const getVendorName = (vendorId) => vendors.find(v => v.vendorId === vendorId)?.name || vendorId
 
   const formatScheduleDisplay = (s) => {
@@ -452,7 +502,17 @@ export default function Staff() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
           <h2>Staff Schedules</h2>
           {editingSchedule === null && canManageSchedules && (
-            <button onClick={startNewSchedule} className="cta" style={{ marginTop: 0 }}>+ Add Staff Schedule</button>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button
+                onClick={refreshAllSquareTokens}
+                disabled={refreshingSquare !== null}
+                title="Renew Square access tokens for all staff that are expiring or expired"
+                style={{ ...btnStyle('#6c757d'), marginTop: 0 }}
+              >
+                {refreshingSquare === 'all' ? 'Refreshing…' : '↻ Refresh Square tokens'}
+              </button>
+              <button onClick={startNewSchedule} className="cta" style={{ marginTop: 0 }}>+ Add Staff Schedule</button>
+            </div>
           )}
         </div>
 
@@ -690,6 +750,16 @@ export default function Staff() {
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      {canManageSchedules && s.squareAccessToken && (
+                        <button
+                          onClick={() => refreshSquareToken(s.visibleId, s.staffName)}
+                          disabled={refreshingSquare !== null}
+                          title="Renew this staff member's Square access token now"
+                          style={btnStyle('#6c757d')}
+                        >
+                          {refreshingSquare === s.visibleId ? '↻…' : '↻ Square'}
+                        </button>
+                      )}
                       {canManageSchedules && (
                         <button onClick={() => startEditSchedule(s)} style={btnStyle('#2196F3')}>Edit</button>
                       )}

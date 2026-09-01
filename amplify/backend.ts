@@ -7,12 +7,14 @@ import { auth } from './auth/resource.js';
 import { data } from './data/resource.js';
 import { sendSms } from './functions/send-sms/resource.js';
 import { sendEmail } from './functions/send-email/resource.js';
+import { refreshSquareTokens } from './functions/refresh-square-tokens/resource.js';
 
 const backend = defineBackend({
   auth,
   data,
   sendSms,
   sendEmail,
+  refreshSquareTokens,
 });
 
 // --- Pinpoint Analytics ---

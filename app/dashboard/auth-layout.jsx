@@ -5,6 +5,7 @@ import '@aws-amplify/ui-react/styles.css'
 import { Amplify } from 'aws-amplify'
 import { useEffect, useRef } from 'react'
 import outputs from '../../amplify_outputs.json'
+import SquareReconnectGate from '../components/SquareReconnectGate'
 
 Amplify.configure(outputs, { ssr: true })
 
@@ -26,6 +27,7 @@ export default function DashboardAuthLayout({ children }) {
     >
       {({ signOut, user }) => (
         <AutoLogout signOut={signOut}>
+          <SquareReconnectGate email={user?.signInDetails?.loginId} />
           <div>
             <div style={{ 
               padding: '1rem', 

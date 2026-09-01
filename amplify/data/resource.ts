@@ -1,4 +1,5 @@
 import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
+import { refreshSquareTokens } from '../functions/refresh-square-tokens/resource';
 
 const schema = a.schema({
   Vendor: a
@@ -219,7 +220,11 @@ const schema = a.schema({
       index('bundleId')
     ])
     .authorization((allow) => [allow.publicApiKey()]),
-});
+})
+  // Grant the scheduled token-refresh function IAM access to the GraphQL API so
+  // it can list and update StaffSchedule records. Function access is configured
+  // at the schema level (it cannot be set per-model).
+  .authorization((allow) => [allow.resource(refreshSquareTokens)]);
 
 export type Schema = ClientSchema<typeof schema>;
 
