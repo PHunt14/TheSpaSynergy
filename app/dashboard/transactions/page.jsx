@@ -62,22 +62,31 @@ export default function TransactionsPage() {
   const [transactions, setTransactions] = useState([])
   const [summary, setSummary] = useState({ totalAppointments: 0, paidCount: 0, unpaidCount: 0, totalRevenue: 0 })
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState(null)
   const [selectedDate, setSelectedDate] = useState(getLocalDateString(new Date()))
   const [statusFilter, setStatusFilter] = useState('all')
   const [paymentFilter, setPaymentFilter] = useState('all')
   const [expandedId, setExpandedId] = useState(null)
+  const [pagination, setPagination] = useState({ nextToken: null, hasMore: false, totalCount: 0, limit: 50 })
 
-  const loadTransactions = () => {
-    setLoading(true)
+  const loadTransactions = (isLoadMore = false) => {
+    if (isLoadMore) {
+      setLoadingMore(true)
+    } else {
+      setLoading(true)
+      setTransactions([])
+      setPagination({ nextToken: null, hasMore: false, totalCount: 0, limit: 50 })
+    }
     setError(null)
 
     const startDate = `${selectedDate}T00:00`
     const endDate = `${selectedDate}T23:59`
 
-    const params = new URLSearchParams({ startDate, endDate })
+    const params = new URLSearchParams({ startDate, endDate, limit: '50' })
     if (statusFilter !== 'all') params.set('status', statusFilter)
     if (paymentFilter !== 'all') params.set('paymentStatus', paymentFilter)
+    if (isLoadMore && pagination.nextToken) params.set('nextToken', pagination.nextToken)
 
     fetch(`/api/dashboard/transactions?${params}`)
       .then(res => {
@@ -85,13 +94,20 @@ export default function TransactionsPage() {
         return res.json()
       })
       .then(data => {
-        setTransactions(data.transactions || [])
+        if (isLoadMore) {
+          setTransactions(prev => [...prev, ...(data.transactions || [])])
+        } else {
+          setTransactions(data.transactions || [])
+        }
         setSummary(data.summary || { totalAppointments: 0, paidCount: 0, unpaidCount: 0, totalRevenue: 0 })
+        setPagination(data.pagination || { nextToken: null, hasMore: false, totalCount: 0, limit: 50 })
         setLoading(false)
+        setLoadingMore(false)
       })
       .catch(err => {
         setError(err.message || 'Failed to load transactions')
         setLoading(false)
+        setLoadingMore(false)
       })
   }
 
@@ -176,13 +192,45 @@ export default function TransactionsPage() {
       )}
 
       {!loading && grouped.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          {grouped.map((item, idx) => {
-            if (item.type === 'group') {
-              return <GroupRow key={item.groupId} group={item} expandedId={expandedId} setExpandedId={setExpandedId} />
-            }
-            return <TransactionRow key={item.appointmentId || idx} txn={item} expandedId={expandedId} setExpandedId={setExpandedId} />
-          })}
+        <div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {grouped.map((item, idx) => {
+              if (item.type === 'group') {
+                return <GroupRow key={item.groupId} group={item} expandedId={expandedId} setExpandedId={setExpandedId} />
+              }
+              return <TransactionRow key={item.appointmentId || idx} txn={item} expandedId={expandedId} setExpandedId={setExpandedId} />
+            })}
+          </div>
+
+          {/* Pagination: Load More button */}
+          {pagination.hasMore && (
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1.5rem' }}>
+              <button
+                onClick={() => loadTransactions(true)}
+                disabled={loadingMore}
+                style={{
+                  padding: '0.75rem 1.5rem',
+                  borderRadius: '8px',
+                  border: '1px solid var(--color-primary)',
+                  background: loadingMore ? '#f0f0f0' : 'white',
+                  color: 'var(--color-primary)',
+                  cursor: loadingMore ? 'not-allowed' : 'pointer',
+                  fontSize: '1rem',
+                  fontWeight: '600',
+                  opacity: loadingMore ? 0.6 : 1,
+                }}
+              >
+                {loadingMore ? 'Loading...' : `Load More (${pagination.totalCount - transactions.length} remaining)`}
+              </button>
+            </div>
+          )}
+
+          {/* Pagination info */}
+          {pagination.totalCount > 0 && (
+            <div style={{ textAlign: 'center', marginTop: '1rem', fontSize: '0.85rem', color: 'var(--color-text-light)' }}>
+              Showing {transactions.length} of {pagination.totalCount} transactions
+            </div>
+          )}
         </div>
       )}
     </div>

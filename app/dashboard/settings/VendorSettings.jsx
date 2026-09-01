@@ -30,6 +30,12 @@ export default function VendorSettings({ currentUser, vendors, selectedVendorId,
 
   const [vendorBlackoutDate, setVendorBlackoutDate] = useState('')
   const [blackoutLoading, setBlackoutLoading] = useState(false)
+  
+  // House vendor Square credentials (Requirement 10.7)
+  const [selectedVendor, setSelectedVendor] = useState(null)
+  const [houseSquareAccessToken, setHouseSquareAccessToken] = useState('')
+  const [houseSquareLocationId, setHouseSquareLocationId] = useState('')
+  const [houseSquareConnectionStatus, setHouseSquareConnectionStatus] = useState('unknown')
 
   useEffect(() => {
     if (selectedVendorId) {
@@ -42,6 +48,7 @@ export default function VendorSettings({ currentUser, vendors, selectedVendorId,
     try {
       const { data: v } = await client.models.Vendor.get({ vendorId })
       if (v) {
+        setSelectedVendor(v)
         setVendorName(v.name || '')
         setVendorEmail(v.email || '')
         setVendorPhone(v.phone || '')
@@ -51,6 +58,11 @@ export default function VendorSettings({ currentUser, vendors, selectedVendorId,
         setSocialTiktok(v.socialTiktok || '')
         setSocialWebsite(v.socialWebsite || '')
         setGooglePlaceId(v.googlePlaceId || '')
+        
+        // Load house vendor credentials if this is the house vendor
+        setHouseSquareAccessToken(v.squareAccessToken || '')
+        setHouseSquareLocationId(v.squareLocationId || '')
+        setHouseSquareConnectionStatus(v.squareOAuthStatus || 'unknown')
       }
     } catch (error) {
       console.error('Error loading vendor settings:', error)
@@ -97,6 +109,33 @@ export default function VendorSettings({ currentUser, vendors, selectedVendorId,
     } finally { setSaving(false) }
   }
 
+  const handleSaveHouseVendorCredentials = async () => {
+    if (!houseSquareAccessToken.trim() || !houseSquareLocationId.trim()) {
+      showMessage('Both Square Access Token and Location ID are required')
+      return
+    }
+    
+    setSaving(true)
+    try {
+      const response = await fetch('/api/vendors', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          vendorId: selectedVendorId, 
+          squareAccessToken: houseSquareAccessToken,
+          squareLocationId: houseSquareLocationId,
+          squareOAuthStatus: 'connected'
+        })
+      })
+      if (!response.ok) { showMessage('Error saving house vendor credentials'); return }
+      showMessage('House vendor Square credentials saved!')
+      setHouseSquareConnectionStatus('connected')
+    } catch (error) {
+      showMessage('Error saving credentials: ' + error.message)
+    } finally { 
+      setSaving(false) 
+    }
+  }
 
   const handleSaveVendorBlackout = async () => {
     setBlackoutLoading(true)
@@ -186,6 +225,53 @@ export default function VendorSettings({ currentUser, vendors, selectedVendorId,
         </button>
       </div>
 
+      {/* House Vendor Square Credentials */}
+      {selectedVendor?.isHouse && currentUser?.role === 'admin' && (
+        <div style={sectionStyle}>
+          <h2 style={{ marginTop: 0, marginBottom: '1.5rem' }}>🏠 House Vendor Square Account<Tooltip text="Enter the Square OAuth credentials for the house vendor (facility owner). This account receives house fees from multi-provider services." /></h2>
+          
+          <div style={{ marginBottom: '1rem', padding: '0.75rem', background: '#e8f5e9', borderRadius: '8px' }}>
+            <p style={{ margin: '0.5rem 0', fontSize: '0.95rem' }}>
+              Status: <strong style={{ color: houseSquareConnectionStatus === 'connected' ? '#4CAF50' : '#ff9800' }}>
+                {houseSquareConnectionStatus === 'connected' ? '✓ Connected' : '⚠ Not Connected'}
+              </strong>
+            </p>
+          </div>
+
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={labelStyle}>Square Access Token<Tooltip text="OAuth access token from Square's Developer Dashboard. Usually starts with 'sq_'. Do not share this token publicly." /></label>
+            <input 
+              type="password" 
+              value={houseSquareAccessToken} 
+              onChange={(e) => setHouseSquareAccessToken(e.target.value)} 
+              placeholder="sq_..." 
+              style={inputStyle} 
+            />
+            <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginTop: '0.5rem' }}>
+              Leave blank if using OAuth. Enter directly if managing credentials manually.
+            </p>
+          </div>
+
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={labelStyle}>Square Location ID<Tooltip text="The Square Location ID where payments will be processed. Found in Square Dashboard under Locations." /></label>
+            <input 
+              type="text" 
+              value={houseSquareLocationId} 
+              onChange={(e) => setHouseSquareLocationId(e.target.value)} 
+              placeholder="L..." 
+              style={inputStyle} 
+            />
+          </div>
+
+          <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', marginBottom: '1rem', background: '#fff3cd', padding: '0.75rem', borderRadius: '6px', marginLeft: '-2rem', marginRight: '-2rem', paddingLeft: '2rem', paddingRight: '2rem' }}>
+            💡 <strong>Note:</strong> This is a fallback option. Normally, use OAuth connection for automatic token refresh and better security.
+          </p>
+
+          <button type="button" onClick={handleSaveHouseVendorCredentials} disabled={saving} className="cta">
+            {saving ? 'Saving...' : 'Save House Vendor Credentials'}
+          </button>
+        </div>
+      )}
 
       {/* Booking Blackout */}
       <div style={sectionStyle}>

@@ -280,7 +280,21 @@ describe('resolvePaymentRoute', () => {
       })
     })
 
-    test('throws when house provider lacks Square credentials', () => {
+    test('does not require house provider credentials when the service has no house fee', () => {
+      const result = resolvePaymentRoute(
+        makeAppointment(),
+        makeStaff(),
+        makeProvider(),
+        makeService({ price: 100, houseFeeEnabled: false, houseFeeAmount: 0 }),
+        makeHouseProvider({ squareAccessToken: undefined, squareLocationId: undefined, squareOAuthStatus: 'disconnected' })
+      )
+
+      expect(result.houseFeeAmount).toBe(0)
+      expect(result.staffAmount).toBe(100)
+      expect(result.houseFeeCredentials).toBeNull()
+    })
+
+    test('throws when house provider lacks Square credentials for a house-fee service', () => {
       const houseProvider = makeHouseProvider({
         squareAccessToken: undefined,
         squareOAuthStatus: 'disconnected',

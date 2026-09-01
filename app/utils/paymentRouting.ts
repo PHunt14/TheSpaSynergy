@@ -28,7 +28,7 @@ export interface PaymentRouteResult {
   providerSquareCredentials: SquareCredentials | null;
   effectiveCredentials: SquareCredentials;
   houseFeeAmount: number;
-  houseFeeCredentials: SquareCredentials;
+  houseFeeCredentials: SquareCredentials | null;
   staffAmount: number;
 }
 
@@ -210,14 +210,7 @@ export function resolveCredentialChain(
 
   // Step (b): Check sibling staff on same vendor (skip if house-is-vendor)
   if (!houseIsVendor) {
-    const sibling = siblingStaff.find(
-      (s) =>
-        s.squareOAuthStatus === 'connected' &&
-        !!s.squareAccessToken &&
-        s.squareAccessToken.trim() !== '' &&
-        !!s.squareLocationId &&
-        s.squareLocationId.trim() !== ''
-    );
+    const sibling = siblingStaff.find((s) => hasValidCredentials(s));
 
     if (sibling) {
       resolutionPath.push('sibling:resolved');
@@ -308,29 +301,32 @@ export function resolvePaymentRoute(
     );
   }
 
-  // Calculate house fee
+  // Calculate house fee only when enabled and configured.
   let houseFeeAmount = 0;
+  let houseFeeCredentials: SquareCredentials | null = null;
+
   if (service.houseFeeEnabled && service.houseFeeAmount > 0) {
     houseFeeAmount = service.houseFeeAmount;
+
+    // House fee credentials come from the house provider.
+    // The house vendor uses vendor-level credentials (not staff OAuth), so we only
+    // require a token and locationId — squareOAuthStatus may be 'disconnected' even
+    // when credentials are valid (vendor-level tokens are set directly, not via OAuth flow).
+    houseFeeCredentials =
+      houseProvider.squareAccessToken && houseProvider.squareAccessToken.trim() !== '' &&
+      houseProvider.squareLocationId && houseProvider.squareLocationId.trim() !== ''
+        ? { accessToken: houseProvider.squareAccessToken!, locationId: houseProvider.squareLocationId! }
+        : extractCredentials(houseProvider);
+
+    if (!houseFeeCredentials) {
+      throw new PaymentRouteError(
+        `Cannot process house fee: house provider "${houseProvider.name}" does not have valid Square credentials.`
+      );
+    }
   }
 
   // Staff gets the remainder after house fee
   const staffAmount = service.price - houseFeeAmount;
-
-  // House fee credentials come from the house provider.
-  // The house vendor uses vendor-level credentials (not staff OAuth), so we only
-  // require a token and locationId — squareOAuthStatus may be 'disconnected' even
-  // when credentials are valid (vendor-level tokens are set directly, not via OAuth flow).
-  const houseFeeCredentials =
-    houseProvider.squareAccessToken && houseProvider.squareAccessToken.trim() !== '' &&
-    houseProvider.squareLocationId && houseProvider.squareLocationId.trim() !== ''
-      ? { accessToken: houseProvider.squareAccessToken!, locationId: houseProvider.squareLocationId! }
-      : extractCredentials(houseProvider);
-  if (!houseFeeCredentials) {
-    throw new PaymentRouteError(
-      `Cannot process house fee: house provider "${houseProvider.name}" does not have valid Square credentials.`
-    );
-  }
 
   return {
     staffSquareCredentials,

@@ -47,6 +47,7 @@ const schema = a.schema({
   Service: a
     .model({
       serviceId: a.id().required(),
+      vendorId: a.string().required(),
       name: a.string().required(),
       description: a.string(),
       categories: a.string().array(),
@@ -69,6 +70,9 @@ const schema = a.schema({
       paymentSplitRules: a.json(),
     })
     .identifier(['serviceId'])
+    .secondaryIndexes((index) => [
+      index('vendorId')  // GSI for listServicesByVendor queries (Requirement 12.2)
+    ])
     .authorization((allow) => [allow.publicApiKey()]),
 
   Bundle: a

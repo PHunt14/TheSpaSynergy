@@ -29,10 +29,63 @@
 }
 ```
 
-Configure in Dashboard → Services → Edit Service:
-1. Check "Enable House Fee"
-2. Enter fee amount
-3. Dashboard shows "Vendor receives: $XX.XX"
+## Dashboard Configuration
+
+### Step 1: Enable House Fee on a Service (Coming Soon)
+
+**Note**: The Dashboard UI for house fee configuration is planned for Q3 2026. For now, follow the API steps below or contact your administrator.
+
+**Future UI Path**: Dashboard → Services → [Select Service] → Enable House Fee
+
+**API method** (admin only):
+```bash
+curl -X PATCH https://your-domain/api/services \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{
+    "serviceId": "svc-winsome-massage-60",
+    "houseFeeEnabled": true,
+    "houseFeeAmount": 20
+  }'
+```
+
+### Step 2: Configure House Vendor Square Credentials
+
+**Path**: Dashboard → Settings → Vendor Settings → [Select House Vendor]
+
+1. Log in to Dashboard as Admin
+2. Go to **Settings → Vendor Settings** tab
+3. In the vendor selector dropdown, find and select your house vendor (e.g., "The Kera Studio")
+4. Scroll to **Square Account** section
+5. Enter:
+   - **Kiosk Payment Credentials** (house vendor's Square info)
+   - Credentials can be set via OAuth (recommended) or directly as a fallback
+
+**Option A: OAuth (Recommended)**
+- Click **"Connect Square"** button
+- Authorize the house vendor's Square account
+- Dashboard will save `squareAccessToken`, `squareLocationId`, and token expiry
+
+**Option B: Direct Credentials (Fallback)**
+- Enter `squareAccessToken` and `squareLocationId` directly
+- Use this if OAuth needs to be bypassed
+- Note: Tokens will not auto-refresh; you must manually update when they expire
+
+### Step 3: Verify Configuration
+
+**Test**: Create an appointment for a service with house fee enabled and pay with a test card
+
+**Verify in Square Dashboard**:
+1. Log in to house vendor's Square account (e.g., Kera's account)
+2. Go to **Transactions** or **Customers**
+3. Look for a charge matching the house fee amount (e.g., $20)
+4. If found: ✅ House fee is being routed correctly
+
+**If house fee doesn't appear**:
+- Check: `houseFeeEnabled: true` on the service
+- Check: `houseFeeAmount > 0` on the service
+- Check: House vendor has valid `squareAccessToken` and `squareLocationId`
+- Check: Staff member has valid Square credentials (for the service portion to charge)
 
 ## Payment Flow Examples
 

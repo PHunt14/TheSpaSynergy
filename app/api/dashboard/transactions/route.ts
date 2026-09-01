@@ -6,6 +6,7 @@ import { fetchAuthSession } from 'aws-amplify/auth/server';
 import { Amplify } from 'aws-amplify';
 import { createServerRunner } from '@aws-amplify/adapter-nextjs';
 import { withErrorLogging } from '@/lib/logger/middleware';
+import { getCache } from '@/lib/dashboard-cache';
 
 Amplify.configure(config, { ssr: true });
 
@@ -54,10 +55,23 @@ export const GET = withErrorLogging(async function GET(request: Request) {
 
   const client = getClient();
   const { searchParams } = new URL(request.url);
+
   const startDate = searchParams.get('startDate');
   const endDate = searchParams.get('endDate');
   const statusFilter = searchParams.get('status');
   const paymentStatusFilter = searchParams.get('paymentStatus');
+  const limit = Math.min(Number.parseInt(searchParams.get('limit') || '50', 10), 100); // Max 100, default 50
+  const nextTokenParam = searchParams.get('nextToken');
+  
+  // Decode nextToken (base64 encoded offset)
+  let offset = 0;
+  if (nextTokenParam) {
+    try {
+      offset = Number.parseInt(Buffer.from(nextTokenParam, 'base64').toString('utf-8'), 10);
+    } catch {
+      offset = 0;
+    }
+  }
 
   if (!startDate || !endDate) {
     return Response.json({ error: 'startDate and endDate are required' }, { status: 400 });
@@ -69,8 +83,13 @@ export const GET = withErrorLogging(async function GET(request: Request) {
     const activeVendors = (vendors || []).filter(v => v.isActive !== false);
     const vendorMap = new Map(activeVendors.map(v => [v.vendorId, v.name]));
 
-    // Determine which vendors to query — all authenticated users see all vendors
+    // Determine which vendors to query based on user role (Requirement 10.4, 10.5)
+    // - Admin role: can see all vendors' transactions
+    // - Vendor/staff role: can only see their own vendor's transactions
     let vendorsToQuery = activeVendors;
+    if (currentUser.role !== 'admin' && currentUser.vendorId) {
+      vendorsToQuery = activeVendors.filter(v => v.vendorId === currentUser.vendorId);
+    }
 
     // Fetch appointments across all relevant vendors for the date range
     const allAppointments: any[] = [];
@@ -106,28 +125,43 @@ export const GET = withErrorLogging(async function GET(request: Request) {
       filtered = filtered.filter(apt => !apt.paymentId && apt.paymentStatus !== 'paid');
     }
 
-    // Batch-fetch unique services and staff
+    // Batch-fetch unique services and staff with caching (Requirement 12.3)
     const uniqueServiceIds = [...new Set(filtered.map(a => a.serviceId).filter(Boolean))] as string[];
     const uniqueStaffIds = [...new Set(filtered.map(a => a.staffId).filter(Boolean))] as string[];
 
     const serviceMap: Record<string, any> = {};
     const staffMap: Record<string, any> = {};
 
+    const cache = getCache();
+
     await Promise.all([
       ...uniqueServiceIds.map(async (sid) => {
-        const { data } = await client.models.Service.get({ serviceId: sid });
-        if (data) serviceMap[sid] = data;
+        try {
+          const data = await cache.getService(sid, async (id) => {
+            const { data: serviceData } = await client.models.Service.get({ serviceId: id });
+            return serviceData;
+          });
+          if (data) serviceMap[sid] = data;
+        } catch (err) {
+          console.error(`Failed to fetch service ${sid}:`, err);
+        }
       }),
       ...uniqueStaffIds.map(async (sid) => {
-        const { data } = await client.models.StaffSchedule.get({ visibleId: sid });
-        if (data) staffMap[sid] = data;
+        try {
+          const data = await cache.getStaff(sid, async (id) => {
+            const { data: staffData } = await client.models.StaffSchedule.get({ visibleId: id });
+            return staffData;
+          });
+          if (data) staffMap[sid] = data;
+        } catch (err) {
+          console.error(`Failed to fetch staff ${sid}:`, err);
+        }
       }),
     ]);
 
     // Enrich appointments
     // For grouped appointments (multi-provider), each appointment represents one provider's share,
     // NOT the full service price. The service price applies to the group as a whole.
-    const groupIds = [...new Set(filtered.map((a: any) => a.groupId).filter(Boolean))];
 
     const enriched = filtered.map((apt: any) => {
       const service = serviceMap[apt.serviceId] || null;
@@ -222,9 +256,24 @@ export const GET = withErrorLogging(async function GET(request: Request) {
       }
     }
 
+    // Pagination (Requirement 11.2)
+    const totalCount = enriched.length;
+    const paginatedTransactions = enriched.slice(offset, offset + limit);
+    const hasMore = offset + limit < totalCount;
+    
+    // Encode nextToken as base64(offset)
+    const nextToken = hasMore ? Buffer.from(String(offset + limit)).toString('base64') : null;
+
     return Response.json({
-      transactions: enriched,
+      transactions: paginatedTransactions,
       summary: { totalAppointments: totalTransactions, paidCount, unpaidCount, totalRevenue },
+      pagination: {
+        offset,
+        limit,
+        totalCount,
+        hasMore,
+        nextToken,
+      },
     });
   } catch (error) {
     console.error('Transactions API error:', error);
