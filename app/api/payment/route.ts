@@ -43,7 +43,7 @@ Amplify.configure(config, { ssr: true });
 export const POST = withErrorLogging(async function POST(request: Request) {
   try {
     // Rate limit check (Requirement 11.1)
-    const clientIp = getClientIp(request.headers);
+    const clientIp = getClientIp(request.headers || new Headers());
     const rateLimitResponse = rateLimitMiddleware(clientIp, 10, 10000); // 10 requests per 10 seconds
     if (rateLimitResponse) {
       return rateLimitResponse;

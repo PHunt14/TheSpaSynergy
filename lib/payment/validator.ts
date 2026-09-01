@@ -59,7 +59,7 @@ export function dollarsToCents(amount: number): number {
 
 /**
  * Validates that the submitted payment amount matches the expected amount
- * within a tolerance of $0.01 and is within reasonable bounds ($0.50–$9999.99).
+ * within a tolerance of $0.01 and is within reasonable bounds ($0.01–$9999.99).
  *
  * Requirement 4.1: Verify that the requested amount matches the expected amount
  * within a tolerance of $0.01.
@@ -92,12 +92,12 @@ export function validatePaymentAmount(input: PaymentValidationInput): Validation
     };
   }
 
-  // Enforce reasonable bounds: $0.50 minimum, $9999.99 maximum
-  if (sanitizedAmount < 0.50) {
+  // Enforce reasonable bounds: $0.01 minimum, $9999.99 maximum
+  if (sanitizedAmount < 0.01) {
     return {
       valid: false,
       error: {
-        message: 'Payment amount must be at least $0.50',
+        message: 'Payment amount must be at least $0.01',
         received: sanitizedAmount,
       },
     };
