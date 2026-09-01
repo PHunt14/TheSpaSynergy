@@ -57,6 +57,18 @@ const sections = [
 
 const platformUpdates = [
   {
+    version: 'v1.6.4',
+    date: 'September 1, 2026',
+    title: 'Square Reliability: Auto-Refresh & Reconnect Prompts',
+    changes: [
+      'Fixed kiosk showing "Card payment not available / provider has not connected Square" for staff who were in fact connected — an expired access token with a valid refresh token is now correctly treated as chargeable, matching what the payment flow can actually process',
+      'Added a daily background job that proactively refreshes Square access tokens before they expire, so card payments no longer lapse after a quiet period',
+      'Added a login reminder that prompts a staff member to reconnect Square only when their account genuinely needs it (revoked or unrecoverable token)',
+      'My Settings now shows an accurate "Reconnect recommended" notice for expired Square tokens instead of a misleading "Connected" status',
+      'Added manual "Refresh Square" controls on the Staff page — refresh a single staff member or all connected accounts on demand',
+    ],
+  },
+  {
     version: 'v1.6.3',
     date: 'August 31, 2026',
     title: 'Dashboard Payment Features & Performance Optimization',
