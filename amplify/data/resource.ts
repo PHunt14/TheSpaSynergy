@@ -141,6 +141,31 @@ const schema = a.schema({
     ])
     .authorization((allow) => [allow.publicApiKey()]),
 
+  // Atomic double-booking guard.
+  // The primary key (slotKey) is a single quantized slot "cell" for one staff
+  // member: `${staffId}#${date}#${cellIndex}` where cellIndex is a fixed-grid
+  // (5-minute) bucket. DynamoDB's auto-generated create is a PutItem with an
+  // implicit attribute_not_exists(slotKey) condition, so two concurrent creates
+  // of the SAME cell can never both succeed — exactly one wins. A booking
+  // reserves every cell its [start, start+duration+buffer) interval touches;
+  // if any cell is already taken, the slot overlaps and the booking is rejected
+  // atomically (no post-hoc race window). Reservations are released (deleted)
+  // when the owning appointment is cancelled/rescheduled/reassigned.
+  SlotReservation: a
+    .model({
+      slotKey: a.id().required(),
+      appointmentId: a.string().required(),
+      staffId: a.string().required(),
+      vendorId: a.string(),
+      date: a.string().required(),
+      cellIndex: a.integer().required(),
+      groupId: a.string(),
+      createdAt: a.datetime(),
+    })
+    .identifier(['slotKey'])
+    .secondaryIndexes((index) => [index('appointmentId')])
+    .authorization((allow) => [allow.publicApiKey()]),
+
   SiteSettings: a
     .model({
       settingKey: a.id().required(),

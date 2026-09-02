@@ -2,6 +2,7 @@ import { Client, Environment } from 'square';
 import { randomUUID } from 'node:crypto';
 import { client, resolveAppointmentDetails, sendAppointmentNotifications } from '@/lib/appointment-notifications';
 import { calculateBundlePrice } from '@/app/utils/bundleDiscount';
+import { releaseByAppointmentId } from '@/app/utils/slotReservation';
 import { withErrorLogging } from '@/lib/logger/middleware';
 
 export const POST = withErrorLogging(async function POST(request: Request) {
@@ -58,6 +59,9 @@ export const POST = withErrorLogging(async function POST(request: Request) {
       console.error('Error cancelling appointment:', updateErrors);
       return Response.json({ error: 'Failed to cancel appointment' }, { status: 500 });
     }
+
+    // Free the reserved slot cells so the time becomes bookable again.
+    await releaseByAppointmentId(client, appointmentId);
 
     await sendAppointmentNotifications({ event: 'cancelled', appointment, details });
 
@@ -118,6 +122,9 @@ async function handlePartialBundleCancellation(appointment: any, bundle: any, de
     console.error('Error cancelling appointment:', cancelErrors);
     return Response.json({ error: 'Failed to cancel appointment' }, { status: 500 });
   }
+
+  // Free the cancelled service's reserved slot cells.
+  await releaseByAppointmentId(client, appointment.appointmentId);
 
   // Fetch remaining services to recalculate price
   const remainingServiceIds = remainingAppointments.map((a: any) => a.serviceId);
@@ -240,6 +247,9 @@ async function handleFullBundleCancellation(appointment: any, bundle: any, detai
     return Response.json({ error: 'Failed to cancel all appointments in bundle' }, { status: 500 });
   }
 
+  // Free every cancelled appointment's reserved slot cells.
+  await Promise.all(appointmentIds.map((id: string) => releaseByAppointmentId(client, id)));
+
   // Calculate total refund amount (the full bundle price that was paid)
   const totalRefundAmount = bundle.price || 0;
 
@@ -312,6 +322,11 @@ async function handleGroupCancellation(appointment: any, details: any) {
     console.error('Error cancelling group appointments:', cancelErrors);
     return Response.json({ error: 'Failed to cancel all appointments in group' }, { status: 500 });
   }
+
+  // Free every group appointment's reserved slot cells.
+  await Promise.all(
+    groupAppointments.map((appt: any) => releaseByAppointmentId(client, appt.appointmentId))
+  );
 
   // Handle refund if any appointment in the group has a paymentId
   let refundResult = null;

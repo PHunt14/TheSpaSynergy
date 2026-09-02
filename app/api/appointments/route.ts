@@ -6,6 +6,7 @@ import { randomUUID } from 'crypto';
 import { resolveAppointmentDetails, sendAppointmentNotifications, sendStaffBookingNotification } from '@/lib/appointment-notifications';
 import { assignStaff, rankEligibleStaff } from '@/app/utils/staffAssigner.js';
 import { detectConflict, extractDateFromDateTime } from '@/app/utils/overlapDetection';
+import { reserveSlots, reserveSlotsForMany, releaseKeys, releaseByAppointmentId, moveReservation } from '@/app/utils/slotReservation';
 import { getCurrentUser } from '@/lib/auth';
 import { withErrorLogging } from '@/lib/logger/middleware';
 
@@ -61,12 +62,14 @@ export const PATCH = withErrorLogging(async function PATCH(request: Request) {
       const effectiveDateTime = updateFields.dateTime || existingAppt?.dateTime;
 
       if (effectiveStaffId && effectiveDateTime) {
-        // Fetch service duration for overlap calculation
+        // Fetch service duration + buffer for overlap calculation
         const targetServiceId = updateFields.serviceId || existingAppt?.serviceId;
         let duration = 60; // default fallback
+        let moveBuffer = 15;
         if (targetServiceId) {
           const { data: svc } = await client.models.Service.get({ serviceId: targetServiceId });
           if (svc?.duration) duration = svc.duration as number;
+          if (svc && svc.bufferMinutes != null) moveBuffer = svc.bufferMinutes as number;
         }
 
         const overlap = await detectOverlap(client, effectiveStaffId, effectiveDateTime, duration, appointmentId, true);
@@ -74,6 +77,23 @@ export const PATCH = withErrorLogging(async function PATCH(request: Request) {
           return Response.json({
             warning: 'Scheduling conflict detected',
             conflict: overlap,
+            message: 'This appointment overlaps with an existing appointment. Resubmit with confirmOverlap=true to save anyway.',
+          }, { status: 409 });
+        }
+
+        // Atomically move the reservation to the new staff/time. If the target
+        // interval is taken, reject the edit and leave the original intact.
+        const moved = await moveReservation(client, appointmentId, {
+          staffId: effectiveStaffId,
+          dateTime: effectiveDateTime,
+          durationMinutes: duration,
+          bufferMinutes: moveBuffer,
+          appointmentId,
+          vendorId: (updateFields.vendorId as string) || (existingAppt?.vendorId as string) || undefined,
+        });
+        if (!moved.ok) {
+          return Response.json({
+            warning: 'Scheduling conflict detected',
             message: 'This appointment overlaps with an existing appointment. Resubmit with confirmOverlap=true to save anyway.',
           }, { status: 409 });
         }
@@ -346,6 +366,30 @@ export const POST = withErrorLogging(async function POST(request: Request) {
       return Response.json({ error: 'Could not resolve vendor for this appointment' }, { status: 400 });
     }
 
+    // --- Atomic slot reservation (definitive double-booking guard) ---
+    // Reserve the interval's grid cells BEFORE creating the appointment. The
+    // reservation create is a conditional PutItem, so if a concurrent booking
+    // grabbed any overlapping cell, exactly one of us wins and the loser is
+    // rejected here — closing the check-then-write race. Vendors who explicitly
+    // confirmOverlap intentionally double-book and skip the reservation.
+    const enforceReservation = assignedStaffId && !(!isCustomerBooking && confirmOverlap);
+    if (enforceReservation) {
+      const reservation = await reserveSlots(client, {
+        staffId: assignedStaffId as string,
+        dateTime,
+        durationMinutes: duration,
+        bufferMinutes: serviceBuffer,
+        appointmentId,
+        vendorId: resolvedVendorId,
+      });
+      if (!reservation.ok) {
+        return Response.json(
+          { error: 'This time slot is no longer available. Please select a different time.' },
+          { status: 409 }
+        );
+      }
+    }
+
     const { data, errors } = await client.models.Appointment.create({
       appointmentId,
       vendorId: resolvedVendorId,
@@ -364,28 +408,9 @@ export const POST = withErrorLogging(async function POST(request: Request) {
 
     if (errors) {
       console.error('Error creating appointment:', errors);
+      // Release the reservation we just took so the slot isn't stuck held.
+      if (enforceReservation) await releaseByAppointmentId(client, appointmentId);
       return Response.json({ error: 'Failed to create appointment' }, { status: 500 });
-    }
-
-    // --- Post-write race condition guard (Req 4.6) ---
-    // Re-check for conflicts after writing to catch concurrent bookings that slipped through
-    if (assignedStaffId && isCustomerBooking) {
-      try {
-        const { data: staffSchedule } = await client.models.StaffSchedule.get({ visibleId: assignedStaffId });
-        if (staffSchedule?.vendorId) {
-          // Re-check with the SAME authority as the pre-write check
-          // (detectOverlap → current DB Service.duration), excluding the
-          // appointment we just created. This catches a concurrent booking
-          // that slipped in, without rolling back on a stale stored duration.
-          const overlap = await detectOverlap(client, assignedStaffId, dateTime, duration, appointmentId, !isCustomerBooking, { bufferOverride: serviceBuffer });
-          if (overlap) {
-            await client.models.Appointment.update({ appointmentId, status: 'cancelled' } as any);
-            return Response.json({ error: 'This time slot is no longer available' }, { status: 409 });
-          }
-        }
-      } catch (e) {
-        console.error('Post-write conflict check failed (non-fatal):', e);
-      }
     }
 
     // Auto-populate client catalog
@@ -411,6 +436,39 @@ export const POST = withErrorLogging(async function POST(request: Request) {
     return Response.json({ error: 'Failed to create appointment' }, { status: 500 });
   }
 })
+
+/**
+ * Injects the CURRENT DB Service.duration into each appointment's customer JSON
+ * (as customer.duration) so downstream conflict checks that read customer.duration
+ * (e.g. assignStaff → hasAppointmentConflict) use the up-to-date duration rather
+ * than the value frozen when the appointment was originally booked. Mirrors the
+ * availability route's enrichAppointmentsWithDbDuration. Blocked-time durations
+ * are authoritative and are never overwritten.
+ */
+async function enrichAppointmentsWithDbDuration(amplifyClient: any, appointments: any[]): Promise<any[]> {
+  const serviceIds = [...new Set(appointments.map((a: any) => a.serviceId).filter(Boolean))] as string[];
+  const durationMap: Record<string, number> = {};
+  await Promise.all(serviceIds.map(async (sid: string) => {
+    if (sid === 'blocked' || sid === 'manual') return;
+    const { data: svc } = await amplifyClient.models.Service.get({ serviceId: sid });
+    if (svc?.duration) durationMap[sid] = svc.duration as number;
+  }));
+
+  return appointments.map((apt: any) => {
+    let customer = apt.customer;
+    if (typeof customer === 'string') {
+      try { customer = JSON.parse(customer); } catch { customer = {}; }
+    }
+    if (!customer) customer = {};
+    if (customer.isBlockedTime) return apt; // blocked-time duration is authoritative
+    const duration = durationMap[apt.serviceId];
+    if (duration) {
+      customer.duration = duration;
+      return { ...apt, customer: JSON.stringify(customer) };
+    }
+    return apt;
+  });
+}
 
 /**
  * Overlap detection helper (Req 4.6)
@@ -556,13 +614,36 @@ async function handleMultiProviderBooking(body: any, amplifyClient: any) {
   // Generate a shared groupId
   const groupId = randomUUID();
 
+  // Pre-assign appointmentIds so reservations and appointments share ids.
+  const plannedUnits = assignedStaffMembers.map((staff: any) => ({ staff, appointmentId: randomUUID() }));
+
+  // --- Atomic slot reservation for ALL providers (all-or-nothing) ---
+  // Every provider must hold the interval at once; if any provider's cells are
+  // taken, the whole group is rejected and nothing is written.
+  const mpReservation = await reserveSlotsForMany(
+    amplifyClient,
+    plannedUnits.map(({ staff, appointmentId }: any) => ({
+      staffId: staff.staffId,
+      dateTime,
+      durationMinutes: service.duration || 60,
+      bufferMinutes,
+      appointmentId,
+      vendorId: staff.vendorId,
+      groupId,
+    }))
+  );
+  if (!mpReservation.ok) {
+    return Response.json(
+      { error: 'This time slot is no longer available. Please select a different time.' },
+      { status: 409 }
+    );
+  }
+
   // Create one appointment per assigned staff member
   const appointmentIds: string[] = [];
   const creationErrors: any[] = [];
 
-  for (const staff of assignedStaffMembers) {
-    const appointmentId = randomUUID();
-
+  for (const { staff, appointmentId } of plannedUnits) {
     const { errors } = await amplifyClient.models.Appointment.create({
       appointmentId,
       vendorId: staff.vendorId,
@@ -582,7 +663,7 @@ async function handleMultiProviderBooking(body: any, amplifyClient: any) {
     }
   }
 
-  // If any creation failed, roll back the successfully created ones
+  // If any creation failed, roll back the successfully created ones + reservations
   if (creationErrors.length > 0) {
     for (const id of appointmentIds) {
       try {
@@ -591,6 +672,7 @@ async function handleMultiProviderBooking(body: any, amplifyClient: any) {
         console.error('Rollback failed for appointment:', id, e);
       }
     }
+    await releaseKeys(amplifyClient, mpReservation.reservedKeys);
     console.error('Error creating multi-provider appointments:', creationErrors);
     return Response.json({ error: 'Failed to create appointments' }, { status: 500 });
   }
@@ -618,35 +700,9 @@ async function handleMultiProviderBooking(body: any, amplifyClient: any) {
       .catch(e => console.error('Staff notification failed for appointment:', aptId, e));
   }
 
-  // --- Post-write race condition guard for multi-provider bookings ---
-  // Uses the SAME authority as the pre-write assignment (detectOverlap → current
-  // DB Service.duration + the new service's buffer), excluding this group's own
-  // appointments. This only catches a genuine concurrent booking; it will not
-  // roll back on a stale stored duration (the old manual loop's bug).
-  try {
-    for (let i = 0; i < assignedStaffMembers.length; i++) {
-      const staff = assignedStaffMembers[i];
-      const ownAppointmentId = appointmentIds[i];
-      const overlap = await detectOverlap(
-        amplifyClient,
-        staff.staffId,
-        dateTime,
-        service.duration || 60,
-        ownAppointmentId,
-        false,
-        { bufferOverride: bufferMinutes }
-      );
-      if (overlap) {
-        // Genuine concurrent conflict — roll back the whole group.
-        for (const id of appointmentIds) {
-          await amplifyClient.models.Appointment.update({ appointmentId: id, status: 'cancelled' } as any).catch(() => {});
-        }
-        return Response.json({ error: 'This time slot is no longer available' }, { status: 409 });
-      }
-    }
-  } catch (e) {
-    console.error('Multi-provider post-write conflict check failed (non-fatal):', e);
-  }
+  // No post-write recheck needed: the atomic reservation above already
+  // guarantees each provider exclusively holds its interval before any
+  // appointment was written.
 
   return Response.json({ success: true, appointmentIds, groupId });
 }
@@ -699,9 +755,17 @@ async function handleQuantityBooking(body: any, amplifyClient: any) {
       amplifyClient.models.Appointment.list({ filter: { vendorId: { eq: vid }, dateTime: { beginsWith: date } } })
     );
     const appointmentResults = await Promise.all(appointmentPromises);
-    const existingAppointments = appointmentResults
+    const rawExistingAppointments = appointmentResults
       .flatMap((r: any) => r.data || [])
       .filter((apt: any) => apt.status !== 'cancelled');
+
+    // Enrich existing appointments with the CURRENT DB Service.duration so
+    // assignStaff (which reads customer.duration via hasAppointmentConflict) uses
+    // live durations rather than whatever was frozen at the original booking
+    // time. Matches the availability (show) path and the single-booking path
+    // (detectOverlap), so a slot shown as available can't be double-booked
+    // because an existing appointment stored a shorter duration.
+    const existingAppointments = await enrichAppointmentsWithDbDuration(amplifyClient, rawExistingAppointments);
 
     // Buffer authority: the NEW service's buffer, matching the availability
     // (show) path getParallelQuantitySlots (service.bufferMinutes ?? 15).
@@ -722,9 +786,36 @@ async function handleQuantityBooking(body: any, amplifyClient: any) {
       return Response.json({ error: error.message || 'Selected time is no longer available' }, { status: 409 });
     }
 
+    // Pre-assign appointmentIds so reservations and appointments share ids.
+    const plannedUnits = assignedStaffMembers.map((staff: any) => ({ staff, appointmentId: randomUUID() }));
+
+    // --- Atomic slot reservation for ALL parallel units (all-or-nothing) ---
+    // Vendor bookings that intentionally overlap (createdBy set) skip this.
+    let parallelReservedKeys: string[] = [];
+    if (!body.createdBy) {
+      const res = await reserveSlotsForMany(
+        amplifyClient,
+        plannedUnits.map(({ staff, appointmentId }: any) => ({
+          staffId: staff.staffId,
+          dateTime,
+          durationMinutes: duration,
+          bufferMinutes,
+          appointmentId,
+          vendorId: staff.vendorId,
+          groupId,
+        }))
+      );
+      if (!res.ok) {
+        return Response.json(
+          { error: 'This time slot is no longer available. Please select a different time.' },
+          { status: 409 }
+        );
+      }
+      parallelReservedKeys = res.reservedKeys;
+    }
+
     // Create one appointment per staff member
-    for (const staff of assignedStaffMembers) {
-      const appointmentId = randomUUID();
+    for (const { staff, appointmentId } of plannedUnits) {
       const { errors } = await amplifyClient.models.Appointment.create({
         appointmentId,
         vendorId: staff.vendorId,
@@ -746,6 +837,13 @@ async function handleQuantityBooking(body: any, amplifyClient: any) {
         appointmentIds.push(appointmentId);
       }
     }
+
+    // On creation failure, release this group's reservations during rollback.
+    if (creationErrors.length > 0 && parallelReservedKeys.length > 0) {
+      await releaseKeys(amplifyClient, parallelReservedKeys);
+    }
+    // No post-write recheck needed: the atomic reservation above guarantees
+    // every parallel unit exclusively held its interval before any write.
   } else {
     // Sequential: same staff, back-to-back appointments.
     // Buffer authority: the NEW service's buffer, matching the availability
@@ -808,14 +906,48 @@ async function handleQuantityBooking(body: any, amplifyClient: any) {
       assignedStaffId = candidateStaffIds[0];
     }
 
-    let currentMinutes = blockStart;
+    // Pre-plan every sub-slot (dateTime + its own appointmentId).
+    const plannedSubSlots: { slotDateTime: string; appointmentId: string }[] = [];
+    {
+      let m = blockStart;
+      for (let i = 0; i < quantity; i++) {
+        const hour = Math.floor(m / 60);
+        const min = m % 60;
+        plannedSubSlots.push({
+          slotDateTime: `${date}T${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}:00`,
+          appointmentId: randomUUID(),
+        });
+        m += duration + actualBuffer;
+      }
+    }
 
-    for (let i = 0; i < quantity; i++) {
-      const hour = Math.floor(currentMinutes / 60);
-      const min = currentMinutes % 60;
-      const slotDateTime = `${date}T${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}:00`;
+    // --- Atomic slot reservation for the WHOLE back-to-back block ---
+    // Reserve every sub-slot's interval for the chosen staff before writing.
+    // Vendor bookings that intentionally overlap (createdBy set) skip this.
+    let sequentialReservedKeys: string[] = [];
+    if (assignedStaffId && !body.createdBy) {
+      const res = await reserveSlotsForMany(
+        amplifyClient,
+        plannedSubSlots.map(({ slotDateTime, appointmentId }) => ({
+          staffId: assignedStaffId as string,
+          dateTime: slotDateTime,
+          durationMinutes: duration,
+          bufferMinutes: actualBuffer,
+          appointmentId,
+          vendorId,
+          groupId,
+        }))
+      );
+      if (!res.ok) {
+        return Response.json(
+          { error: 'This time slot is no longer available. Please select a different time.' },
+          { status: 409 }
+        );
+      }
+      sequentialReservedKeys = res.reservedKeys;
+    }
 
-      const appointmentId = randomUUID();
+    for (const { slotDateTime, appointmentId } of plannedSubSlots) {
       const { errors } = await amplifyClient.models.Appointment.create({
         appointmentId,
         vendorId,
@@ -836,9 +968,10 @@ async function handleQuantityBooking(body: any, amplifyClient: any) {
       } else {
         appointmentIds.push(appointmentId);
       }
+    }
 
-      // Move to next slot: duration + buffer
-      currentMinutes += duration + actualBuffer;
+    if (creationErrors.length > 0 && sequentialReservedKeys.length > 0) {
+      await releaseKeys(amplifyClient, sequentialReservedKeys);
     }
   }
 

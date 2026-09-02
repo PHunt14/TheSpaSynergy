@@ -4,6 +4,7 @@ import type { Schema } from '../../../../amplify/data/resource';
 import config from '../../../../amplify_outputs.json' with { type: 'json' };
 import { randomUUID } from 'node:crypto';
 import { assignBundleStaff } from '../../../utils/bundleStaffAssigner.js';
+import { reserveSlotsForMany, releaseKeys } from '../../../utils/slotReservation';
 import { calculateBundlePrice, validateBundleServices } from '../../../utils/bundleDiscount.js';
 import { checkBookingBlackout, blackoutResponseFields } from '../../../utils/bookingBlackout';
 import { getCurrentUser } from '@/lib/auth';
@@ -181,9 +182,17 @@ export const POST = withErrorLogging(async function POST(request: Request) {
     );
     const appointmentResults = await Promise.all(appointmentPromises);
 
-    const existingAppointments = appointmentResults
+    const rawExistingAppointments = appointmentResults
       .flatMap(result => result.data || [])
       .filter((apt: any) => apt.status !== 'cancelled' && apt.staffId && allStaffIds.has(apt.staffId));
+
+    // Enrich existing appointments with the CURRENT DB Service.duration so
+    // conflict detection uses live durations rather than whatever customer.duration
+    // was frozen into the record at its original booking time. This matches the
+    // availability (show) path (enrichAppointmentsWithDbDuration) so a bundle can
+    // no longer be booked on top of an appointment whose service was later
+    // lengthened. Blocked-time durations are authoritative and never overwritten.
+    const existingAppointments = await enrichWithDbDuration(rawExistingAppointments);
 
     // --- Assign staff per service ---
     let staffAssignments;
@@ -293,12 +302,46 @@ export const POST = withErrorLogging(async function POST(request: Request) {
     const appointmentIds: string[] = [];
     const creationErrors: any[] = [];
 
-    for (const assignment of staffAssignments) {
-      const appointmentId = randomUUID();
-      const serviceDateTime = `${date}T${assignment.startTime}`;
+    // Pre-plan each service assignment with its dateTime, duration, and id.
+    const plannedAssignments = staffAssignments.map((assignment: any) => {
       const serviceForAssignment = orderedServices.find((s: any) => s.serviceId === assignment.serviceId);
-      const assignmentDuration = serviceForAssignment?.duration || 60;
+      return {
+        assignment,
+        appointmentId: randomUUID(),
+        serviceDateTime: `${date}T${assignment.startTime}`,
+        assignmentDuration: serviceForAssignment?.duration || 60,
+      };
+    });
 
+    // --- Atomic slot reservation for EVERY service in the bundle ---
+    // Each service's interval must be exclusively held for its assigned staff
+    // before any appointment is written. All-or-nothing: if any cell is taken,
+    // the whole bundle is rejected atomically. Vendors who confirmOverlap
+    // intentionally double-book and skip the reservation.
+    let bundleReservedKeys: string[] = [];
+    if (!(isVendorBooking && confirmOverlap)) {
+      const res = await reserveSlotsForMany(
+        client,
+        plannedAssignments.map(({ assignment, appointmentId, serviceDateTime, assignmentDuration }: any) => ({
+          staffId: assignment.staffId,
+          dateTime: serviceDateTime,
+          durationMinutes: assignmentDuration,
+          bufferMinutes,
+          appointmentId,
+          vendorId: assignment.vendorId,
+          groupId: bundleId,
+        }))
+      );
+      if (!res.ok) {
+        return Response.json(
+          { error: 'This time slot is no longer available. Please select a different time.' },
+          { status: 409 }
+        );
+      }
+      bundleReservedKeys = res.reservedKeys;
+    }
+
+    for (const { assignment, appointmentId, serviceDateTime, assignmentDuration } of plannedAssignments) {
       const { errors } = await client.models.Appointment.create({
         appointmentId,
         vendorId: assignment.vendorId,
@@ -319,7 +362,7 @@ export const POST = withErrorLogging(async function POST(request: Request) {
       }
     }
 
-    // If any appointment creation failed, roll back
+    // If any appointment creation failed, roll back appointments + reservations
     if (creationErrors.length > 0) {
       for (const id of appointmentIds) {
         try {
@@ -328,6 +371,7 @@ export const POST = withErrorLogging(async function POST(request: Request) {
           console.error('Rollback failed for appointment:', id, e);
         }
       }
+      await releaseKeys(client, bundleReservedKeys);
       console.error('Error creating bundle appointments:', creationErrors);
       return Response.json({ error: 'Failed to create appointments' }, { status: 500 });
     }
@@ -394,7 +438,7 @@ export const POST = withErrorLogging(async function POST(request: Request) {
       // Update existing bundle record
       const { errors: bundleErrors } = await client.models.Bundle.update(bundleData);
       if (bundleErrors) {
-        // Roll back appointments
+        // Roll back appointments + reservations
         for (const id of appointmentIds) {
           try {
             await client.models.Appointment.update({ appointmentId: id, status: 'cancelled' } as any);
@@ -402,6 +446,7 @@ export const POST = withErrorLogging(async function POST(request: Request) {
             console.error('Rollback failed for appointment:', id, e);
           }
         }
+        await releaseKeys(client, bundleReservedKeys);
         console.error('Error updating bundle record:', bundleErrors);
         return Response.json({ error: 'Failed to create bundle record' }, { status: 500 });
       }
@@ -409,7 +454,7 @@ export const POST = withErrorLogging(async function POST(request: Request) {
       // Create new bundle record
       const { errors: bundleErrors } = await client.models.Bundle.create(bundleData);
       if (bundleErrors) {
-        // Roll back appointments
+        // Roll back appointments + reservations
         for (const id of appointmentIds) {
           try {
             await client.models.Appointment.update({ appointmentId: id, status: 'cancelled' } as any);
@@ -417,10 +462,15 @@ export const POST = withErrorLogging(async function POST(request: Request) {
             console.error('Rollback failed for appointment:', id, e);
           }
         }
+        await releaseKeys(client, bundleReservedKeys);
         console.error('Error creating bundle record:', bundleErrors);
         return Response.json({ error: 'Failed to create bundle record' }, { status: 500 });
       }
     }
+
+    // No post-write recheck needed for customer bundles: the atomic reservation
+    // above already guarantees every service exclusively held its interval
+    // before any appointment was written.
 
     // --- Return success response ---
     return Response.json({
@@ -439,4 +489,38 @@ export const POST = withErrorLogging(async function POST(request: Request) {
 function timeToMin(timeStr: string): number {
   const [h, m] = timeStr.split(':').map(Number);
   return h * 60 + m;
+}
+
+/**
+ * Injects the CURRENT DB Service.duration into each appointment's customer JSON
+ * (as customer.duration) so downstream conflict checks (hasAppointmentConflict,
+ * which reads customer.duration) use the up-to-date duration rather than the
+ * value frozen when the appointment was originally booked. Mirrors the
+ * availability route's enrichAppointmentsWithDbDuration. Blocked-time durations
+ * are authoritative and are never overwritten.
+ */
+async function enrichWithDbDuration(appointments: any[]): Promise<any[]> {
+  const serviceIds = [...new Set(appointments.map(a => a.serviceId).filter(Boolean))] as string[];
+  const durationMap: Record<string, number> = {};
+  await Promise.all(serviceIds.map(async (sid) => {
+    if (sid === 'blocked' || sid === 'manual') return;
+    const { data: svc } = await client.models.Service.get({ serviceId: sid });
+    if (svc?.duration) durationMap[sid] = svc.duration as number;
+  }));
+
+  return appointments.map(apt => {
+    let customer = apt.customer;
+    if (typeof customer === 'string') {
+      try { customer = JSON.parse(customer); } catch { customer = {}; }
+    }
+    if (!customer) customer = {};
+    // Never overwrite a blocked-time duration — it is authoritative.
+    if (customer.isBlockedTime) return apt;
+    const duration = durationMap[apt.serviceId];
+    if (duration) {
+      customer.duration = duration;
+      return { ...apt, customer: JSON.stringify(customer) };
+    }
+    return apt;
+  });
 }

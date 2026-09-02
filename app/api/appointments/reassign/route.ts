@@ -1,4 +1,5 @@
 import { client } from '@/lib/appointment-notifications';
+import { moveReservation } from '@/app/utils/slotReservation';
 import { withErrorLogging } from '@/lib/logger/middleware';
 
 export const POST = withErrorLogging(async function POST(request: Request) {
@@ -81,6 +82,28 @@ export const POST = withErrorLogging(async function POST(request: Request) {
     );
 
     if (hasConflict) {
+      return Response.json(
+        { error: 'Staff member has a conflicting appointment' },
+        { status: 409 }
+      );
+    }
+
+    // 6b. Atomically move the reservation to the new staff.
+    // Reserve the new staff's cells first; only release the old staff's cells if
+    // that succeeds. If the new staff's interval is taken, the reassign is
+    // rejected atomically and the original assignment stays intact.
+    const buffer = (service.bufferMinutes != null)
+      ? (service.bufferMinutes as number)
+      : 15;
+    const moved = await moveReservation(client, appointmentId, {
+      staffId: newStaffId,
+      dateTime: appointment.dateTime as string,
+      durationMinutes: service.duration || 60,
+      bufferMinutes: buffer,
+      appointmentId,
+      vendorId: newStaffRecord.vendorId as string,
+    });
+    if (!moved.ok) {
       return Response.json(
         { error: 'Staff member has a conflicting appointment' },
         { status: 409 }
