@@ -80,6 +80,45 @@ async function getExistingCategoryNames(client: ReturnType<typeof getClient>): P
  * Supports `includeInactive=true` query param to return all services.
  * No vendor filtering — services are global entities.
  */
+/**
+ * Explicit selection set for reads.
+ *
+ * IMPORTANT: `vendorId` is intentionally OMITTED. The `Service` model declares
+ * `vendorId` as a required (non-nullable) field, but services are treated as
+ * global entities and the write handlers strip `vendorId` from payloads, so
+ * many records have a null `vendorId`. If `vendorId` is included in the
+ * selection set, AppSync raises a "Cannot return null for non-nullable type"
+ * error for every such record and the whole `list` call returns `errors`,
+ * producing an empty service list on the booking page and provider dashboard.
+ * Omitting `vendorId` (which the frontend never uses) makes the read tolerant
+ * of those records. The frontend does not consume `vendorId`.
+ */
+const SERVICE_READ_SELECTION_SET = [
+  'serviceId',
+  'name',
+  'description',
+  'categories',
+  'resourceType',
+  'duration',
+  'price',
+  'bufferMinutes',
+  'houseFeeEnabled',
+  'houseFeeAmount',
+  'houseFeePercent',
+  'isActive',
+  'requiresConsultation',
+  'cardPaymentDisabled',
+  'allowedStaff',
+  'parentServiceIds',
+  'providersRequired',
+  'maxQuantityPerBooking',
+  'minPeople',
+  'maxPeople',
+  'paymentSplitRules',
+  'createdAt',
+  'updatedAt',
+] as const;
+
 export const GET = withErrorLogging(async function GET(request: Request) {
   const client = getClient();
   const { searchParams } = new URL(request.url);
@@ -92,11 +131,18 @@ export const GET = withErrorLogging(async function GET(request: Request) {
 
     const { data: services, errors } = await client.models.Service.list({
       ...(filter ? { filter: filter as any } : {}),
+      selectionSet: SERVICE_READ_SELECTION_SET as unknown as any,
     });
 
-    if (errors) {
+    // Only fail hard when NO data came back. AppSync can return partial data
+    // alongside non-fatal field-level errors; in that case we still serve the
+    // records we did get rather than blanking the entire catalog.
+    if (errors && (!services || services.length === 0)) {
       console.error('Error fetching services:', errors);
       return Response.json({ error: 'Failed to fetch services' }, { status: 500 });
+    }
+    if (errors) {
+      console.warn('Non-fatal errors fetching services (serving partial data):', errors);
     }
 
     return Response.json({

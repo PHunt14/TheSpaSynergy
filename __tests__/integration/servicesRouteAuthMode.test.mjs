@@ -38,6 +38,11 @@ const mockServiceList = jest.fn(async ({ filter } = {}) => {
   return { data: all, errors: undefined }
 })
 
+// Field the route must NOT request in its selection set. `Service.vendorId` is
+// declared non-nullable in the schema, but many records store null, so
+// selecting it makes AppSync fail the whole list query. See route.ts.
+const VENDOR_ID_FIELD = 'vendorId'
+
 // The shared apiKey client from `@/lib/auth`.
 const apiKeyClient = {
   models: {
@@ -167,9 +172,44 @@ describe('GET /api/services — uses public apiKey client (regression: empty ser
     expect(body.services[0].categories).toEqual(['Massage'])
   })
 
-  test('returns 500 with the route-specific error when the client reports auth errors', async () => {
-    // Simulate the pre-fix failure mode: the data client rejects the query
-    // (as user-pool auth did against a publicApiKey-only model).
+  test('requests an explicit selection set that OMITS the non-nullable vendorId field', async () => {
+    // Regression guard for the "Cannot return null for non-nullable type:
+    // 'String' ... vendorId" AppSync error that blanked the whole catalog.
+    seedService({ serviceId: 'svc-1', name: 'Sauna', price: 40, duration: 25 })
+
+    await route.GET(makeRequest())
+
+    expect(mockServiceList).toHaveBeenCalledTimes(1)
+    const listArgs = mockServiceList.mock.calls[0][0]
+    expect(listArgs).toHaveProperty('selectionSet')
+    expect(Array.isArray(listArgs.selectionSet)).toBe(true)
+    expect(listArgs.selectionSet).not.toContain(VENDOR_ID_FIELD)
+    // Sanity: it still selects the fields the frontend relies on.
+    expect(listArgs.selectionSet).toEqual(
+      expect.arrayContaining(['serviceId', 'name', 'price', 'duration', 'isActive', 'categories'])
+    )
+  })
+
+  test('serves partial data when the client reports NON-fatal field errors (does not 500)', async () => {
+    // AppSync can return the valid records alongside field-level errors for a
+    // few bad rows. The route must still serve what came back.
+    mockServiceList.mockResolvedValueOnce({
+      data: [
+        { serviceId: 'svc-ok-1', name: 'Good One', price: 10, duration: 10, isActive: true },
+        { serviceId: 'svc-ok-2', name: 'Good Two', price: 20, duration: 20, isActive: true },
+      ],
+      errors: [{ message: "Cannot return null for non-nullable type: 'String' ... vendorId" }],
+    })
+
+    const res = await route.GET(makeRequest())
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.services).toHaveLength(2)
+  })
+
+  test('returns 500 only when the client reports errors AND no data came back', async () => {
+    // e.g. a true authorization failure or total query rejection.
     mockServiceList.mockResolvedValueOnce({ data: null, errors: [{ message: 'Not Authorized to access list on type Service' }] })
 
     const res = await route.GET(makeRequest())
