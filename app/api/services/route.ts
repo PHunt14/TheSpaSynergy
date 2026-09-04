@@ -1,6 +1,4 @@
-import { generateServerClientUsingCookies } from '@aws-amplify/adapter-nextjs/data';
 import { cookies } from 'next/headers';
-import type { Schema } from '../../../amplify/data/resource';
 import config from '../../../amplify_outputs.json' with { type: 'json' };
 import { fetchAuthSession } from 'aws-amplify/auth/server';
 import { Amplify } from 'aws-amplify';
@@ -11,16 +9,24 @@ import { validateCategoryName } from '../../utils/categoryValidator';
 import { syncAllowedStaffChanges } from '../../utils/squareCatalogSync';
 import type { Service as SyncService } from '../../utils/squareCatalogSync';
 import { withErrorLogging } from '@/lib/logger/middleware';
+import { client } from '@/lib/auth';
 
 Amplify.configure(config, { ssr: true });
 
 const { runWithAmplifyServerContext } = createServerRunner({ config });
 
+/**
+ * Returns the shared Amplify Data client.
+ *
+ * IMPORTANT: This uses the default `generateClient()` from `@/lib/auth`, which
+ * authorizes with the public API key (the schema's `defaultAuthorizationMode`).
+ * The `Service` and `ServiceCategory` models only grant `allow.publicApiKey()`,
+ * so this route must NOT use a cookie/user-pool client — doing so causes every
+ * Service query to fail authorization and return HTTP 500 (empty service lists
+ * on both the customer booking page and the provider dashboard).
+ */
 function getClient() {
-  return generateServerClientUsingCookies<Schema>({
-    config,
-    cookies,
-  });
+  return client;
 }
 
 // Get current user from session
