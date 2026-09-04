@@ -48,7 +48,13 @@ const schema = a.schema({
   Service: a
     .model({
       serviceId: a.id().required(),
-      vendorId: a.string().required(),
+      // Optional: services are global/staff-driven entities. Many records are
+      // vendor-less (write handlers strip vendorId, and payment routes to the
+      // assigned staff, not the service's vendor). A required vendorId caused
+      // listServices to fail with "Cannot return null for non-nullable type"
+      // whenever a record had a null vendorId. Kept for the GSI below; records
+      // without a vendorId simply do not appear in the listServiceByVendorId index.
+      vendorId: a.string(),
       name: a.string().required(),
       description: a.string(),
       categories: a.string().array(),

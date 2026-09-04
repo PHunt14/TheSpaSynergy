@@ -1,0 +1,6 @@
+M  __tests__/integration/servicesRouteAuthMode.test.mjs
+ M amplify/data/resource.ts
+M  app/api/services/route.ts
+M  package.json
+A  scripts/backfill-service-vendorid-prod.mjs
+M  tsconfig.tsbuildinfo
