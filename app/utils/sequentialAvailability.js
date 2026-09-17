@@ -1,4 +1,4 @@
-import { DAY_NAMES, getRecurrenceHours } from './availability.js'
+import { DAY_NAMES, getRecurrenceHours, getScheduleOverride } from './availability.js'
 import { canAssignBundleStaff } from './bundleStaffAssigner.js'
 
 /**
@@ -327,6 +327,14 @@ function getScanRange(orderedServices, staffSchedulesByService, dayOfWeek, reque
 function getStaffHours(staff, dayOfWeek, requestedDate) {
   if (!staff.schedule) return null
   const schedule = typeof staff.schedule === 'string' ? JSON.parse(staff.schedule) : staff.schedule
+
+  // Date-specific overrides take priority over the weekly template.
+  // undefined = no override, null = explicitly closed, { start, end } = custom hours.
+  const override = getScheduleOverride(schedule.overrides, requestedDate)
+  if (override !== undefined) {
+    return override ? { start: override.start, end: override.end } : null
+  }
+
   const daySchedule = schedule[dayOfWeek]
   if (!daySchedule) return null
 

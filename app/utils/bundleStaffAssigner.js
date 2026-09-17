@@ -1,4 +1,4 @@
-import { DAY_NAMES, getRecurrenceHours, hasAppointmentConflict } from './availability.js'
+import { DAY_NAMES, getRecurrenceHours, getScheduleOverride, hasAppointmentConflict } from './availability.js'
 import { calculateServiceSchedule } from './sequentialAvailability.js'
 
 /**
@@ -335,14 +335,23 @@ function verifyNoIntraBundleConflicts(assignments, bufferMinutes) {
 function isWorkingAtTime(staff, dayOfWeek, requestedDate, time, duration) {
   if (!staff.schedule) return false
   const schedule = typeof staff.schedule === 'string' ? JSON.parse(staff.schedule) : staff.schedule
-  const daySchedule = schedule[dayOfWeek]
-  if (!daySchedule) return false
 
   let hours = null
-  if (daySchedule.recurrence) {
-    hours = getRecurrenceHours(daySchedule, requestedDate)
-  } else if (daySchedule.start) {
-    hours = { start: daySchedule.start, end: daySchedule.end }
+  // Date-specific overrides take priority over the weekly template.
+  // undefined = no override, null = explicitly closed, { start, end } = custom hours.
+  const override = getScheduleOverride(schedule.overrides, requestedDate)
+  if (override !== undefined) {
+    if (!override) return false // explicitly closed that day
+    hours = { start: override.start, end: override.end }
+  } else {
+    const daySchedule = schedule[dayOfWeek]
+    if (!daySchedule) return false
+
+    if (daySchedule.recurrence) {
+      hours = getRecurrenceHours(daySchedule, requestedDate)
+    } else if (daySchedule.start) {
+      hours = { start: daySchedule.start, end: daySchedule.end }
+    }
   }
 
   if (!hours) return false

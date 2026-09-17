@@ -1,0 +1,19 @@
+﻿ __tests__/utils/sequentialAvailability.test.mjs | 286 ++++++++++++++++++++++++
+ app/api/available-dates/route.ts                |  90 +++-----
+ app/api/bundle-availability/route.ts            | 131 +++--------
+ app/booking/bundle-time/page.jsx                |  28 ++-
+ app/utils/bundleStaffAssigner.js                |  23 +-
+ app/utils/sequentialAvailability.js             |  10 +-
+ tsconfig.tsbuildinfo                            |   2 +-
+ 7 files changed, 402 insertions(+), 168 deletions(-)
+ M __tests__/utils/sequentialAvailability.test.mjs
+ M app/api/available-dates/route.ts
+ M app/api/bundle-availability/route.ts
+ M app/booking/bundle-time/page.jsx
+ M app/utils/bundleStaffAssigner.js
+ M app/utils/sequentialAvailability.js
+ M tsconfig.tsbuildinfo
+?? __tests__/components/BundleTimeAvailableDates.test.jsx
+?? __tests__/utils/bundleAvailabilityCore.test.mjs
+?? app/utils/bundleAvailabilityCore.ts
+?? diffstat.txt
