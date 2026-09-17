@@ -584,3 +584,289 @@ describe('Edge cases', () => {
     }
   })
 })
+
+// ── Available-dates ↔ times consistency ──────────────────────────────────────
+//
+// Regression guard for the "day shows available but has no time slots" bug.
+//
+// The /api/available-dates (bundle) endpoint now decides a day is available by
+// running this SAME getSequentialBundleSlots scheduler and checking slots.length
+// > 0. Previously it only checked that each service had a staff member *working*
+// that day, which is weaker than the times endpoint and produced highlighted
+// days with zero bookable times. These tests pin the invariant that "staff are
+// working" does NOT imply "a slot exists".
+
+describe('available-dates consistency: working staff does not imply a slot', () => {
+  test('bundle that does not fit in the working window yields no slots', () => {
+    // Two 60-min services + 15 buffer = 135 min, but staff only work 09:00–11:00 (120 min).
+    const services = [
+      makeService('svc-1', 60, ['staff-1']),
+      makeService('svc-2', 60, ['staff-1']),
+    ]
+    const staffSchedulesByService = {
+      'svc-1': [makeStaff('staff-1', 'v-a', shortMondaySchedule)],
+      'svc-2': [makeStaff('staff-1', 'v-a', shortMondaySchedule)],
+    }
+
+    const { slots } = getSequentialBundleSlots({
+      services,
+      staffSchedulesByService,
+      appointments: [],
+      startDate: '2025-01-06', // Monday
+      bufferMinutes: 15,
+      serviceOrder: ['svc-1', 'svc-2'],
+      multiDay: false,
+      maxDays: 1,
+    })
+
+    // Staff ARE working Monday, but the bundle cannot fit -> the day must NOT
+    // be reported as available.
+    expect(slots.length).toBe(0)
+  })
+
+  test('a fitting bundle on a working day yields at least one slot', () => {
+    const services = [
+      makeService('svc-1', 60, ['staff-1']),
+      makeService('svc-2', 30, ['staff-1']),
+    ]
+    const staffSchedulesByService = {
+      'svc-1': [makeStaff('staff-1', 'v-a', mondaySchedule)], // 09:00–17:00
+      'svc-2': [makeStaff('staff-1', 'v-a', mondaySchedule)],
+    }
+
+    const { slots } = getSequentialBundleSlots({
+      services,
+      staffSchedulesByService,
+      appointments: [],
+      startDate: '2025-01-06',
+      bufferMinutes: 15,
+      serviceOrder: ['svc-1', 'svc-2'],
+      multiDay: false,
+      maxDays: 1,
+    })
+
+    expect(slots.length).toBeGreaterThan(0)
+  })
+
+  test('a day fully booked by existing appointments yields no slots even with working staff', () => {
+    const services = [
+      makeService('svc-1', 60, ['staff-1']),
+      makeService('svc-2', 60, ['staff-1']),
+    ]
+    // Only two hours of work, and the single eligible staff member is booked the whole time.
+    const staffSchedulesByService = {
+      'svc-1': [makeStaff('staff-1', 'v-a', shortMondaySchedule)], // 09:00–11:00
+      'svc-2': [makeStaff('staff-1', 'v-a', shortMondaySchedule)],
+    }
+    const appointments = [
+      { staffId: 'staff-1', dateTime: '2025-01-06T09:00', duration: 120, status: 'confirmed' },
+    ]
+
+    const { slots } = getSequentialBundleSlots({
+      services,
+      staffSchedulesByService,
+      appointments,
+      startDate: '2025-01-06',
+      bufferMinutes: 15,
+      serviceOrder: ['svc-1', 'svc-2'],
+      multiDay: false,
+      maxDays: 1,
+    })
+
+    expect(slots.length).toBe(0)
+  })
+})
+
+// ── Schedule overrides honored by the bundle scheduler ───────────────────────
+//
+// Regression guard: the bundle scheduler (getStaffHours / isWorkingAtTime) must
+// honor schedule.overrides the same way the rest of the app does. Previously it
+// only read the weekly template, so a staff member available on a date ONLY via
+// an override was treated as not working -> the whole bundle produced no slots
+// even though the calendar (which honors overrides) showed the day as available.
+
+describe('bundle scheduler honors schedule.overrides', () => {
+  // 2025-01-06 is a Monday. We use a staff whose WEEKLY template is closed
+  // Monday but who has a date-specific override opening 09:00-17:00 that day.
+  const overrideOpenSchedule = {
+    // No monday key at all -> normally closed on Mondays.
+    overrides: { '2025-01-06': { start: '09:00', end: '17:00' } },
+  }
+
+  test('staff working only via a date override yields slots', () => {
+    const services = [
+      makeService('svc-1', 60, ['staff-1']),
+      makeService('svc-2', 30, ['staff-1']),
+    ]
+    const staffSchedulesByService = {
+      'svc-1': [makeStaff('staff-1', 'v-a', overrideOpenSchedule)],
+      'svc-2': [makeStaff('staff-1', 'v-a', overrideOpenSchedule)],
+    }
+
+    const { slots } = getSequentialBundleSlots({
+      services,
+      staffSchedulesByService,
+      appointments: [],
+      startDate: '2025-01-06',
+      bufferMinutes: 15,
+      serviceOrder: ['svc-1', 'svc-2'],
+      multiDay: false,
+      maxDays: 1,
+    })
+
+    expect(slots.length).toBeGreaterThan(0)
+  })
+
+  test('override that closes a normally-open day removes slots', () => {
+    // Weekly template open Monday, but an override closes 2025-01-06 (null).
+    const overrideClosedSchedule = {
+      monday: { start: '09:00', end: '17:00' },
+      overrides: { '2025-01-06': null },
+    }
+    const services = [
+      makeService('svc-1', 60, ['staff-1']),
+      makeService('svc-2', 30, ['staff-1']),
+    ]
+    const staffSchedulesByService = {
+      'svc-1': [makeStaff('staff-1', 'v-a', overrideClosedSchedule)],
+      'svc-2': [makeStaff('staff-1', 'v-a', overrideClosedSchedule)],
+    }
+
+    const { slots } = getSequentialBundleSlots({
+      services,
+      staffSchedulesByService,
+      appointments: [],
+      startDate: '2025-01-06',
+      bufferMinutes: 15,
+      serviceOrder: ['svc-1', 'svc-2'],
+      multiDay: false,
+      maxDays: 1,
+    })
+
+    expect(slots.length).toBe(0)
+  })
+
+  test('one bundle service closed by override on that date zeroes the whole bundle', () => {
+    // svc-1 staff works normally; svc-2 staff is closed by override that date.
+    // Because a bundle requires ALL services assignable, the day must yield no slots.
+    const openSchedule = { monday: { start: '09:00', end: '17:00' } }
+    const closedByOverride = {
+      monday: { start: '09:00', end: '17:00' },
+      overrides: { '2025-01-06': null },
+    }
+    const services = [
+      makeService('svc-1', 60, ['staff-1']),
+      makeService('svc-2', 30, ['staff-2']),
+    ]
+    const staffSchedulesByService = {
+      'svc-1': [makeStaff('staff-1', 'v-a', openSchedule)],
+      'svc-2': [makeStaff('staff-2', 'v-b', closedByOverride)],
+    }
+
+    const { slots } = getSequentialBundleSlots({
+      services,
+      staffSchedulesByService,
+      appointments: [],
+      startDate: '2025-01-06',
+      bufferMinutes: 15,
+      serviceOrder: ['svc-1', 'svc-2'],
+      multiDay: false,
+      maxDays: 1,
+    })
+
+    expect(slots.length).toBe(0)
+  })
+})
+
+// ── Resource-type services (sauna/room) modeled as synthetic resource staff ──
+//
+// Regression guard: a bundle containing a sauna/room service used to yield zero
+// slots because those services have no human staff. The API routes now inject a
+// synthetic resource-staff entry (visibleId resource-sauna/resource-room) whose
+// schedule reflects the vendor's resource hours. This verifies the scheduler can
+// assign such a resource alongside a normal staff-based service.
+
+describe('bundle with a synthetic resource (sauna) service', () => {
+  const makeResourceStaff = (id, schedule) => ({
+    visibleId: id,
+    isActive: true,
+    name: 'Sauna',
+    autoAssignRules: null,
+    schedule: JSON.stringify(schedule),
+  })
+
+  test('sauna + haircut bundle yields slots when the sauna is open', () => {
+    const services = [
+      makeService('svc-haircut', 30, ['staff-1']),
+      makeService('svc-sauna', 45, ['resource-sauna']),
+    ]
+    const staffSchedulesByService = {
+      'svc-haircut': [makeStaff('staff-1', 'v-a', mondaySchedule)],
+      'svc-sauna': [makeResourceStaff('resource-sauna', { monday: { start: '09:00', end: '17:00' } })],
+    }
+
+    const { slots } = getSequentialBundleSlots({
+      services,
+      staffSchedulesByService,
+      appointments: [],
+      startDate: '2025-01-06', // Monday
+      bufferMinutes: 15,
+      serviceOrder: ['svc-haircut', 'svc-sauna'],
+      multiDay: false,
+      maxDays: 1,
+    })
+
+    expect(slots.length).toBeGreaterThan(0)
+  })
+
+  test('sauna closed that day zeroes the bundle (empty resource staff)', () => {
+    const services = [
+      makeService('svc-haircut', 30, ['staff-1']),
+      makeService('svc-sauna', 45, ['resource-sauna']),
+    ]
+    const staffSchedulesByService = {
+      'svc-haircut': [makeStaff('staff-1', 'v-a', mondaySchedule)],
+      'svc-sauna': [], // vendor saunaHours had no entry for this day -> closed
+    }
+
+    const { slots } = getSequentialBundleSlots({
+      services,
+      staffSchedulesByService,
+      appointments: [],
+      startDate: '2025-01-06',
+      bufferMinutes: 15,
+      serviceOrder: ['svc-haircut', 'svc-sauna'],
+      multiDay: false,
+      maxDays: 1,
+    })
+
+    expect(slots.length).toBe(0)
+  })
+
+  test('existing sauna booking blocks the overlapping resource slot', () => {
+    const services = [
+      makeService('svc-sauna', 45, ['resource-sauna']),
+    ]
+    const staffSchedulesByService = {
+      'svc-sauna': [makeResourceStaff('resource-sauna', { monday: { start: '09:00', end: '10:00' } })],
+    }
+    // The only window (09:00-10:00 fits one 45-min session) is taken by an
+    // existing sauna appointment on the resource-sauna calendar.
+    const appointments = [
+      { staffId: 'resource-sauna', dateTime: '2025-01-06T09:00', status: 'confirmed', customer: JSON.stringify({ duration: 45 }) },
+    ]
+
+    const { slots } = getSequentialBundleSlots({
+      services,
+      staffSchedulesByService,
+      appointments,
+      startDate: '2025-01-06',
+      bufferMinutes: 15,
+      serviceOrder: ['svc-sauna'],
+      multiDay: false,
+      maxDays: 1,
+    })
+
+    expect(slots.length).toBe(0)
+  })
+})

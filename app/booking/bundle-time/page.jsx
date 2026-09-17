@@ -35,6 +35,21 @@ function BundleTimeContent() {
     return allowedDays.includes(dayName)
   }
 
+  // Format a date as YYYY-MM-DD in local time. Using toISOString() would convert
+  // to UTC and shift the calendar day in timezones behind UTC, which breaks the
+  // match against the backend's local-time date strings.
+  const formatDateLocal = (date) => {
+    const y = date.getFullYear()
+    const m = String(date.getMonth() + 1).padStart(2, '0')
+    const d = String(date.getDate()).padStart(2, '0')
+    return `${y}-${m}-${d}`
+  }
+
+  // Local datetime string (no timezone suffix) for passing to the confirm page.
+  // new Date(...) parses this in local time, and buildDateTimeISO()'s
+  // date.split('T')[0] recovers the correct local calendar day.
+  const formatDateTimeLocal = (date) => `${formatDateLocal(date)}T00:00:00`
+
   // Find the next allowed date from today
   useEffect(() => {
     if (!allowedDays) return
@@ -76,7 +91,7 @@ function BundleTimeContent() {
     fetch(`/api/available-dates?${serviceParam}&month=${month}&year=${year}${daysParam}`)
       .then(res => res.json())
       .then(data => setAvailableDates(new Set(data.availableDates || [])))
-      .catch(() => {})
+      .catch(err => console.error('[bundle-time] fetchAvailableDates failed', err))
   }
 
   useEffect(() => {
@@ -90,13 +105,13 @@ function BundleTimeContent() {
   const isDateAvailable = (date) => {
     if (allowedDays && !isAllowedDay(date)) return false
     if (!availableDates) return true
-    return availableDates.has(date.toISOString().split('T')[0])
+    return availableDates.has(formatDateLocal(date))
   }
 
   const getDayClassName = (date) => {
     if (allowedDays && !isAllowedDay(date)) return 'unavailable-day'
     if (!availableDates) return ''
-    return availableDates.has(date.toISOString().split('T')[0]) ? '' : 'unavailable-day'
+    return availableDates.has(formatDateLocal(date)) ? '' : 'unavailable-day'
   }
 
   useEffect(() => {
@@ -110,7 +125,10 @@ function BundleTimeContent() {
     setLoading(true)
     setSelectedTime(null)
 
-    const dateStr = selectedDate.toISOString().split('T')[0]
+    // Use LOCAL date formatting (not toISOString, which is UTC and shifts the
+    // day backward in timezones behind UTC). This must match the date keys the
+    // calendar/backend use, otherwise the times request asks about the wrong day.
+    const dateStr = formatDateLocal(selectedDate)
 
     // Use bundle-availability for multi-service, single-service availability otherwise
     const url = serviceIds.length > 1
@@ -207,7 +225,7 @@ function BundleTimeContent() {
 
       {selectedTime && (
         <Link
-          href={`/booking/confirm?${bundleId ? `bundleId=${bundleId}&` : ''}services=${serviceIds.join(',')}&date=${selectedDate.toISOString()}&time=${selectedTime}${people ? `&people=${people}` : ''}${quantitiesParam ? `&quantities=${quantitiesParam}` : ''}${selectedSchedule ? `&schedule=${encodeURIComponent(JSON.stringify(selectedSchedule))}` : ''}`}
+          href={`/booking/confirm?${bundleId ? `bundleId=${bundleId}&` : ''}services=${serviceIds.join(',')}&date=${formatDateTimeLocal(selectedDate)}&time=${selectedTime}${people ? `&people=${people}` : ''}${quantitiesParam ? `&quantities=${quantitiesParam}` : ''}${selectedSchedule ? `&schedule=${encodeURIComponent(JSON.stringify(selectedSchedule))}` : ''}`}
           className="cta"
         >
           Continue

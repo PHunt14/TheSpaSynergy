@@ -57,6 +57,20 @@ const sections = [
 
 const platformUpdates = [
   {
+    version: 'v1.6.8',
+    date: 'September 11, 2026',
+    title: 'Multi-Select Booking: Consistent Calendar & Times',
+    changes: [
+      'Fixed multi-select (bundle) booking showing green days with no available times — the calendar and the time picker now share one availability computation, so a selectable day always has real bookable times',
+      'Multi-select booking works for any combination of services, scheduled back-to-back with buffers and real staff assignment',
+      'Fixed a timezone bug that could hide all available dates (or ask for the wrong day) for users in timezones behind UTC',
+      'Sauna services in a bundle now resolve against the shared sauna resource calendar; room services correctly require staff like any other service',
+      'Calendar now accounts for existing appointments and blocked time (with reliable pagination), matching what the time picker enforces',
+      'Staff schedule date-specific overrides are now honored by bundle scheduling',
+      'Added request validation (service count and date/month/year) on the availability endpoints',
+    ],
+  },
+  {
     version: 'v1.6.6',
     date: 'September 1, 2026',
     title: 'Kiosk Cleanup: Removed Standalone Custom Charge',

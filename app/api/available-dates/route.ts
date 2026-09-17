@@ -4,6 +4,7 @@ import type { Schema } from '../../../amplify/data/resource';
 import config from '../../../amplify_outputs.json' with { type: 'json' };
 import { DAY_NAMES, getDayHoursSync, resolveStaffSync, hasAnySlot, getRecurrenceHours } from '../../utils/availability.js';
 import { getEligibleStaff } from '../../utils/staffEligibility';
+import { buildBundleAvailabilityContext, computeBundleAvailableDates } from '../../utils/bundleAvailabilityCore';
 import { withErrorLogging } from '@/lib/logger/middleware';
 
 const client = generateServerClientUsingCookies<Schema>({
@@ -38,9 +39,25 @@ export const GET = withErrorLogging(async function GET(request: Request) {
     return Response.json({ error: 'Missing required parameters: serviceId (or serviceIds), month, year' }, { status: 400 });
   }
 
+  // Validate month (1-12) and year (reasonable range) to avoid building an
+  // invalid date range from NaN/absurd values.
+  const monthNumParsed = Number.parseInt(month, 10);
+  const yearNumParsed = Number.parseInt(year, 10);
+  if (
+    !Number.isInteger(monthNumParsed) || monthNumParsed < 1 || monthNumParsed > 12 ||
+    !Number.isInteger(yearNumParsed) || yearNumParsed < 2000 || yearNumParsed > 2100
+  ) {
+    return Response.json({ error: 'Invalid month or year' }, { status: 400 });
+  }
+
   // Bundle multi-service path: check all services have staff availability
   if (serviceIdsParam) {
-    return handleBundleAvailableDates(serviceIdsParam.split(','), month, year, allowedDays);
+    // Cap service count to bound per-request work (matches bundle-availability).
+    const bundleServiceIds = serviceIdsParam.split(',').filter(Boolean);
+    if (bundleServiceIds.length === 0 || bundleServiceIds.length > 10) {
+      return Response.json({ error: 'serviceIds must contain between 1 and 10 services' }, { status: 400 });
+    }
+    return handleBundleAvailableDates(bundleServiceIds, month, year, allowedDays);
   }
 
   try {
@@ -322,80 +339,39 @@ async function handleBundleAvailableDates(
     const monthNum = Number.parseInt(month);
     const yearNum = Number.parseInt(year);
 
-    // Fetch all services
-    const servicePromises = serviceIds.map(id => client.models.Service.get({ serviceId: id }));
-    const serviceResults = await Promise.all(servicePromises);
+    // Fetch services (preserve requested order).
+    const serviceResults = await Promise.all(
+      serviceIds.map(id => client.models.Service.get({ serviceId: id }))
+    );
     const services = serviceResults.filter(r => r.data).map(r => r.data!) as any[];
-
     if (services.length === 0) {
       return Response.json({ availableDates: [] });
     }
 
-    // Check global booking blackout
+    // Global booking blackout.
     const { data: globalSetting } = await client.models.SiteSettings.get({ settingKey: 'globalBookingDisabledUntil' });
     const globalUntil = globalSetting?.settingValue;
     if (globalUntil && new Date(globalUntil as string) > new Date()) {
       return Response.json({ availableDates: [], bookingDisabled: true });
     }
 
-    // Fetch all staff schedules
-    const { data: allStaffData } = await client.models.StaffSchedule.list();
-    const allStaff = ((allStaffData || []) as any[]).filter((s: any) => s.isActive !== false);
+    // Build the SAME availability context the time picker uses, scoped to the
+    // whole month, then ask the shared core which days have a real serial slot.
+    // Using one shared per-day computation guarantees the calendar and the time
+    // picker agree: a green day always has at least one bookable time.
+    const datePrefix = `${yearNum}-${String(monthNum).padStart(2, '0')}`;
+    const ctx = await buildBundleAvailabilityContext(client, services, datePrefix);
 
-    // Exclude staff with active booking blackout
-    const now = new Date();
-    const activeStaff = allStaff.filter((s: any) => {
-      if (s.bookingDisabledUntil && new Date(s.bookingDisabledUntil) > now) return false;
-      return true;
-    });
-
-    // Build eligible staff per service
-    const staffByService: Record<string, any[]> = {};
-    for (const service of services) {
-      const allowed = (service.allowedStaff as string[] | null) || [];
-      if (allowed.length > 0) {
-        staffByService[service.serviceId] = activeStaff.filter(s => allowed.includes(s.visibleId));
-      } else {
-        // All Staff — exclude resource calendars
-        staffByService[service.serviceId] = activeStaff.filter(s => !s.visibleId.startsWith('resource-'));
-      }
-    }
-
-    // Build date range
     const firstDay = new Date(yearNum, monthNum - 1, 1);
     const lastDay = new Date(yearNum, monthNum, 0);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const minDate = new Date(today);
-    minDate.setDate(minDate.getDate() + 1); // Bundle services are staff-based, require booking tomorrow+
+    minDate.setDate(minDate.getDate() + 1); // staff-based bundles require booking tomorrow+
 
-    const availableDates: string[] = [];
-
-    for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
-      if (d < minDate) continue;
-      const dateStr = formatDateLocal(d);
-      const dayOfWeek = DAY_NAMES[d.getDay()];
-
-      if (allowedDays && !allowedDays.includes(dayOfWeek)) continue;
-
-      // Check that EVERY service has at least one eligible staff working this day
-      let allServicesHaveStaff = true;
-      for (const service of services) {
-        const eligibleStaff = staffByService[service.serviceId] || [];
-        const hasWorkingStaff = eligibleStaff.some(staff => {
-          const hours = getStaffHoursForDay(staff, dayOfWeek, d);
-          return hours && hours.start && hours.end;
-        });
-        if (!hasWorkingStaff) {
-          allServicesHaveStaff = false;
-          break;
-        }
-      }
-
-      if (allServicesHaveStaff) {
-        availableDates.push(dateStr);
-      }
-    }
+    const availableDates = computeBundleAvailableDates(
+      ctx, firstDay, lastDay, minDate, allowedDays, formatDateLocal
+    );
 
     return Response.json({ availableDates });
   } catch (error) {
