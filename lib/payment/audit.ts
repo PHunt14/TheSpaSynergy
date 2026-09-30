@@ -41,6 +41,23 @@ export interface PaymentAuditRecord {
   // Custom charge fields (Requirement 8.2)
   description?: string;
   clientName?: string;
+  /**
+   * For partial payments only: the outcome of the automatic compensating refund
+   * of the house charge. 'refunded' means the customer was made whole (net $0);
+   * 'refund_failed' means the house charge is still captured and needs manual
+   * reconciliation.
+   */
+  houseRefund?: 'refunded' | 'refund_failed';
+  /** Refund id when the compensating refund succeeded. */
+  houseRefundId?: string;
+  /**
+   * Single-charge-to-provider house fee handling: the house fee amount the
+   * provider now owes the house (recorded in HouseFeeLedger), the ledger row
+   * id, and whether the ledger write succeeded.
+   */
+  houseFeeOwed?: number;
+  houseFeeLedgerId?: string;
+  houseFeeLedgerRecorded?: boolean;
 }
 
 /**

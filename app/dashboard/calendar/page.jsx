@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { fetchAuthSession } from 'aws-amplify/auth'
 import {
   DEFAULT_START_HOUR,
@@ -21,6 +21,34 @@ import MultiStaffWeekView from './MultiStaffWeekView'
 // ── Constants ─────────────────────────────────────────────────
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+// Mobile breakpoint — matches the 767px breakpoint used across the dashboard CSS.
+const MOBILE_BREAKPOINT = 767
+
+// ── Hooks ─────────────────────────────────────────────────────
+
+// Returns true when the viewport is at or below the mobile breakpoint.
+// Uses matchMedia and stays in sync on resize/orientation change. SSR-safe:
+// starts false on the server and syncs on mount.
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return
+    const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`)
+    const update = () => setIsMobile(mql.matches)
+    update()
+    // addEventListener is supported in all modern browsers; fall back for older Safari.
+    if (mql.addEventListener) {
+      mql.addEventListener('change', update)
+      return () => mql.removeEventListener('change', update)
+    }
+    mql.addListener(update)
+    return () => mql.removeListener(update)
+  }, [])
+
+  return isMobile
+}
 
 // ── Utility Functions ─────────────────────────────────────────
 
@@ -1458,6 +1486,22 @@ export default function Calendar() {
   const [multiStaffError, setMultiStaffError] = useState(null)
   const [defaultStaffId, setDefaultStaffId] = useState(null)
 
+  // Responsive: adapt layout for phones/small screens
+  const isMobile = useIsMobile()
+
+  // On small screens the 7-column week grid is hard to navigate, so switch to the
+  // single-day view the first time we detect a mobile viewport. This runs once per
+  // transition into mobile and leaves the user free to pick week/month afterward.
+  const autoSwitchedRef = useRef(false)
+  useEffect(() => {
+    if (isMobile && !autoSwitchedRef.current) {
+      autoSwitchedRef.current = true
+      if (view !== 'day') setView('day')
+    }
+    if (!isMobile) autoSwitchedRef.current = false
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMobile])
+
   // Action handlers
   const handleConfirm = async (appointment) => {
     if (!confirm('Confirm this appointment?')) return
@@ -1749,17 +1793,21 @@ export default function Calendar() {
     <div>
       {/* Top bar: title + vendor selector + view toggle */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', width: isMobile ? '100%' : 'auto', justifyContent: isMobile ? 'space-between' : 'flex-start' }}>
           <h1 style={{ margin: 0 }}>Calendar</h1>
-          <button onClick={() => setNewAppointmentDateTime(new Date())} className="cta" style={{ margin: 0, padding: '0.4rem 1rem', fontSize: '0.85rem' }}>
+          <button
+            onClick={() => setNewAppointmentDateTime(new Date())}
+            className="cta"
+            style={{ margin: 0, padding: isMobile ? '0.6rem 1.1rem' : '0.4rem 1rem', fontSize: isMobile ? '0.95rem' : '0.85rem' }}
+          >
             + New
           </button>
         </div>
-        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap', width: isMobile ? '100%' : 'auto' }}>
           <select
             value={selectedStaffId || 'everyone'}
             onChange={(e) => setSelectedStaffId(e.target.value)}
-            style={{ padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '0.9rem' }}
+            style={{ padding: isMobile ? '0.7rem 0.75rem' : '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: isMobile ? '1rem' : '0.9rem', width: isMobile ? '100%' : 'auto' }}
           >
             <option value="everyone">Everyone</option>
             {vendors.length > 0 ? (
@@ -1796,20 +1844,21 @@ export default function Calendar() {
               ))
             )}
           </select>
-          <div style={{ display: 'flex', background: 'var(--color-accent)', borderRadius: '8px', padding: '3px' }}>
+          <div style={{ display: 'flex', background: 'var(--color-accent)', borderRadius: '8px', padding: '3px', width: isMobile ? '100%' : 'auto' }}>
             {['day', 'week', 'month'].map(v => (
               <button
                 key={v}
                 onClick={() => setView(v)}
                 style={{
-                  padding: '0.4rem 0.9rem',
+                  flex: isMobile ? 1 : 'none',
+                  padding: isMobile ? '0.6rem 0.9rem' : '0.4rem 0.9rem',
                   borderRadius: '6px',
                   border: 'none',
                   background: view === v ? 'var(--color-primary)' : 'transparent',
                   color: view === v ? 'white' : 'var(--color-text)',
                   cursor: 'pointer',
                   fontWeight: '500',
-                  fontSize: '0.9rem',
+                  fontSize: isMobile ? '0.95rem' : '0.9rem',
                   textTransform: 'capitalize',
                 }}
               >
@@ -1821,30 +1870,67 @@ export default function Calendar() {
       </div>
 
       {/* Navigation bar */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-          <button onClick={() => navigateDate(-1)} style={{ padding: '0.4rem 0.8rem', borderRadius: '6px', border: '1px solid var(--color-border)', background: 'white', cursor: 'pointer', fontSize: '0.9rem' }}>←</button>
-          <button onClick={goToToday} className="cta" style={{ padding: '0.4rem 1rem', fontSize: '0.9rem' }}>Today</button>
-          <button onClick={() => navigateDate(1)} style={{ padding: '0.4rem 0.8rem', borderRadius: '6px', border: '1px solid var(--color-border)', background: 'white', cursor: 'pointer', fontSize: '0.9rem' }}>→</button>
-        </div>
-        <h2 style={{ margin: 0, fontSize: '1.1rem' }}>{headerLabel}</h2>
-        {/* Hour range adjuster (day/week/everyone only) */}
-        {view !== 'month' && (
-          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', fontSize: '0.8rem' }}>
-            <select value={startHour} onChange={(e) => setStartHour(Number(e.target.value))} style={{ padding: '0.3rem', borderRadius: '4px', border: '1px solid var(--color-border)', fontSize: '0.8rem' }}>
-              {Array.from({ length: 12 }, (_, i) => i).map(h => (
-                <option key={h} value={h}>{h === 0 ? '12 AM' : h < 12 ? `${h} AM` : `${h - 12} PM`}</option>
-              ))}
-            </select>
-            <span>–</span>
-            <select value={endHour} onChange={(e) => setEndHour(Number(e.target.value))} style={{ padding: '0.3rem', borderRadius: '4px', border: '1px solid var(--color-border)', fontSize: '0.8rem' }}>
-              {Array.from({ length: 12 }, (_, i) => i + 12).map(h => (
-                <option key={h} value={h}>{h === 12 ? '12 PM' : h < 24 ? `${h - 12} PM` : '12 AM'}</option>
-              ))}
-            </select>
+      {isMobile ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.25rem' }}>
+          {/* Date label — centered on its own row */}
+          <h2 style={{ margin: 0, fontSize: '1.05rem', textAlign: 'center' }}>{headerLabel}</h2>
+          {/* Prev / Today / Next — large, evenly spaced tap targets */}
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <button
+              onClick={() => navigateDate(-1)}
+              aria-label="Previous"
+              style={{ flex: '0 0 auto', minWidth: '52px', padding: '0.7rem 1rem', borderRadius: '8px', border: '1px solid var(--color-border)', background: 'white', cursor: 'pointer', fontSize: '1.1rem' }}
+            >←</button>
+            <button onClick={goToToday} className="cta" style={{ flex: 1, padding: '0.7rem 1rem', fontSize: '0.95rem', margin: 0 }}>Today</button>
+            <button
+              onClick={() => navigateDate(1)}
+              aria-label="Next"
+              style={{ flex: '0 0 auto', minWidth: '52px', padding: '0.7rem 1rem', borderRadius: '8px', border: '1px solid var(--color-border)', background: 'white', cursor: 'pointer', fontSize: '1.1rem' }}
+            >→</button>
           </div>
-        )}
-      </div>
+          {/* Hour range adjuster (day/week/everyone only) */}
+          {view !== 'month' && (
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', justifyContent: 'center', fontSize: '0.85rem' }}>
+              <select value={startHour} onChange={(e) => setStartHour(Number(e.target.value))} style={{ flex: 1, padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem' }}>
+                {Array.from({ length: 12 }, (_, i) => i).map(h => (
+                  <option key={h} value={h}>{h === 0 ? '12 AM' : h < 12 ? `${h} AM` : `${h - 12} PM`}</option>
+                ))}
+              </select>
+              <span>–</span>
+              <select value={endHour} onChange={(e) => setEndHour(Number(e.target.value))} style={{ flex: 1, padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', fontSize: '0.9rem' }}>
+                {Array.from({ length: 12 }, (_, i) => i + 12).map(h => (
+                  <option key={h} value={h}>{h === 12 ? '12 PM' : h < 24 ? `${h - 12} PM` : '12 AM'}</option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <button onClick={() => navigateDate(-1)} style={{ padding: '0.4rem 0.8rem', borderRadius: '6px', border: '1px solid var(--color-border)', background: 'white', cursor: 'pointer', fontSize: '0.9rem' }}>←</button>
+            <button onClick={goToToday} className="cta" style={{ padding: '0.4rem 1rem', fontSize: '0.9rem' }}>Today</button>
+            <button onClick={() => navigateDate(1)} style={{ padding: '0.4rem 0.8rem', borderRadius: '6px', border: '1px solid var(--color-border)', background: 'white', cursor: 'pointer', fontSize: '0.9rem' }}>→</button>
+          </div>
+          <h2 style={{ margin: 0, fontSize: '1.1rem' }}>{headerLabel}</h2>
+          {/* Hour range adjuster (day/week/everyone only) */}
+          {view !== 'month' && (
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', fontSize: '0.8rem' }}>
+              <select value={startHour} onChange={(e) => setStartHour(Number(e.target.value))} style={{ padding: '0.3rem', borderRadius: '4px', border: '1px solid var(--color-border)', fontSize: '0.8rem' }}>
+                {Array.from({ length: 12 }, (_, i) => i).map(h => (
+                  <option key={h} value={h}>{h === 0 ? '12 AM' : h < 12 ? `${h} AM` : `${h - 12} PM`}</option>
+                ))}
+              </select>
+              <span>–</span>
+              <select value={endHour} onChange={(e) => setEndHour(Number(e.target.value))} style={{ padding: '0.3rem', borderRadius: '4px', border: '1px solid var(--color-border)', fontSize: '0.8rem' }}>
+                {Array.from({ length: 12 }, (_, i) => i + 12).map(h => (
+                  <option key={h} value={h}>{h === 12 ? '12 PM' : h < 24 ? `${h - 12} PM` : '12 AM'}</option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+      )}
 
       {loading && selectedStaffId !== 'everyone' && <p style={{ textAlign: 'center', color: 'var(--color-text-light)' }}>Loading appointments...</p>}
 
@@ -1862,6 +1948,13 @@ export default function Calendar() {
             Retry
           </button>
         </div>
+      )}
+
+      {/* Scroll hint for the horizontally scrolling multi-staff grids on mobile */}
+      {selectedStaffId === 'everyone' && isMobile && (view === 'day' || view === 'week') && !multiStaffLoading && !multiStaffError && (
+        <p style={{ margin: '0 0 0.5rem', fontSize: '0.8rem', color: 'var(--color-text-light)', textAlign: 'center' }}>
+          Swipe sideways to see more staff, or pick one person above for a full-width view.
+        </p>
       )}
 
       {/* Multi-Staff (Everyone) View */}
@@ -1915,9 +2008,9 @@ export default function Calendar() {
       {!loading && view === 'day' && selectedStaffId !== 'everyone' && (
         <div style={{ display: 'flex', border: '1px solid var(--color-border)', borderRadius: '8px', overflow: 'hidden' }}>
           {/* Time labels */}
-          <div style={{ width: '60px', flexShrink: 0, background: 'var(--color-accent)' }}>
+          <div style={{ width: isMobile ? '52px' : '60px', flexShrink: 0, background: 'var(--color-accent)' }}>
             {timeSlots.map((slot, i) => (
-              <div key={i} style={{ height: '40px', display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end', paddingRight: '8px', paddingTop: '2px', fontSize: '0.7rem', color: 'var(--color-text-light)', borderBottom: '1px solid var(--color-border)' }}>
+              <div key={i} style={{ height: '40px', display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end', paddingRight: '8px', paddingTop: '2px', fontSize: isMobile ? '0.75rem' : '0.7rem', color: 'var(--color-text-light)', borderBottom: '1px solid var(--color-border)' }}>
                 {slot.minute === 0 ? `${slot.hour === 0 ? 12 : slot.hour > 12 ? slot.hour - 12 : slot.hour}${slot.hour < 12 ? 'a' : 'p'}` : ''}
               </div>
             ))}
@@ -1941,8 +2034,13 @@ export default function Calendar() {
       )}
 
       {/* Week View — Time Block */}
+      {!loading && view === 'week' && selectedStaffId !== 'everyone' && isMobile && (
+        <p style={{ margin: '0 0 0.5rem', fontSize: '0.8rem', color: 'var(--color-text-light)', textAlign: 'center' }}>
+          Swipe sideways to see the full week, or tap “Day” for a single-day view.
+        </p>
+      )}
       {!loading && view === 'week' && selectedStaffId !== 'everyone' && (
-        <div style={{ display: 'flex', border: '1px solid var(--color-border)', borderRadius: '8px', overflow: 'auto' }}>
+        <div style={{ display: 'flex', border: '1px solid var(--color-border)', borderRadius: '8px', overflow: 'auto', WebkitOverflowScrolling: 'touch' }}>
           {/* Time labels */}
           <div style={{ width: '50px', flexShrink: 0, background: 'var(--color-accent)' }}>
             {/* Header spacer */}
@@ -1957,7 +2055,7 @@ export default function Calendar() {
           {getWeekDates(currentDate).map((date, idx) => {
             const wh = getWorkingHoursForDate(date)
             return (
-            <div key={idx} style={{ flex: 1, minWidth: '100px', borderLeft: '3px solid #ccc' }}>
+            <div key={idx} style={{ flex: isMobile ? '0 0 130px' : 1, minWidth: isMobile ? '130px' : '100px', borderLeft: '3px solid #ccc' }}>
               {/* Day header */}
               <div style={{
                 height: '36px',
