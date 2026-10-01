@@ -19,3 +19,8 @@ playwright-report/
 .kiro/
 
 test-texts/
+
+# Takedown kit (local-only: runbook, AWS wrapper scripts, infra identifiers,
+# backup manifests). Not needed to serve the offline site, which is just
+# amplify.yml + public-offline/.
+takedown/

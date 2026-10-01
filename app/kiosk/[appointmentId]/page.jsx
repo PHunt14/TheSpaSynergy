@@ -163,7 +163,16 @@ function PaymentContent() {
       }
 
       if (!payData.success) {
-        setError('Payment failed: ' + (payData.details || payData.error || 'Unknown error'))
+        // Distinguish a safe-to-retry partial (the house-fee safety net already
+        // refunded the house charge, so the card is at net $0) from a state
+        // where a charge is still live and must NOT be re-run blindly.
+        if (payData.partial && payData.houseRefunded) {
+          setError('Payment did not complete and was fully reversed — no charge remains on the card. Please try again.')
+        } else if (payData.partial && payData.houseRefunded === false) {
+          setError('Payment did not complete. A partial charge may still be on the card — do NOT recharge. ' + (payData.details || 'Contact the house to reconcile.'))
+        } else {
+          setError('Payment failed: ' + (payData.details || payData.error || 'Unknown error'))
+        }
         setPaying(false)
         return
       }
@@ -171,6 +180,11 @@ function PaymentContent() {
       // For group payments, all appointments are already marked paid by the API.
       // For single payments, update the appointment record.
       if (!appointment.isGroupPayment) {
+        // House-fee-enabled services: the provider is charged the FULL amount and
+        // owes the house its fee (recorded server-side in the HouseFeeLedger).
+        // Reflect that obligation in the audit rather than a (non-existent) house
+        // card charge.
+        const houseFeeOwed = payData.houseFeeOwedToHouse ?? payData.houseFeeAmount ?? 0
         await fetch('/api/appointments', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -182,8 +196,12 @@ function PaymentContent() {
             tipAmount: tipAmount > 0 ? tipAmount : undefined,
             status: 'confirmed',
             paymentRaw: JSON.stringify({
+              // House fee is an obligation the provider owes the house, not a
+              // separate card charge (see HouseFeeLedger / provider dashboard).
+              houseFeeOwed: houseFeeOwed > 0 ? { amount: houseFeeOwed, collectedBy: 'provider', ledgerId: payData.houseFeeLedgerId || null } : null,
+              // Same-account optimization may still return a housePaymentId.
               houseFee: payData.housePaymentId ? { paymentId: payData.housePaymentId, amount: payData.houseFeeAmount } : null,
-              staffPayments: [{ staffId: appointment.staffId, paymentId: payData.paymentId, amount: payData.staffAmount || appointment.service.price }],
+              staffPayments: [{ staffId: appointment.staffId, paymentId: payData.paymentId, amount: appointment.service.price }],
               tipAmount: tipAmount || 0,
               processedAt: new Date().toISOString(),
             }),

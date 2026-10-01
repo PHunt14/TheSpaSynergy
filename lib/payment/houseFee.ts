@@ -50,6 +50,20 @@ export interface SplitPaymentResult {
   tipAmount: number;
   partial?: boolean; // true if house succeeded but staff failed
   error?: string;
+  /**
+   * Compensating-refund outcome when a partial occurs (house captured, staff
+   * failed). The two charges target SEPARATE Square merchant accounts funded by
+   * a single-use card nonce, so the staff charge cannot be retried on the same
+   * nonce — Square rejects it with "Card nonce already used". To avoid leaving
+   * the customer charged the house fee for nothing, we automatically refund the
+   * captured house charge and report the result here.
+   * - 'refunded'      → house charge was refunded; customer net $0. Safe to retry.
+   * - 'refund_failed' → house charge is STILL captured; manual refund required.
+   * - undefined       → not applicable (no partial occurred).
+   */
+  houseRefund?: 'refunded' | 'refund_failed';
+  /** Refund id when the compensating refund succeeded. */
+  houseRefundId?: string;
 }
 
 /**
@@ -285,8 +299,21 @@ async function executeTwoChargeSplit(
       tipAmount,
     };
   } catch (error: any) {
-    // Requirement 1.4: House succeeded but staff failed → partial
+    // House succeeded but staff failed. This is the confirmed production failure
+    // mode: the staff charge reuses the same single-use card nonce already spent
+    // by the house charge, so Square rejects it with "Card nonce already used".
+    // Because the two charges hit SEPARATE merchant accounts, the staff charge
+    // cannot be salvaged on this nonce. Safety net: refund the captured house
+    // charge so the customer is not left paying the house fee for nothing.
     const details = error?.errors?.[0]?.detail || error?.message || 'Staff payment failed';
+
+    const refund = await refundHouseCharge(
+      houseClient,
+      housePaymentId,
+      dollarsToCents(decision.houseFeeAmount),
+      idempotencyKeyBase,
+    );
+
     return {
       success: false,
       housePaymentId,
@@ -295,6 +322,47 @@ async function executeTwoChargeSplit(
       tipAmount,
       partial: true,
       error: details,
+      houseRefund: refund.refunded ? 'refunded' : 'refund_failed',
+      houseRefundId: refund.refundId,
     };
+  }
+}
+
+/**
+ * Compensating refund for the house charge when the paired staff charge fails.
+ *
+ * The house and staff charges settle into two DIFFERENT Square merchant
+ * accounts, so a failed staff charge cannot be retried on the same single-use
+ * nonce. Rather than leave the customer charged only the house fee, we refund
+ * the house charge in full, returning the payment to a clean, all-or-nothing
+ * state. This never throws — a refund failure is reported so the caller can
+ * flag it for manual reconciliation.
+ */
+async function refundHouseCharge(
+  houseClient: Client,
+  housePaymentId: string | undefined,
+  houseFeeAmountCents: number,
+  idempotencyKeyBase: string,
+): Promise<{ refunded: boolean; refundId?: string }> {
+  if (!housePaymentId) {
+    return { refunded: false };
+  }
+
+  try {
+    const { result } = await houseClient.refundsApi.refundPayment({
+      idempotencyKey: `${idempotencyKeyBase}-house-refund`,
+      paymentId: housePaymentId,
+      amountMoney: { amount: BigInt(houseFeeAmountCents), currency: 'USD' },
+      reason: 'Automatic reversal: paired staff charge failed (house-fee split)',
+    });
+    // Square returns a refund object; a PENDING or COMPLETED status both mean
+    // the reversal was accepted by Square.
+    const refundId = result.refund?.id;
+    return { refunded: Boolean(refundId), refundId };
+  } catch {
+    // Refund itself failed — the house charge is still captured. Surface this
+    // so the caller marks it for manual reconciliation rather than silently
+    // assuming the customer was made whole.
+    return { refunded: false };
   }
 }

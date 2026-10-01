@@ -32,6 +32,8 @@ import {
   executeSplitPayment,
   SplitDecisionError,
 } from '../../../lib/payment/houseFee';
+import { recordHouseFeeObligation } from '../../../lib/payment/houseFeeLedger';
+import { sendPaymentAlert } from '../../../lib/payment/paymentAlert';
 import {
   appendAuditRecord,
   buildAuditRecord,
@@ -268,6 +270,176 @@ async function processSinglePayment(sourceId: string, amount: number, vendorId: 
  * 9. appendAuditRecord (success, failure, or partial)
  * 10. Return response
  */
+/**
+ * Charges the provider the FULL service amount (price + tip) in a SINGLE Square
+ * charge, then records the house fee as an obligation in the HouseFeeLedger.
+ *
+ * This is the fix for the cross-merchant house-fee split: rather than a second
+ * card charge to the house account (which fails on single-use nonce reuse), the
+ * provider collects the whole amount and owes the house its fee, tracked in the
+ * ledger and shown on the provider dashboard.
+ *
+ * The ledger write is best-effort: the customer's card is charged correctly
+ * regardless, so a ledger failure never rolls back the payment — it is recorded
+ * in the audit trail and flagged for follow-up instead.
+ */
+async function chargeProviderFullAmountWithHouseFeeLedger(args: {
+  dataClient: any;
+  sourceId: string;
+  splitDecision: { houseFeeAmount: number; staffAmount: number };
+  effectiveCredentials: { accessToken: string; locationId: string };
+  idempotencyKeyBase: string;
+  sanitizedTip: number;
+  credResult: { source: string; resolutionPath: string[] };
+  appointmentId?: string;
+  staff: any;
+  service: any;
+  appointment: any;
+}) {
+  const {
+    dataClient, sourceId, splitDecision, effectiveCredentials, idempotencyKeyBase,
+    sanitizedTip, credResult, appointmentId, staff, service, appointment,
+  } = args;
+
+  const squareEnvironment = process.env.NEXT_PUBLIC_SQUARE_ENVIRONMENT === 'production'
+    ? Environment.Production
+    : Environment.Sandbox;
+
+  const client = new Client({
+    accessToken: effectiveCredentials.accessToken,
+    environment: squareEnvironment,
+  });
+
+  // Full amount to the provider = house fee + staff portion (the whole price).
+  const fullAmount = splitDecision.houseFeeAmount + splitDecision.staffAmount;
+  const amountCents = Math.round(fullAmount * 100);
+  const tipCents = Math.round(sanitizedTip * 100);
+
+  let providerPaymentId: string | undefined;
+  try {
+    const paymentRequest: any = {
+      sourceId,
+      // Single charge → single deterministic key (no -house/-staff split).
+      idempotencyKey: `${idempotencyKeyBase}-full`,
+      amountMoney: { amount: BigInt(amountCents), currency: 'USD' },
+      locationId: effectiveCredentials.locationId,
+    };
+    if (tipCents > 0) {
+      paymentRequest.tipMoney = { amount: BigInt(tipCents), currency: 'USD' };
+    }
+
+    const { result } = await client.paymentsApi.createPayment(paymentRequest);
+    providerPaymentId = result.payment?.id;
+  } catch (error: any) {
+    console.error('Square API error (provider full charge):', JSON.stringify(error, null, 2));
+    const details = error?.errors?.[0]?.detail || error?.message || 'Unknown Square error';
+
+    // No charge captured → total failure. Record audit and return 500.
+    const auditRecord = buildAuditRecord({
+      type: 'failure',
+      houseFeeAmount: splitDecision.houseFeeAmount,
+      staffAmount: splitDecision.staffAmount,
+      tipAmount: sanitizedTip,
+      routingMethod: credResult.source as 'staff' | 'sibling_staff' | 'house',
+      credentialResolutionPath: credResult.resolutionPath,
+      failureReason: details,
+      attemptedAmountCents: amountCents,
+      credentialSource: credResult.source,
+      idempotencyKey: idempotencyKeyBase,
+    });
+    if (appointmentId) {
+      await appendAuditRecord(appointmentId, auditRecord);
+    }
+    await sendPaymentAlert({
+      kind: 'failure',
+      appointmentId,
+      staffId: staff.visibleId,
+      staffName: staff.staffName,
+      serviceName: service.name,
+      amount: fullAmount + sanitizedTip,
+      houseFeeAmount: splitDecision.houseFeeAmount,
+      details,
+    });
+    return Response.json({
+      error: 'Payment processing failed',
+      details,
+      paymentCompleted: false,
+    }, { status: 500 });
+  }
+
+  // Charge succeeded — record the house-fee obligation (best-effort).
+  const customerName =
+    (appointment?.customer && typeof appointment.customer === 'object'
+      ? appointment.customer.name
+      : undefined) || undefined;
+
+  const ledger = await recordHouseFeeObligation(dataClient, {
+    staffId: staff.visibleId,
+    staffName: staff.staffName,
+    vendorId: staff.vendorId,
+    appointmentId,
+    serviceId: service.serviceId,
+    serviceName: service.name,
+    customerName,
+    houseFeeAmount: splitDecision.houseFeeAmount,
+    paymentId: providerPaymentId,
+  });
+
+  if (!ledger.recorded) {
+    // The customer was charged correctly; only the internal obligation record
+    // failed. Surface loudly for reconciliation but do NOT fail the payment.
+    console.error(
+      'House fee ledger write FAILED after successful provider charge. ' +
+      `staffId=${staff.visibleId} appointmentId=${appointmentId} ` +
+      `paymentId=${providerPaymentId} houseFee=${splitDecision.houseFeeAmount}. ` +
+      `Reason: ${ledger.error}. Manual ledger entry required.`
+    );
+    await sendPaymentAlert({
+      kind: 'ledger_unrecorded',
+      appointmentId,
+      staffId: staff.visibleId,
+      staffName: staff.staffName,
+      serviceName: service.name,
+      customerName,
+      houseFeeAmount: splitDecision.houseFeeAmount,
+      paymentId: providerPaymentId,
+      details: ledger.error,
+    });
+  }
+
+  const auditRecord = buildAuditRecord({
+    type: 'success',
+    staffPaymentId: providerPaymentId,
+    staffAmount: splitDecision.staffAmount,
+    houseFeeAmount: splitDecision.houseFeeAmount,
+    tipAmount: sanitizedTip,
+    routingMethod: credResult.source as 'staff' | 'sibling_staff' | 'house',
+    credentialResolutionPath: credResult.resolutionPath,
+    houseFeeOwed: splitDecision.houseFeeAmount,
+    houseFeeLedgerId: ledger.ledgerId,
+    houseFeeLedgerRecorded: ledger.recorded,
+  });
+  if (appointmentId) {
+    await appendAuditRecord(appointmentId, auditRecord);
+  }
+
+  return Response.json({
+    success: true,
+    paymentId: providerPaymentId,
+    staffPaymentId: providerPaymentId,
+    status: 'COMPLETED',
+    tipAmount: sanitizedTip,
+    houseFeeAmount: splitDecision.houseFeeAmount,
+    staffAmount: splitDecision.staffAmount,
+    // Money flow: provider collected the full amount and owes the house its fee.
+    houseFeeCollectedBy: 'provider',
+    houseFeeOwedToHouse: splitDecision.houseFeeAmount,
+    houseFeeLedgerRecorded: ledger.recorded,
+    houseFeeLedgerId: ledger.ledgerId,
+    routedTo: credResult.source,
+  });
+}
+
 async function processStaffRoutedPayment(
   dataClient: any,
   sourceId: string,
@@ -435,9 +607,39 @@ async function processStaffRoutedPayment(
   const paymentType = splitDecision.shouldSplit ? 'house_fee' : 'full';
   const idempotencyKeyBase = generateIdempotencyKey(effectiveAppointmentId, paymentType, sourceTokenHash);
 
-  // --- Step 8: executeSplitPayment or single charge ---
+  // --- Step 8: house fee handling ---
+  //
+  // When a house fee applies AND the provider and house are DIFFERENT Square
+  // merchant accounts, we do NOT attempt two card charges. A Square card nonce
+  // is single-use and merchant-scoped, so a second charge to the house account
+  // always fails ("Card nonce already used") and previously lost the provider
+  // portion (confirmed prod incidents: Trinity 9/25, Jylian 9/24).
+  //
+  // Instead: charge the PROVIDER the full amount in ONE charge, and record the
+  // house fee as an obligation the provider owes the house (HouseFeeLedger).
+  // The provider dashboard aggregates these per person per month.
+  //
+  // The same-account case (singleChargeOptimization) is genuinely one charge to
+  // one account, so it keeps the existing executeSplitPayment path unchanged.
+  if (splitDecision.shouldSplit && !splitDecision.singleChargeOptimization) {
+    const fullChargeResult = await chargeProviderFullAmountWithHouseFeeLedger({
+      dataClient,
+      sourceId,
+      splitDecision,
+      effectiveCredentials,
+      idempotencyKeyBase,
+      sanitizedTip,
+      credResult,
+      appointmentId,
+      staff,
+      service,
+      appointment,
+    });
+    return fullChargeResult;
+  }
+
   if (splitDecision.shouldSplit) {
-    // Execute split payment (or single charge optimization)
+    // Same-account optimization: one charge to one account (safe).
     const splitResult = await executeSplitPayment(
       sourceId,
       splitDecision,
@@ -476,7 +678,11 @@ async function processStaffRoutedPayment(
         routedTo: credResult.source,
       });
     } else if (splitResult.partial) {
-      // Partial: house succeeded, staff failed
+      // Partial: house charge captured but staff charge failed. The split's
+      // safety net attempts to refund the house charge so the customer is not
+      // left paying the house fee for nothing.
+      const houseRefunded = splitResult.houseRefund === 'refunded';
+
       const auditRecord = buildAuditRecord({
         type: 'partial',
         housePaymentId: splitResult.housePaymentId,
@@ -487,19 +693,39 @@ async function processStaffRoutedPayment(
         credentialResolutionPath: credResult.resolutionPath,
         failureReason: splitResult.error,
         idempotencyKey: idempotencyKeyBase,
+        houseRefund: splitResult.houseRefund,
+        houseRefundId: splitResult.houseRefundId,
       });
 
       if (appointmentId) {
         await appendAuditRecord(appointmentId, auditRecord);
       }
 
+      await sendPaymentAlert({
+        kind: 'partial',
+        appointmentId,
+        houseFeeAmount: splitResult.houseFeeAmount,
+        housePaymentId: splitResult.housePaymentId,
+        houseRefunded,
+        details: splitResult.error,
+      });
+
+      const details = houseRefunded
+        ? `Payment did not complete. The $${splitResult.houseFeeAmount.toFixed(2)} house fee that was charged has been automatically refunded, so the card was not left partially charged. Please retry the payment.`
+        : `Staff payment failed AND the $${splitResult.houseFeeAmount.toFixed(2)} house fee could not be auto-refunded (payment id ${splitResult.housePaymentId}). Do NOT recharge the full amount — the house fee is still on the card. Manual refund required.`;
+
       return Response.json({
-        error: 'Partial payment processed',
-        details: `Staff payment failed. House fee of $${splitResult.houseFeeAmount.toFixed(2)} was charged.`,
+        error: 'Payment did not complete',
+        details,
         paymentCompleted: false,
         partial: true,
         housePaymentId: splitResult.housePaymentId,
         houseFeeAmount: splitResult.houseFeeAmount,
+        houseRefunded,
+        houseRefundId: splitResult.houseRefundId,
+        // When the house fee was refunded, the customer is at net $0 and the
+        // operator can safely retry the whole payment.
+        safeToRetry: houseRefunded,
       }, { status: 500 });
     } else {
       // Total failure

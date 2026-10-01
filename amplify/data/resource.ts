@@ -251,6 +251,39 @@ const schema = a.schema({
       index('bundleId')
     ])
     .authorization((allow) => [allow.publicApiKey()]),
+
+  // Records house-fee obligations. When a house-fee-enabled service is paid,
+  // the provider is charged the FULL amount in a single Square charge (avoiding
+  // the cross-merchant nonce-reuse failure), and the house fee is recorded here
+  // as money the provider owes the house. The provider dashboard aggregates
+  // these per person per month; the house marks them settled when collected.
+  HouseFeeLedger: a
+    .model({
+      ledgerId: a.id().required(),
+      staffId: a.string().required(),
+      staffName: a.string(),
+      vendorId: a.string(),
+      appointmentId: a.string(),
+      serviceId: a.string(),
+      serviceName: a.string(),
+      customerName: a.string(),
+      houseFeeAmount: a.float().required(),
+      // Billing month in YYYY-MM (UTC) for per-month aggregation on the dashboard.
+      month: a.string().required(),
+      // 'owed' when the provider still owes the house; 'settled' once collected.
+      status: a.string().required().default('owed'),
+      // The Square payment id of the full charge to the provider (for audit).
+      paymentId: a.string(),
+      createdAt: a.string().required(),
+      settledAt: a.string(),
+      settledBy: a.string(),
+    })
+    .identifier(['ledgerId'])
+    .secondaryIndexes((index) => [
+      index('staffId').sortKeys(['month']),
+      index('month'),
+    ])
+    .authorization((allow) => [allow.publicApiKey()]),
 })
   // Grant the scheduled token-refresh function IAM access to the GraphQL API so
   // it can list and update StaffSchedule records. Function access is configured
